@@ -15,7 +15,7 @@ public class DocumentProcessingController {
         }
     }
     
-   private static String initiateOCR(String contentDocumentId) {
+  private static String initiateOCR(String contentDocumentId) {
     // Step 1: Get the content document (ContentVersion)
     ContentDocument contentDoc = [SELECT Id, Title FROM ContentDocument WHERE Id = :contentDocumentId LIMIT 1];
     
@@ -30,31 +30,30 @@ public class DocumentProcessingController {
     document.setContent(documentBlob);
     
     // Step 5: Set the OCR template to use (example)
-    String ocrTemplateId = 'PL_Template'; // This is your OCR template's ID (replace with the actual template ID)
+    String ocrTemplateId = 'PL_Template'; // Replace with your actual template ID
     document.setTemplateId(ocrTemplateId);
 
     // Step 6: Call the IDR API to extract text from the document
     Idr.ExtractedData extractedData = document.extract();
     
-    // Step 7: Ensure we are getting the keyValuePairs from the extracted data
+    // Step 7: Log the structure of the extractedData object
+    System.debug('Extracted Data: ' + extractedData);
+
+    // Step 8: Ensure keyValuePairs exist and loop over them if available
+    String extractedText = '';
     if (extractedData != null && extractedData.keyValuePairs != null) {
-        // Step 8: Extract the data and format it into a string
-        String extractedText = '';
-        
-        // Loop through the key-value pairs and build the extracted text string
         for (Idr.KeyValue keyValue : extractedData.keyValuePairs) {
-            // Debugging the key-value pair extraction
-            System.debug('Key: ' + keyValue.getKey() + ', Value: ' + keyValue.getValue());
-            
-            // Add the key-value pair to the extracted text
+            // Debugging key and value for each key-value pair
+            System.debug('Key: ' + keyValue.getKey() + ' Value: ' + keyValue.getValue());
             extractedText += keyValue.getKey() + ': ' + keyValue.getValue() + '\n';
         }
-        
-        return extractedText;
     } else {
-        // If no key-value pairs are found, return an error message
-        return 'No extracted text found in the document.';
+        // If keyValuePairs are not found, log an error
+        System.debug('No key-value pairs found in the extracted data.');
+        extractedText = 'No extracted text found in the document.';
     }
+
+    return extractedText;
 }
 
 
