@@ -15,7 +15,7 @@ public class DocumentProcessingController {
         }
     }
     
-    private static String initiateOCR(String contentDocumentId) {
+   private static String initiateOCR(String contentDocumentId) {
     // Step 1: Get the content document (ContentVersion)
     ContentDocument contentDoc = [SELECT Id, Title FROM ContentDocument WHERE Id = :contentDocumentId LIMIT 1];
     
@@ -36,19 +36,27 @@ public class DocumentProcessingController {
     // Step 6: Call the IDR API to extract text from the document
     Idr.ExtractedData extractedData = document.extract();
     
-    // Step 7: Check if keyValuePairs exist in the extractedData object
+    // Step 7: Ensure we are getting the keyValuePairs from the extracted data
     if (extractedData != null && extractedData.keyValuePairs != null) {
         // Step 8: Extract the data and format it into a string
         String extractedText = '';
+        
+        // Loop through the key-value pairs and build the extracted text string
         for (Idr.KeyValue keyValue : extractedData.keyValuePairs) {
+            // Debugging the key-value pair extraction
+            System.debug('Key: ' + keyValue.getKey() + ', Value: ' + keyValue.getValue());
+            
+            // Add the key-value pair to the extracted text
             extractedText += keyValue.getKey() + ': ' + keyValue.getValue() + '\n';
         }
+        
         return extractedText;
     } else {
         // If no key-value pairs are found, return an error message
         return 'No extracted text found in the document.';
     }
 }
+
 
 
     private static void saveExtractedTextToRecord(String extractedText) {
