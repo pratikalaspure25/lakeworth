@@ -1,0 +1,62 @@
+public class DocumentProcessingController {
+    
+    @AuraEnabled
+    public static String processFile(String contentDocumentId) {
+        try {
+            // Step 1: Initiate OCR extraction
+            String extractedText = initiateOCR(contentDocumentId);
+            
+            // Step 2: Save the extracted text into Profit_and_Loss__c record
+            saveExtractedTextToRecord(extractedText);
+            
+            return 'Text extraction and record creation successful';
+        } catch (Exception e) {
+            return 'Error processing the document: ' + e.getMessage();
+        }
+    }
+    
+    private static String initiateOCR(String contentDocumentId) {
+        // Step 1: Get the content document (ContentVersion)
+        ContentDocument contentDoc = [SELECT Id, Title FROM ContentDocument WHERE Id = :contentDocumentId LIMIT 1];
+        
+        // Step 2: Get the ContentVersion for the file
+        ContentVersion contentVersion = [SELECT Id, Title, VersionData FROM ContentVersion WHERE ContentDocumentId = :contentDoc.Id LIMIT 1];
+        
+        // Step 3: Convert the document data into a format suitable for the IDR API call
+        Blob documentBlob = contentVersion.VersionData;
+        
+        // Step 4: Call the IDR API to extract text
+        // You should set the OCR template here if required, depending on your document template
+        // Replace the following with the actual OCR extraction call, assuming you have set up an OCR template in IDR
+        Idr.Document document = new Idr.Document();
+        document.setContent(documentBlob);
+        
+        // Set the OCR template to use (example)
+        String ocrTemplateId = 'PL_Template'; // Replace with your actual template ID
+        document.setTemplateId(ocrTemplateId);
+
+        // Extract text using the IDR API
+        Idr.ExtractedData extractedData = document.extract();
+        
+        // Fetch the extracted text from the response
+        String extractedText = '';
+        for (Idr.KeyValue keyValue : extractedData.keyValuePairs) {
+            extractedText += keyValue.getKey() + ': ' + keyValue.getValue() + '\n';
+        }
+        
+        return extractedText;
+    }
+
+    private static void saveExtractedTextToRecord(String extractedText) {
+        // Create a new Profit_and_Loss__c record and save the extracted text
+        Profit_and_Loss__c record = new Profit_and_Loss__c();
+        
+        // Populate the record with extracted data
+        record.Name = 'Profit and Loss Statement';
+        record.Extracted_Text__c = extractedText;  // Assuming a custom field for extracted text
+        record.Loan_Number__c = '093384';  // Example: Loan Number extracted from the document
+        
+        // Insert the record into Salesforce
+        insert record;
+    }
+}
