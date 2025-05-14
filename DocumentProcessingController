@@ -16,36 +16,40 @@ public class DocumentProcessingController {
     }
     
     private static String initiateOCR(String contentDocumentId) {
-        // Step 1: Get the content document (ContentVersion)
-        ContentDocument contentDoc = [SELECT Id, Title FROM ContentDocument WHERE Id = :contentDocumentId LIMIT 1];
-        
-        // Step 2: Get the ContentVersion for the file
-        ContentVersion contentVersion = [SELECT Id, Title, VersionData FROM ContentVersion WHERE ContentDocumentId = :contentDoc.Id LIMIT 1];
-        
-        // Step 3: Convert the document data into a format suitable for the IDR API call
-        Blob documentBlob = contentVersion.VersionData;
-        
-        // Step 4: Call the IDR API to extract text
-        // You should set the OCR template here if required, depending on your document template
-        // Replace the following with the actual OCR extraction call, assuming you have set up an OCR template in IDR
-        Idr.Document document = new Idr.Document();
-        document.setContent(documentBlob);
-        
-        // Set the OCR template to use (example)
-        String ocrTemplateId = 'PL_Template'; // Replace with your actual template ID
-        document.setTemplateId(ocrTemplateId);
+    // Step 1: Get the content document (ContentVersion)
+    ContentDocument contentDoc = [SELECT Id, Title FROM ContentDocument WHERE Id = :contentDocumentId LIMIT 1];
+    
+    // Step 2: Get the ContentVersion for the file
+    ContentVersion contentVersion = [SELECT Id, Title, VersionData FROM ContentVersion WHERE ContentDocumentId = :contentDoc.Id LIMIT 1];
+    
+    // Step 3: Convert the document data into a format suitable for the IDR API call
+    Blob documentBlob = contentVersion.VersionData;
+    
+    // Step 4: Create a document object for extraction
+    Idr.Document document = new Idr.Document();
+    document.setContent(documentBlob);
+    
+    // Step 5: Set the OCR template to use (example)
+    String ocrTemplateId = 'PL_Template'; // This is your OCR template's ID (replace with the actual template ID)
+    document.setTemplateId(ocrTemplateId);
 
-        // Extract text using the IDR API
-        Idr.ExtractedData extractedData = document.extract();
-        
-        // Fetch the extracted text from the response
+    // Step 6: Call the IDR API to extract text from the document
+    Idr.ExtractedData extractedData = document.extract();
+    
+    // Step 7: Check if keyValuePairs exist in the extractedData object
+    if (extractedData != null && extractedData.keyValuePairs != null) {
+        // Step 8: Extract the data and format it into a string
         String extractedText = '';
         for (Idr.KeyValue keyValue : extractedData.keyValuePairs) {
             extractedText += keyValue.getKey() + ': ' + keyValue.getValue() + '\n';
         }
-        
         return extractedText;
+    } else {
+        // If no key-value pairs are found, return an error message
+        return 'No extracted text found in the document.';
     }
+}
+
 
     private static void saveExtractedTextToRecord(String extractedText) {
         // Create a new Profit_and_Loss__c record and save the extracted text
