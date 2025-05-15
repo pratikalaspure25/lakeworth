@@ -1,36 +1,45 @@
 public class ProcessDocumentJob implements Queueable {
     private String contentDocumentId;
+    private String recordId;
 
-    // Constructor to initialize the contentDocumentId
-    public ProcessDocumentJob(String contentDocumentId) {
+    // Constructor to initialize contentDocumentId and recordId
+    public ProcessDocumentJob(String contentDocumentId, String recordId) {
         this.contentDocumentId = contentDocumentId;
+        this.recordId = recordId;
     }
 
-    // The execute method is where the actual processing happens
     public void execute(QueueableContext context) {
         try {
-            // Fetch the document's metadata (e.g., title, content)
-            ContentDocument contentDocument = [SELECT Id, Title FROM ContentDocument WHERE Id = :contentDocumentId LIMIT 1];
+            // Retrieve the content of the file (e.g., PDF or Image)
+            ContentVersion cv = [SELECT Id, Title, VersionData FROM ContentVersion WHERE ContentDocumentId = :contentDocumentId LIMIT 1];
 
-            // Simulating the OCR service invocation (e.g., AWS Textract, Google Vision API)
-            String ocrResult = callOcrService(contentDocument);
+            // Call the OCR process (AWS Textract or any OCR service)
+            String ocrResult = triggerOcrProcessing(cv.VersionData);
 
-            // Handle OCR processing results (save data, update records, etc.)
-            System.debug('OCR Result: ' + ocrResult);
-
-            // Optionally, save the results or process further (e.g., create a custom object to store extracted data)
-            // Example: save the result in a custom object
-            // CustomOCRResult__c result = new CustomOCRResult__c(OCR_Text__c = ocrResult);
-            // insert result;
-            
+            // Save the extracted data to Profit_and_Loss__c
+            saveExtractedDataToProfitAndLoss(ocrResult);
         } catch (Exception e) {
             System.debug('Error processing document: ' + e.getMessage());
         }
     }
 
-    // Placeholder for calling an external OCR service like AWS Textract or Google Vision
-    private String callOcrService(ContentDocument contentDocument) {
-        // Simulated OCR processing result
-        return 'Simulated OCR result for document: ' + contentDocument.Title;
+    private String triggerOcrProcessing(Blob documentData) {
+        // Simulate sending the document to an OCR service
+        // Replace with actual call to OCR service like AWS Textract
+        return 'Simulated OCR result with extracted data';
+    }
+
+    private void saveExtractedDataToProfitAndLoss(String ocrResult) {
+        // Example of saving extracted data to Profit_and_Loss__c
+        Profit_and_Loss__c profitLossRecord = [SELECT Id FROM Profit_and_Loss__c WHERE Id = :recordId LIMIT 1];
+        
+        // Simulating data from OCR
+        profitLossRecord.Borrower_Name_s__c = 'Timothy Ratliff, Rick Hatchett';
+        profitLossRecord.Company_Name__c = 'XYZ Builders';
+        profitLossRecord.Loan_Number__c = '093384';
+        profitLossRecord.Type_of_Bussiness__c = 'Commercial Real Estate';
+
+        // Update the record
+        update profitLossRecord;
     }
 }
