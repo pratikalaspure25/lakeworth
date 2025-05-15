@@ -162,15 +162,17 @@ private String fetchExtractedText(String ocrDocumentScanResultId, String content
         // Send the HTTP request
         HttpResponse response = http.send(request);
 
+        // Log the response for debugging
+        System.debug('Extracted Text API response: ' + response.getBody());
+
         // Handle the response
         if (response.getStatusCode() == 200) {
-            System.debug('Extracted Text API response: ' + response.getBody());
-
-            // Deserialize the response body into a List of Maps to handle the array properly
-            List<Map<String, Object>> responseList = (List<Map<String, Object>>) JSON.deserializeUntyped(response.getBody());
+            // Deserialize the response body into a Map of type List
+            Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
+            List<Map<String, Object>> responseList = (List<Map<String, Object>>) responseMap.get('outputValues').get('ocrDocumentScanResultDetails');
 
             // Check if responseList is not empty
-            if (!responseList.isEmpty()) {
+            if (responseList != null && !responseList.isEmpty()) {
                 Map<String, Object> firstResult = responseList.get(0);
                 System.debug('Extracted Text: ' + firstResult);
                 return firstResult.toString(); // You can further process the data if needed
@@ -187,6 +189,7 @@ private String fetchExtractedText(String ocrDocumentScanResultId, String content
         return null;
     }
 }
+
 
 
 
