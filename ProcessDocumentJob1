@@ -141,8 +141,8 @@ private String fetchExtractedText(String ocrDocumentScanResultId, String content
         String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
 
         // Prepare the request body as a JSON string
-        String requestBody = JSON.serialize(new Map<String, Object>{
-            'inputs' => new List<Map<String, Object>>{
+        String requestBody = JSON.serialize(new Map<String, Object> {
+            'inputs' => new List<Map<String, Object>> {
                 new Map<String, Object> {
                     'ocrDocumentScanResultId' => ocrDocumentScanResultId,  // OCR result ID obtained from the first step
                     'contentDocumentId' => contentDocumentId,  // Ensure you pass the contentDocumentId as well
@@ -167,45 +167,52 @@ private String fetchExtractedText(String ocrDocumentScanResultId, String content
 
         // Handle the response
         if (response.getStatusCode() == 200) {
-            // Deserialize the response body dynamically
-            Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
+            // Deserialize the response body into a List of Maps (List<Map<String, Object>>)
+            List<Object> responseList = (List<Object>) JSON.deserializeUntyped(response.getBody());
 
-            // Check if the response contains 'outputValues' and 'ocrDocumentScanResultDetails'
-            if (responseMap.containsKey('outputValues')) {
-                Map<String, Object> outputValues = (Map<String, Object>) responseMap.get('outputValues');
-                
-                if (outputValues.containsKey('ocrDocumentScanResultDetails')) {
-                    Object ocrDocumentScanResultDetails = outputValues.get('ocrDocumentScanResultDetails');
-                    
-                    // Check if the 'ocrDocumentScanResultDetails' is a list
-                    if (ocrDocumentScanResultDetails instanceof List) {
-                        List<Map<String, Object>> detailsList = (List<Map<String, Object>>) ocrDocumentScanResultDetails;
-                        System.debug('Extracted Text: ' + detailsList);
-                        return detailsList.toString(); // Return extracted text
-                    } else if (ocrDocumentScanResultDetails instanceof Map) {
-                        // If it's a Map instead of a List, log it or process it accordingly
-                        System.debug('ocrDocumentScanResultDetails is a Map: ' + ocrDocumentScanResultDetails);
-                        return ocrDocumentScanResultDetails.toString(); // You can adjust based on your needs
+            // Check if the response list is not empty
+            if (responseList != null && !responseList.isEmpty()) {
+                // Get the first item in the response list
+                Map<String, Object> firstResult = (Map<String, Object>) responseList.get(0);
+
+                // Check if 'outputValues' key exists and contains 'ocrDocumentScanResultDetails'
+                if (firstResult.containsKey('outputValues')) {
+                    Map<String, Object> outputValues = (Map<String, Object>) firstResult.get('outputValues');
+                    if (outputValues.containsKey('ocrDocumentScanResultDetails')) {
+                        Object ocrDocumentScanResultDetails = outputValues.get('ocrDocumentScanResultDetails');
+
+                        // Check if ocrDocumentScanResultDetails is a List or Map
+                        if (ocrDocumentScanResultDetails instanceof List) {
+                            // If it's a List, cast it accordingly
+                            List<Map<String, Object>> detailsList = (List<Map<String, Object>>) ocrDocumentScanResultDetails;
+                            System.debug('Extracted Text: ' + detailsList);
+                            return detailsList.toString(); // Return extracted text
+                        } else if (ocrDocumentScanResultDetails instanceof Map) {
+                            // If it's a Map, log it or process it accordingly
+                            System.debug('ocrDocumentScanResultDetails is a Map: ' + ocrDocumentScanResultDetails);
+                            return ocrDocumentScanResultDetails.toString(); // You can adjust based on your needs
+                        } else {
+                            System.debug('Unexpected type for ocrDocumentScanResultDetails: ' + ocrDocumentScanResultDetails);
+                        }
                     } else {
-                        System.debug('Unexpected type for ocrDocumentScanResultDetails: ' + ocrDocumentScanResultDetails);
+                        System.debug('No ocrDocumentScanResultDetails found.');
                     }
                 } else {
-                    System.debug('No ocrDocumentScanResultDetails found.');
+                    System.debug('No outputValues in the response.');
                 }
             } else {
-                System.debug('No outputValues found.');
+                System.debug('No extracted text found.');
+                return null;
             }
         } else {
             System.debug('Error calling Extracted Text API, status: ' + response.getStatus() + ', body: ' + response.getBody());
+            return null;
         }
-        return null;
     } catch (Exception ex) {
         System.debug('Exception during Fetch Extracted Text: ' + ex.getMessage());
         return null;
     }
 }
-
-
 
 
 
