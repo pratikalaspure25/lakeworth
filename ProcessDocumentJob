@@ -1,8 +1,7 @@
-public class ProcessDocumentJob implements Queueable {
+public class ProcessDocumentJob implements Queueable, Database.AllowsCallouts {
     private String contentDocumentId;
     private String recordId;
 
-    // Constructor to initialize contentDocumentId and recordId
     public ProcessDocumentJob(String contentDocumentId, String recordId) {
         this.contentDocumentId = contentDocumentId;
         this.recordId = recordId;
@@ -12,54 +11,99 @@ public class ProcessDocumentJob implements Queueable {
         try {
             // Retrieve the content of the uploaded file (PDF)
             ContentVersion cv = [SELECT Id, Title, VersionData FROM ContentVersion WHERE ContentDocumentId = :contentDocumentId LIMIT 1];
-            
-            // Check if ContentVersion is found
             if (cv == null) {
                 System.debug('No ContentVersion found for ContentDocumentId: ' + contentDocumentId);
                 return; // Exit if no record is found
             }
 
-            // Trigger OCR processing using Intelligent Document Reader (IDR)
-            Map<String, String> extractedData = triggerOcrProcessing(cv.VersionData);
+            // Trigger OCR processing using Intelligent Document Reader (IDR) - via HTTP callout
+            String ocrResult = triggerOcrProcessing(cv.VersionData);
+
+            if(String.isBlank(ocrResult)){
+                System.debug('OCR result was empty.');
+                return;
+            }
 
             // Insert new Profit_and_Loss__c record with extracted data
-            insertNewProfitAndLossRecord(extractedData);
+            insertNewProfitAndLossRecord(ocrResult);
+
         } catch (Exception e) {
             System.debug('Error processing document: ' + e.getMessage());
         }
     }
 
-    // Simulate OCR processing using IDR or other OCR service
-    private Map<String, String> triggerOcrProcessing(Blob documentData) {
-        // In real-world scenario, replace this with the actual OCR service call (e.g., IDR or AWS Textract)
-        
-        // For simulation, we are returning a map with extracted data
-        Map<String, String> extractedData = new Map<String, String>();
-        
-        // Simulated extraction from the document (replace with actual OCR service result parsing)
-        extractedData.put('Company Name', 'XYZ Builders');
-        extractedData.put('Loan Number', '093384');
-        extractedData.put('Borrower Name', 'Timothy Ratliff');
-        extractedData.put('Type of Business', 'Commercial Real Estate');
-        
-        return extractedData; // This is where you will get real extracted data from OCR
+    // This method performs HTTP callout to the IDR OCR API.
+    private String triggerOcrProcessing(Blob documentData) {
+        try {
+            Http http = new Http();
+            HttpRequest request = new HttpRequest();
+
+            // TODO: Replace with your actual IDR API endpoint URL
+            String endpointUrl = 'https://your-idr-api-endpoint.com/process';
+            request.setEndpoint(endpointUrl);
+
+            // POST method to submit PDF file
+            request.setMethod('POST');
+
+            // Headers - adjust content-type and authorization to your IDR API specs
+            request.setHeader('Content-Type', 'application/pdf');
+            // Replace below with actual token or authentication method
+            request.setHeader('Authorization', 'Bearer YOUR_ACCESS_TOKEN');
+
+            // Send PDF file as the request body
+            request.setBodyAsBlob(documentData);
+
+            HttpResponse response = http.send(request);
+
+            if (response.getStatusCode() == 200) {
+                System.debug('OCR API response: ' + response.getBody());
+                // Return the OCR JSON result string for parsing
+                return response.getBody();
+            } else {
+                System.debug('Error calling IDR API, status: ' + response.getStatus() + ', body: ' + response.getBody());
+                return null;
+            }
+        } catch (Exception ex) {
+            System.debug('Exception during OCR processing: ' + ex.getMessage());
+            return null;
+        }
     }
 
-    // Insert a new Profit_and_Loss__c record with dynamically extracted data
-    private void insertNewProfitAndLossRecord(Map<String, String> extractedData) {
-        // Create a new instance of Profit_and_Loss__c to insert
-        Profit_and_Loss__c newRecord = new Profit_and_Loss__c();
+    private void insertNewProfitAndLossRecord(String ocrResult) {
+        try {
+            Profit_and_Loss__c newRecord = new Profit_and_Loss__c();
 
-        // Dynamically populate fields with extracted data
-        newRecord.Name = extractedData.get('Company Name'); // Company Name to Name field
-        newRecord.Loan_Number__c = Integer.valueOf(extractedData.get('Loan Number')); // Loan Number as Integer
-        newRecord.Borrower_Name_s__c = extractedData.get('Borrower Name'); // Borrower Name field
-        newRecord.Type_of_Bussiness__c = extractedData.get('Type of Business'); // Type of Business
+            // Parse the OCR JSON result dynamically into a Map<String,Object>
+            Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(ocrResult);
 
-        // Insert the new record into Salesforce
-        insert newRecord;
+            // Extract fields safely – customize keys based on your OCR JSON structure
+            if(responseMap.containsKey('Company Name')) {
+                newRecord.Name = (String) responseMap.get('Company Name');
+            }
+            if(responseMap.containsKey('Loan Number')) {
+                String loanNumStr = (String) responseMap.get('Loan Number');
+                if(loanNumStr != null && loanNumStr.matches('^[0-9]+$')) {
+                    newRecord.Loan_Number__c = Integer.valueOf(loanNumStr);
+                }
+            }
+            if(responseMap.containsKey('Borrower Name')) {
+                newRecord.Borrower_Name_s__c = (String) responseMap.get('Borrower Name');
+            }
+            if(responseMap.containsKey('Type of Business')) {
+                newRecord.Type_of_Bussiness__c = (String) responseMap.get('Type of Business');
+            }
 
-        // Optionally log success
-        System.debug('New Profit_and_Loss__c record inserted with Id: ' + newRecord.Id);
+            // Optionally associate with a related record passed in the job
+            if(recordId != null) {
+                // Assuming you have a lookup field to associate
+                newRecord.Related_Record__c = recordId;
+            }
+
+            insert newRecord;
+            System.debug('Inserted Profit_and_Loss__c record with Id: ' + newRecord.Id);
+
+        } catch(Exception ex){
+            System.debug('Failed to insert Profit_and_Loss__c record: ' + ex.getMessage());
+        }
     }
 }
