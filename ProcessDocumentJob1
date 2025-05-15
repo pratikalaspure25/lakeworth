@@ -135,7 +135,7 @@ private String triggerOcrProcessing(Blob documentData) {
 private String fetchExtractedText(String ocrDocumentScanResultId) {
     Integer retryCount = 0;
     Integer maxRetries = 5; // Maximum number of retries
-    Integer waitTime = 5000; // Time to wait between retries in milliseconds (5 seconds)
+    Integer waitTime = 5000; // Time to wait between retries in milliseconds (will be used for scheduling the next job)
     
     while (retryCount < maxRetries) {
         try {
@@ -181,8 +181,9 @@ private String fetchExtractedText(String ocrDocumentScanResultId) {
                     System.debug('OCR extraction is still in queue. Retrying...');
                     retryCount++;
                     if (retryCount < maxRetries) {
-                        // Wait for the specified time before retrying
-                        System.sleep(waitTime);
+                        // Instead of sleep, queue the next job for retry
+                        System.enqueueJob(new ProcessDocumentJob(contentDocumentId, recordId));
+                        return 'Retrying OCR extraction...';
                     } else {
                         System.debug('Max retries reached. OCR extraction still in queue.');
                         return 'OCR extraction still in process. Please try again later.';
@@ -211,7 +212,6 @@ private String fetchExtractedText(String ocrDocumentScanResultId) {
     }
     return null; // If max retries reached without OCR completion
 }
-
 
 
 
