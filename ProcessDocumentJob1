@@ -104,8 +104,9 @@ private String triggerOcrProcessing(Blob documentData) {
                                 System.debug('OCR Result ID: ' + ocrResultId);
 
                                 // Fetch the extracted text now
-                                String extractedText = fetchExtractedText(ocrResultId);
+                               String extractedText = fetchExtractedText(ocrResultId, contentDocumentId);
                                 System.debug('Extracted Text: ' + extractedText);
+
                             }
                         }
                     }
