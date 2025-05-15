@@ -127,82 +127,80 @@ public class ProcessDocumentJob implements Queueable, Database.AllowsCallouts {
     }
 
     private String checkOCRStatus() {
-        Http http = new Http();
-        HttpRequest request = new HttpRequest();
-        String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
+    Http http = new Http();
+    HttpRequest request = new HttpRequest();
+    String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
 
-        String requestBody = JSON.serialize(new Map<String, Object>{
-            'inputs' => new List<Map<String, Object>>{
-                new Map<String, Object>{
-                    'contentDocumentId' => contentDocumentId,
-                    'ocrDocumentScanResultId' => ocrResultId,
-                    'startPageIndex' => 1,
-                    'endPageIndex' => 20
-                }
+    String requestBody = JSON.serialize(new Map<String, Object>{
+        'inputs' => new List<Map<String, Object>>{
+            new Map<String, Object>{
+                'contentDocumentId' => contentDocumentId,
+                'ocrDocumentScanResultId' => ocrResultId,  // Make sure to include the OCR Result ID
+                'startPageIndex' => 1,
+                'endPageIndex' => 20
             }
-        });
+        }
+    });
 
-        request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);
-        request.setMethod('POST');
-        request.setHeader('Content-Type', 'application/json');
-        request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());
-        request.setBody(requestBody);
+    request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);
+    request.setMethod('POST');
+    request.setHeader('Content-Type', 'application/json');
+    request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());
+    request.setBody(requestBody);
 
-        HttpResponse response = http.send(request);
-        System.debug('Full Status Response: ' + response.getBody());
+    HttpResponse response = http.send(request);
 
-        if (response.getStatusCode() == 200) {
-            try {
-                List<Object> responseList = (List<Object>) JSON.deserializeUntyped(response.getBody());
-                if (responseList != null && !responseList.isEmpty()) {
-                    Map<String, Object> firstResult = (Map<String, Object>) responseList[0];
-                    System.debug('First Result: ' + firstResult);
+    if (response.getStatusCode() == 200) {
+        try {
+            List<Object> responseList = (List<Object>) JSON.deserializeUntyped(response.getBody());
+            if (responseList != null && !responseList.isEmpty()) {
+                Map<String, Object> firstResult = (Map<String, Object>) responseList[0];
+                
+                if (firstResult.containsKey('outputValues')) {
+                    Map<String, Object> outputValues = (Map<String, Object>) firstResult.get('outputValues');
                     
-                    if (firstResult.containsKey('outputValues')) {
-                        Map<String, Object> outputValues = (Map<String, Object>) firstResult.get('outputValues');
-                        System.debug('Output Values: ' + outputValues);
+                    if (outputValues.containsKey('ocrDocumentScanResultDetails')) {
+                        Map<String, Object> details = (Map<String, Object>) outputValues.get('ocrDocumentScanResultDetails');
                         
-                        if (outputValues.containsKey('status')) {
-                            String status = (String)outputValues.get('status');
-                            System.debug('Direct Status: ' + status);
-                            return status;
-                        }
-                        
-                        if (outputValues.containsKey('ocrDocumentScanResultDetails')) {
-                            Map<String, Object> details = (Map<String, Object>) outputValues.get('ocrDocumentScanResultDetails');
-                            System.debug('OCR Details: ' + details);
+                        // Look for the specific OCR result details
+                        if (details.containsKey('ocrDocumentScanResultDetails')) {
+                            List<Map<String, Object>> resultDetails = (List<Map<String, Object>>) details.get('ocrDocumentScanResultDetails');
                             
-                            if (details.containsKey('status')) {
-                                String status = (String)details.get('status');
-                                System.debug('Found Status: ' + status);
-                                return status;
-                            }
-                            
-                            if (details.containsKey('ocrDocumentScanResults')) {
-                                List<Object> results = (List<Object>)details.get('ocrDocumentScanResults');
-                                if (!results.isEmpty()) {
-                                    Map<String, Object> firstScanResult = (Map<String, Object>)results[0];
-                                    if (firstScanResult.containsKey('status')) {
-                                        String status = (String)firstScanResult.get('status');
-                                        System.debug('Scan Result Status: ' + status);
+                            for (Map<String, Object> resultDetail : resultDetails) {
+                                if (resultDetail.containsKey('status')) {
+                                    String status = (String)resultDetail.get('status');
+                                    System.debug('Found Status in Result Detail: ' + status);
+                                    return status;
+                                }
+                                // Also check if the status is in keyValuePairs
+                                if (resultDetail.containsKey('keyValuePairs')) {
+                                    Map<String, Object> keyValuePairs = (Map<String, Object>) resultDetail.get('keyValuePairs');
+                                    if (keyValuePairs.containsKey('status')) {
+                                        String status = (String)keyValuePairs.get('status');
+                                        System.debug('Found Status in KeyValuePairs: ' + status);
                                         return status;
                                     }
                                 }
                             }
                         }
+                        
+                        // If we haven't found the status yet, check if it's directly in the details
+                        if (details.containsKey('status')) {
+                            String status = (String)details.get('status');
+                            System.debug('Found Status directly in details: ' + status);
+                            return status;
+                        }
                     }
                 }
-                
-                System.debug('Could not find status in response structure. Full response: ' + response.getBody());
-                
-            } catch (Exception e) {
-                System.debug('Error parsing response: ' + e.getMessage());
-                System.debug('Response that caused error: ' + response.getBody());
             }
+        } catch (Exception e) {
+            System.debug('Error parsing response: ' + e.getMessage());
+            System.debug('Response that caused error: ' + response.getBody());
         }
-        
-        return 'Unknown';
     }
+    
+    return 'Unknown';
+}
 
     private String fetchExtractedText(String ocrDocumentScanResultId, String contentDocumentId) {
         Http http = new Http();
