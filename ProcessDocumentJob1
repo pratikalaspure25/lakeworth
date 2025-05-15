@@ -76,23 +76,20 @@ private String triggerOcrProcessing(Blob documentData) {
 
         // Handle the response
         if (response.getStatusCode() == 200) {
-            // Assuming the response is a JSON object with a key 'results' that contains a list
-            Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
+            // Assuming the response is a JSON array (List of objects)
+            List<Map<String, Object>> responseList = (List<Map<String, Object>>) JSON.deserializeUntyped(response.getBody());
 
-            // Check if 'results' key exists and is a list
-            if (responseMap.containsKey('results') && responseMap.get('results') instanceof List) {
-                List<Map<String, Object>> responseList = (List<Map<String, Object>>) responseMap.get('results');
-
-                // Iterate through the response and extract the OCR details
-                for (Map<String, Object> result : responseList) {
-                    String ocrResultId = (String) result.get('ocrDocumentScanResultId');
-                    System.debug('OCR Result ID: ' + ocrResultId);
-                }
+            // Check if the responseList is not empty
+            if (responseList != null && !responseList.isEmpty()) {
+                // Extract OCR details from the first item in the list
+                Map<String, Object> result = responseList[0];  // Get the first element (adjust based on your structure)
+                String ocrResultId = (String) result.get('ocrDocumentScanResultId');
+                System.debug('OCR Result ID: ' + ocrResultId);
 
                 // Return the OCR result ID or response for further processing
                 return response.getBody();
             } else {
-                System.debug('Unexpected response structure: ' + response.getBody());
+                System.debug('Unexpected or empty response: ' + response.getBody());
                 return null;
             }
         } else {
@@ -104,6 +101,7 @@ private String triggerOcrProcessing(Blob documentData) {
         return null;
     }
 }
+
 
 
 
