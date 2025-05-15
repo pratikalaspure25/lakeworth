@@ -33,7 +33,7 @@ public class ProcessDocumentJob implements Queueable, Database.AllowsCallouts {
     }
 
     // This method performs HTTP callout to fetch the extracted text from the document
-    private String triggerOcrProcessing(String contentDocumentId) {
+   public static String fetchExtractedText(String contentDocumentId) {
         try {
             Http http = new Http();
             HttpRequest request = new HttpRequest();
@@ -76,7 +76,6 @@ public class ProcessDocumentJob implements Queueable, Database.AllowsCallouts {
             return null;
         }
     }
-
     // Insert the extracted data into a custom Salesforce record (e.g., Profit_and_Loss__c)
     private void insertNewProfitAndLossRecord(String ocrResult) {
         try {
