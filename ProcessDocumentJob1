@@ -193,24 +193,27 @@ private String fetchExtractedText(String ocrDocumentScanResultId, String content
                             return ocrDocumentScanResultDetails.toString(); // You can adjust based on your needs
                         } else {
                             System.debug('Unexpected type for ocrDocumentScanResultDetails: ' + ocrDocumentScanResultDetails);
+                            return 'Unexpected data format'; // Return an error string if data format is unexpected
                         }
                     } else {
                         System.debug('No ocrDocumentScanResultDetails found.');
+                        return 'No OCR result details'; // Return a string if no details found
                     }
                 } else {
                     System.debug('No outputValues in the response.');
+                    return 'No output values'; // Return a string if no output values found
                 }
             } else {
                 System.debug('No extracted text found.');
-                return null;
+                return 'No extracted text found'; // Return a string if no extracted text found
             }
         } else {
             System.debug('Error calling Extracted Text API, status: ' + response.getStatus() + ', body: ' + response.getBody());
-            return null;
+            return 'Error calling Extracted Text API'; // Return error message if API call fails
         }
     } catch (Exception ex) {
         System.debug('Exception during Fetch Extracted Text: ' + ex.getMessage());
-        return null;
+        return 'Exception: ' + ex.getMessage(); // Return exception message if an error occurs
     }
 }
 
