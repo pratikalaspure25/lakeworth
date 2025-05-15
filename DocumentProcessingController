@@ -1,0 +1,7 @@
+public class DocumentProcessingController {
+    @AuraEnabled
+    public static void processFile(String contentDocumentId) {
+        // Enqueue the job to handle document processing asynchronously
+        System.enqueueJob(new ProcessDocumentJob(contentDocumentId));
+    }
+}
