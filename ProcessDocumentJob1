@@ -132,73 +132,86 @@ private String triggerOcrProcessing(Blob documentData) {
 
 
 // This method fetches the extracted text using the fetchExtractedText API
-private String fetchExtractedText(String ocrDocumentScanResultId, String contentDocumentId) {
-    try {
-        Http http = new Http();
-        HttpRequest request = new HttpRequest();
+private String fetchExtractedText(String ocrDocumentScanResultId) {
+    Integer retryCount = 0;
+    Integer maxRetries = 5; // Maximum number of retries
+    Integer waitTime = 5000; // Time to wait between retries in milliseconds (5 seconds)
+    
+    while (retryCount < maxRetries) {
+        try {
+            Http http = new Http();
+            HttpRequest request = new HttpRequest();
 
-        // Salesforce REST API endpoint to fetch extracted text using the OCR result ID
-        String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
+            // Salesforce REST API endpoint to fetch extracted text using the OCR result ID
+            String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
 
-        // Prepare the request body as a JSON string
-        String requestBody = JSON.serialize(new Map<String, Object>{
-            'inputs' => new List<Map<String, Object>>{
-                new Map<String, Object>{
-                    'ocrDocumentScanResultId' => ocrDocumentScanResultId,  // OCR result ID obtained from the first step
-                    'contentDocumentId' => contentDocumentId,  // Ensure you pass the contentDocumentId as well
-                    'startPageIndex' => 1,  // Start from page 1
-                    'endPageIndex' => 20   // You can change the number of pages to extract
-                }
-            }
-        });
-
-        // Set up the HTTP request
-        request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);  // Combine Salesforce base URL with the endpoint
-        request.setMethod('POST');
-        request.setHeader('Content-Type', 'application/json');
-        request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());  // Use the session ID for authorization
-        request.setBody(requestBody);
-
-        // Send the HTTP request
-        HttpResponse response = http.send(request);
-
-        // Log the response for debugging
-        System.debug('Extracted Text API response: ' + response.getBody());
-
-        // Handle the response
-        if (response.getStatusCode() == 200) {
-            // Deserialize the response body into a List of Maps (List<Map<String, Object>>)
-            List<Object> responseList = (List<Object>) JSON.deserializeUntyped(response.getBody());
-
-            // Check if the response list is not empty
-            if (responseList != null && !responseList.isEmpty()) {
-                // Get the first item in the response list
-                Map<String, Object> firstResult = (Map<String, Object>) responseList.get(0);
-
-                // Check if 'outputValues' key exists and contains 'ocrDocumentScanResultDetails'
-                if (firstResult.containsKey('outputValues')) {
-                    Map<String, Object> outputValues = (Map<String, Object>) firstResult.get('outputValues');
-                    if (outputValues.containsKey('ocrDocumentScanResultDetails')) {
-                        List<Map<String, Object>> detailsList = (List<Map<String, Object>>) outputValues.get('ocrDocumentScanResultDetails');
-                        System.debug('Extracted Text: ' + detailsList);
-                        return detailsList.toString(); // Returning the extracted text (you can further process it if needed)
+            // Prepare the request body as a JSON string
+            String requestBody = JSON.serialize(new Map<String, Object>{
+                'inputs' => new List<Map<String, Object>>{
+                    new Map<String, Object>{
+                        'ocrDocumentScanResultId' => ocrDocumentScanResultId,  // OCR result ID obtained from the first step
+                        'startPageIndex' => 1,  // Start from page 1
+                        'endPageIndex' => 20   // You can change the number of pages to extract
                     }
                 }
-                System.debug('No OCR document scan result details found.');
-                return null;
+            });
+
+            // Set up the HTTP request
+            request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);  // Combine Salesforce base URL with the endpoint
+            request.setMethod('POST');
+            request.setHeader('Content-Type', 'application/json');
+            request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());  // Use the session ID for authorization
+            request.setBody(requestBody);
+
+            // Send the HTTP request
+            HttpResponse response = http.send(request);
+
+            // Handle the response
+            if (response.getStatusCode() == 200) {
+                System.debug('Extracted Text API response: ' + response.getBody());
+
+                // Deserialize the response body into a Map of Lists (List<Map<String, Object>>)
+                Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
+                
+                // Check for OCR status
+                String ocrStatus = (String) responseMap.get('status');
+                
+                // If OCR is still in queue, retry after a wait
+                if (ocrStatus == 'OCR_ENQUEUE') {
+                    System.debug('OCR extraction is still in queue. Retrying...');
+                    retryCount++;
+                    if (retryCount < maxRetries) {
+                        // Wait for the specified time before retrying
+                        System.sleep(waitTime);
+                    } else {
+                        System.debug('Max retries reached. OCR extraction still in queue.');
+                        return 'OCR extraction still in process. Please try again later.';
+                    }
+                } else if (ocrStatus == 'OCR_COMPLETED') {
+                    // Successfully extracted text
+                    List<Map<String, Object>> responseList = (List<Map<String, Object>>) responseMap.get('ocrDocumentScanResultDetails');
+                    
+                    if (!responseList.isEmpty()) {
+                        Map<String, Object> firstResult = responseList.get(0);
+                        System.debug('Extracted Text: ' + firstResult);
+                        return firstResult.toString(); // You can further process the data if needed
+                    } else {
+                        System.debug('No extracted text found.');
+                        return null;
+                    }
+                }
             } else {
-                System.debug('No extracted text found.');
+                System.debug('Error calling Extracted Text API, status: ' + response.getStatus() + ', body: ' + response.getBody());
                 return null;
             }
-        } else {
-            System.debug('Error calling Extracted Text API, status: ' + response.getStatus() + ', body: ' + response.getBody());
+        } catch (Exception ex) {
+            System.debug('Exception during Fetch Extracted Text: ' + ex.getMessage());
             return null;
         }
-    } catch (Exception ex) {
-        System.debug('Exception during Fetch Extracted Text: ' + ex.getMessage());
-        return null;
     }
+    return null; // If max retries reached without OCR completion
 }
+
 
 
 
