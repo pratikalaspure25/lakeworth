@@ -2,20 +2,18 @@ import { LightningElement, api } from 'lwc';
 import processFile from '@salesforce/apex/DocumentProcessingController.processFile';
 
 export default class FileUploadComponent extends LightningElement {
-    @api recordId; // ID of the record where the file will be associated
+    @api recordId;
 
     handleUploadFinished(event) {
-        // Extract the uploaded file's content document ID
         const uploadedFiles = event.detail.files;
         const contentDocumentId = uploadedFiles[0].documentId;
 
-        // Trigger Apex to start the document processing
         processFile({ contentDocumentId })
-            .then(result => {
-                console.log('OCR processing started successfully');
+            .then(() => {
+                console.log('File sent for processing');
             })
             .catch(error => {
-                console.error('Error during OCR processing', error);
+                console.error('Processing error', error);
             });
     }
 }
