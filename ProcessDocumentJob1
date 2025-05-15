@@ -102,6 +102,10 @@ private String triggerOcrProcessing(Blob documentData) {
                                 Map<String, Object> ocrResult = (Map<String, Object>) ocrResultObj;
                                 String ocrResultId = (String) ocrResult.get('ocrDocumentScanResultId');
                                 System.debug('OCR Result ID: ' + ocrResultId);
+
+                            // Fetch the extracted text now
+                                String extractedText = fetchExtractedText(ocrDocumentScanResultId);
+                                System.debug('Extracted Text: ' + extractedText);
                             }
                         }
                     }
@@ -127,20 +131,20 @@ private String triggerOcrProcessing(Blob documentData) {
 
 
 // This method fetches the extracted text using the fetchExtractedText API
-private String fetchExtractedText(String contentDocumentId) {
+private String fetchExtractedText(String ocrDocumentScanResultId) {
     try {
         Http http = new Http();
         HttpRequest request = new HttpRequest();
 
-        // Salesforce REST API endpoint to fetch extracted text
+        // Salesforce REST API endpoint to fetch extracted text using the OCR result ID
         String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
 
         // Prepare the request body as a JSON string
         String requestBody = JSON.serialize(new Map<String, Object>{
             'inputs' => new List<Map<String, Object>>{
                 new Map<String, Object>{
-                    'contentDocumentId' => contentDocumentId,  // Content Document ID
-                    'startPageIndex' => 1,  // Default to page 1
+                    'ocrDocumentScanResultId' => ocrDocumentScanResultId,  // OCR result ID obtained from the first step
+                    'startPageIndex' => 1,  // Start from page 1
                     'endPageIndex' => 20   // You can change the number of pages to extract
                 }
             }
