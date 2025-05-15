@@ -3,10 +3,9 @@ private String triggerOcrProcessing(Blob documentData) {
         Http http = new Http();
         HttpRequest request = new HttpRequest();
 
-        // Use the Named Credential directly in the endpoint
-        // You can specify just the named credential reference like this:
-        String endpointUrl = 'callout:IDR_Textract_Legacy_2';  // Reference the Named Credential
-        request.setEndpoint(endpointUrl + '/textract');  // Ensure you append the correct Textract API endpoint
+        // Use the Named Credential (e.g., 'AWS_Textract_Integration') for the endpoint URL and authentication
+        String endpointUrl = 'callout:AWS_Textract_Integration';  // Reference the Named Credential
+        request.setEndpoint(endpointUrl + '/textract');  // Append the correct Textract API endpoint
 
         // POST method to submit PDF file
         request.setMethod('POST');
