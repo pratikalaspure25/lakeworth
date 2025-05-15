@@ -1,0 +1,33 @@
+private String triggerOcrProcessing(Blob documentData) {
+        try {
+            Http http = new Http();
+            HttpRequest request = new HttpRequest();
+
+            // Use the Named Credential (e.g., 'IDR_Textract_Legacy_2') for the endpoint URL and authentication
+            String endpointUrl = 'callout:IDR_Textract_Legacy_2';  // Named Credential reference
+            request.setEndpoint(endpointUrl + '/textract');  // Add specific Textract API endpoint
+
+            // POST method to submit PDF file
+            request.setMethod('POST');
+
+            // Headers - You can leave these out if they are handled by the Named Credential
+            request.setHeader('Content-Type', 'application/pdf');
+
+            // Send PDF file as the request body
+            request.setBodyAsBlob(documentData);
+
+            HttpResponse response = http.send(request);
+
+            if (response.getStatusCode() == 200) {
+                System.debug('OCR API response: ' + response.getBody());
+                // Return the OCR JSON result string for parsing
+                return response.getBody();
+            } else {
+                System.debug('Error calling IDR API, status: ' + response.getStatus() + ', body: ' + response.getBody());
+                return null;
+            }
+        } catch (Exception ex) {
+            System.debug('Exception during OCR processing: ' + ex.getMessage());
+            return null;
+        }
+    }
