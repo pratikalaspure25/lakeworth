@@ -76,7 +76,7 @@ private String triggerOcrProcessing(Blob documentData) {
 
         // Handle the response
         if (response.getStatusCode() == 200) {
-            // Deserialize the response body as a List of Objects (List of Map-like structures)
+            // Deserialize the response body as a List of Maps (List<Map<String, Object>>)
             List<Object> responseList = (List<Object>) JSON.deserializeUntyped(response.getBody());
 
             // Check if the response is not empty
@@ -108,17 +108,20 @@ private String triggerOcrProcessing(Blob documentData) {
                 }
             } else {
                 System.debug('Unexpected or empty response: ' + response.getBody());
-                return null;
+                return 'No OCR results found'; // Provide a meaningful string in case of an empty response
             }
         } else {
             System.debug('Error calling OCR API, status: ' + response.getStatus() + ', body: ' + response.getBody());
-            return null;
+            return 'Error calling OCR API'; // Return a string indicating failure
         }
+
+        return 'OCR processing completed successfully'; // Return a success message if all goes well
     } catch (Exception ex) {
         System.debug('Exception during OCR processing: ' + ex.getMessage());
-        return null;
+        return 'Exception during OCR processing: ' + ex.getMessage(); // Return the exception message
     }
 }
+
 
 
 
