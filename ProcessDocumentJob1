@@ -40,7 +40,7 @@ public class ProcessDocumentJob implements Queueable, Database.AllowsCallouts {
         }
     }
 
-   // This method performs HTTP callout to the OCR API to trigger text extraction
+  // This method performs HTTP callout to the OCR API to trigger text extraction
 private String triggerOcrProcessing(Blob documentData) {
     try {
         Http http = new Http();
@@ -75,11 +75,10 @@ private String triggerOcrProcessing(Blob documentData) {
         if (response.getStatusCode() == 200) {
             System.debug('OCR API response: ' + response.getBody());
             // Extract the OCR result from the response
-            Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
-            List<Map<String, Object>> ocrResults = (List<Map<String, Object>>) responseMap.get('ocrDocumentScanResultDetails');
-            
-            // Extract the ocrDocumentScanResultId for each page
-            for (Map<String, Object> result : ocrResults) {
+            List<Map<String, Object>> responseList = (List<Map<String, Object>>) JSON.deserializeUntyped(response.getBody());
+
+            // Iterate through the response and extract the OCR details
+            for (Map<String, Object> result : responseList) {
                 String ocrResultId = (String) result.get('ocrDocumentScanResultId');
                 System.debug('OCR Result ID: ' + ocrResultId);
             }
@@ -129,15 +128,15 @@ private String fetchExtractedText(String contentDocumentId) {
         // Handle the response
         if (response.getStatusCode() == 200) {
             System.debug('Extracted Text API response: ' + response.getBody());
-            
-            // Deserialize response body into List<Map<String, Object>> to correctly handle the response
+
+            // Deserialize the response body into a List of Maps to handle the array properly
             List<Map<String, Object>> responseList = (List<Map<String, Object>>) JSON.deserializeUntyped(response.getBody());
-            
-            // Since the response is an array, you can return the first result or handle multiple items
+
+            // Check if responseList is not empty
             if (!responseList.isEmpty()) {
                 Map<String, Object> firstResult = responseList.get(0);
                 System.debug('Extracted Text: ' + firstResult);
-                return firstResult.toString();
+                return firstResult.toString(); // You can further process the data if needed
             } else {
                 System.debug('No extracted text found.');
                 return null;
@@ -151,6 +150,7 @@ private String fetchExtractedText(String contentDocumentId) {
         return null;
     }
 }
+
 
 
     private void insertNewProfitAndLossRecord(String extractedText) {
