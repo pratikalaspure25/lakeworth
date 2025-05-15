@@ -76,18 +76,36 @@ private String triggerOcrProcessing(Blob documentData) {
 
         // Handle the response
         if (response.getStatusCode() == 200) {
-            // Assuming the response is a JSON array (List of objects)
-            List<Map<String, Object>> responseList = (List<Map<String, Object>>) JSON.deserializeUntyped(response.getBody());
+            // Deserialize the response body as a List of Objects (List of Map-like structures)
+            List<Object> responseList = (List<Object>) JSON.deserializeUntyped(response.getBody());
 
-            // Check if the responseList is not empty
+            // Check if the response is not empty
             if (responseList != null && !responseList.isEmpty()) {
-                // Extract OCR details from the first item in the list
-                Map<String, Object> result = responseList[0];  // Get the first element (adjust based on your structure)
-                String ocrResultId = (String) result.get('ocrDocumentScanResultId');
-                System.debug('OCR Result ID: ' + ocrResultId);
+                // Get the first item in the response list
+                Map<String, Object> resultMap = (Map<String, Object>) responseList[0];
 
-                // Return the OCR result ID or response for further processing
-                return response.getBody();
+                // Check if outputValues exists in the result map
+                if (resultMap.containsKey('outputValues')) {
+                    Map<String, Object> outputValues = (Map<String, Object>) resultMap.get('outputValues');
+
+                    if (outputValues.containsKey('ocrDocumentScanResultDetails')) {
+                        // Extract the OCR document scan result details
+                        Map<String, Object> ocrDocumentScanResultDetails = (Map<String, Object>) outputValues.get('ocrDocumentScanResultDetails');
+
+                        if (ocrDocumentScanResultDetails.containsKey('ocrDocumentScanResults')) {
+                            // Extract the OCR results
+                            List<Object> ocrResults = (List<Object>) ocrDocumentScanResultDetails.get('ocrDocumentScanResults');
+
+                            // Iterate over the results and extract the OCR result ID
+                            for (Object ocrResultObj : ocrResults) {
+                                // Cast the object to a map for easier access to the ocrResultId
+                                Map<String, Object> ocrResult = (Map<String, Object>) ocrResultObj;
+                                String ocrResultId = (String) ocrResult.get('ocrDocumentScanResultId');
+                                System.debug('OCR Result ID: ' + ocrResultId);
+                            }
+                        }
+                    }
+                }
             } else {
                 System.debug('Unexpected or empty response: ' + response.getBody());
                 return null;
