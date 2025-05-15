@@ -140,7 +140,7 @@ private String fetchExtractedText(String ocrDocumentScanResultId, String content
         // Salesforce REST API endpoint to fetch extracted text using the OCR result ID
         String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
 
-        // Prepare the request body as a JSON string, now including contentDocumentId
+        // Prepare the request body as a JSON string
         String requestBody = JSON.serialize(new Map<String, Object>{
             'inputs' => new List<Map<String, Object>>{
                 new Map<String, Object>{
@@ -167,15 +167,25 @@ private String fetchExtractedText(String ocrDocumentScanResultId, String content
 
         // Handle the response
         if (response.getStatusCode() == 200) {
-            // Deserialize the response body into a Map of type List
-            Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
-            List<Map<String, Object>> responseList = (List<Map<String, Object>>) responseMap.get('outputValues').get('ocrDocumentScanResultDetails');
+            // Deserialize the response body into a List of Maps (List<Map<String, Object>>)
+            List<Object> responseList = (List<Object>) JSON.deserializeUntyped(response.getBody());
 
-            // Check if responseList is not empty
+            // Check if the response list is not empty
             if (responseList != null && !responseList.isEmpty()) {
-                Map<String, Object> firstResult = responseList.get(0);
-                System.debug('Extracted Text: ' + firstResult);
-                return firstResult.toString(); // You can further process the data if needed
+                // Get the first item in the response list
+                Map<String, Object> firstResult = (Map<String, Object>) responseList.get(0);
+
+                // Check if 'outputValues' key exists and contains 'ocrDocumentScanResultDetails'
+                if (firstResult.containsKey('outputValues')) {
+                    Map<String, Object> outputValues = (Map<String, Object>) firstResult.get('outputValues');
+                    if (outputValues.containsKey('ocrDocumentScanResultDetails')) {
+                        List<Map<String, Object>> detailsList = (List<Map<String, Object>>) outputValues.get('ocrDocumentScanResultDetails');
+                        System.debug('Extracted Text: ' + detailsList);
+                        return detailsList.toString(); // Returning the extracted text (you can further process it if needed)
+                    }
+                }
+                System.debug('No OCR document scan result details found.');
+                return null;
             } else {
                 System.debug('No extracted text found.');
                 return null;
@@ -189,6 +199,7 @@ private String fetchExtractedText(String ocrDocumentScanResultId, String content
         return null;
     }
 }
+
 
 
 
