@@ -40,106 +40,118 @@ public class ProcessDocumentJob implements Queueable, Database.AllowsCallouts {
         }
     }
 
-    // This method performs HTTP callout to the IDR OCR API.
-    private String triggerOcrProcessing(Blob documentData) {
-        try {
-            Http http = new Http();
-            HttpRequest request = new HttpRequest();
+   // This method performs HTTP callout to the OCR API to trigger text extraction
+private String triggerOcrProcessing(Blob documentData) {
+    try {
+        Http http = new Http();
+        HttpRequest request = new HttpRequest();
 
-            // Salesforce REST API endpoint to initiate text extraction
-            String endpointUrl = '/services/data/v58.0/actions/standard/initiateTextExtraction';
+        // Salesforce REST API endpoint to initiate text extraction
+        String endpointUrl = '/services/data/v58.0/actions/standard/initiateTextExtraction';
 
-            // Prepare the request body as a JSON string
-            String requestBody = JSON.serialize(new Map<String, Object>{
-                'inputs' => new List<Map<String, Object>>{
-                    new Map<String, Object>{
-                        'contentDocumentId' => contentDocumentId,  // Your uploaded document ID
-                        'startPageIndex' => 1,  // Start from page 1
-                        'endPageIndex' => 20,  // You can change this based on how many pages you want to extract
-                        'ocrService' => 'AMAZON_TEXTRACT'  // Using the Textract OCR service
-                    }
+        // Prepare the request body as a JSON string
+        String requestBody = JSON.serialize(new Map<String, Object>{
+            'inputs' => new List<Map<String, Object>>{
+                new Map<String, Object>{
+                    'contentDocumentId' => contentDocumentId,  // Your uploaded document ID
+                    'startPageIndex' => 1,  // Start from page 1
+                    'endPageIndex' => 20,  // You can change this based on how many pages you want to extract
+                    'ocrService' => 'AMAZON_TEXTRACT'  // Using the Textract OCR service
                 }
-            });
-
-            // Set up the HTTP request
-            request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);  // Combine Salesforce base URL with the endpoint
-            request.setMethod('POST');
-            request.setHeader('Content-Type', 'application/json');
-            request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());  // Use the session ID for authorization
-            request.setBody(requestBody);
-
-            // Send the HTTP request
-            HttpResponse response = http.send(request);
-
-            // Handle the response
-            if (response.getStatusCode() == 200) {
-                System.debug('OCR API response: ' + response.getBody());
-                // Extract the OCR result from the response
-                Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
-                List<Map<String, Object>> ocrResults = (List<Map<String, Object>>) responseMap.get('ocrDocumentScanResultDetails');
-                
-                // Check if OCR results are empty
-                if (ocrResults.isEmpty()) {
-                    System.debug('No OCR data found.');
-                    return null;
-                }
-
-                // Return the OCR result for further processing (if needed)
-                return response.getBody();
-            } else {
-                System.debug('Error calling OCR API, status: ' + response.getStatus() + ', body: ' + response.getBody());
-                return null;
             }
-        } catch (Exception ex) {
-            System.debug('Exception during OCR processing: ' + ex.getMessage());
-            return null;
-        }
-    }
+        });
 
-    // Fetch the extracted text using the fetchExtractedText API
-    private String fetchExtractedText(String contentDocumentId) {
-        try {
-            Http http = new Http();
-            HttpRequest request = new HttpRequest();
+        // Set up the HTTP request
+        request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);  // Combine Salesforce base URL with the endpoint
+        request.setMethod('POST');
+        request.setHeader('Content-Type', 'application/json');
+        request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());  // Use the session ID for authorization
+        request.setBody(requestBody);
 
-            // Salesforce REST API endpoint to fetch extracted text
-            String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
+        // Send the HTTP request
+        HttpResponse response = http.send(request);
+
+        // Handle the response
+        if (response.getStatusCode() == 200) {
+            System.debug('OCR API response: ' + response.getBody());
+            // Extract the OCR result from the response
+            Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
+            List<Map<String, Object>> ocrResults = (List<Map<String, Object>>) responseMap.get('ocrDocumentScanResultDetails');
             
-            // Prepare the request body as a JSON string
-            String requestBody = JSON.serialize(new Map<String, Object>{
-                'inputs' => new List<Map<String, Object>>{
-                    new Map<String, Object>{
-                        'contentDocumentId' => contentDocumentId,  // Content Document ID
-                        'startPageIndex' => 1,  // Default to page 1
-                        'endPageIndex' => 20   // You can change the number of pages to extract
-                    }
-                }
-            });
-
-            // Set up the HTTP request
-            request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);  // Combine Salesforce base URL with the endpoint
-            request.setMethod('POST');
-            request.setHeader('Content-Type', 'application/json');
-            request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());  // Use the session ID for authorization
-            request.setBody(requestBody);
-
-            // Send the HTTP request
-            HttpResponse response = http.send(request);
-
-            // Handle the response
-            if (response.getStatusCode() == 200) {
-                System.debug('Extracted Text API response: ' + response.getBody());
-                // Return the response body containing the extracted text
-                return response.getBody();
-            } else {
-                System.debug('Error calling Extracted Text API, status: ' + response.getStatus() + ', body: ' + response.getBody());
-                return null;
+            // Extract the ocrDocumentScanResultId for each page
+            for (Map<String, Object> result : ocrResults) {
+                String ocrResultId = (String) result.get('ocrDocumentScanResultId');
+                System.debug('OCR Result ID: ' + ocrResultId);
             }
-        } catch (Exception ex) {
-            System.debug('Exception during Fetch Extracted Text: ' + ex.getMessage());
+
+            // Return the OCR result ID or response for further processing
+            return response.getBody();
+        } else {
+            System.debug('Error calling OCR API, status: ' + response.getStatus() + ', body: ' + response.getBody());
             return null;
         }
+    } catch (Exception ex) {
+        System.debug('Exception during OCR processing: ' + ex.getMessage());
+        return null;
     }
+}
+
+// This method fetches the extracted text using the fetchExtractedText API
+private String fetchExtractedText(String contentDocumentId) {
+    try {
+        Http http = new Http();
+        HttpRequest request = new HttpRequest();
+
+        // Salesforce REST API endpoint to fetch extracted text
+        String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
+
+        // Prepare the request body as a JSON string
+        String requestBody = JSON.serialize(new Map<String, Object>{
+            'inputs' => new List<Map<String, Object>>{
+                new Map<String, Object>{
+                    'contentDocumentId' => contentDocumentId,  // Content Document ID
+                    'startPageIndex' => 1,  // Default to page 1
+                    'endPageIndex' => 20   // You can change the number of pages to extract
+                }
+            }
+        });
+
+        // Set up the HTTP request
+        request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);  // Combine Salesforce base URL with the endpoint
+        request.setMethod('POST');
+        request.setHeader('Content-Type', 'application/json');
+        request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());  // Use the session ID for authorization
+        request.setBody(requestBody);
+
+        // Send the HTTP request
+        HttpResponse response = http.send(request);
+
+        // Handle the response
+        if (response.getStatusCode() == 200) {
+            System.debug('Extracted Text API response: ' + response.getBody());
+            
+            // Deserialize response body into List<Map<String, Object>> to correctly handle the response
+            List<Map<String, Object>> responseList = (List<Map<String, Object>>) JSON.deserializeUntyped(response.getBody());
+            
+            // Since the response is an array, you can return the first result or handle multiple items
+            if (!responseList.isEmpty()) {
+                Map<String, Object> firstResult = responseList.get(0);
+                System.debug('Extracted Text: ' + firstResult);
+                return firstResult.toString();
+            } else {
+                System.debug('No extracted text found.');
+                return null;
+            }
+        } else {
+            System.debug('Error calling Extracted Text API, status: ' + response.getStatus() + ', body: ' + response.getBody());
+            return null;
+        }
+    } catch (Exception ex) {
+        System.debug('Exception during Fetch Extracted Text: ' + ex.getMessage());
+        return null;
+    }
+}
+
 
     private void insertNewProfitAndLossRecord(String extractedText) {
         try {
