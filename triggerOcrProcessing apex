@@ -3,24 +3,49 @@ private String triggerOcrProcessing(Blob documentData) {
         Http http = new Http();
         HttpRequest request = new HttpRequest();
 
-        // Use the Named Credential (e.g., 'AWS_Textract_Integration') for the endpoint URL and authentication
-        String endpointUrl = 'callout:AWS_Textract_Integration';  // Reference the Named Credential
-        request.setEndpoint(endpointUrl + '/textract');  // Append the correct Textract API endpoint
+        // Salesforce REST API endpoint to initiate text extraction
+        String endpointUrl = '/services/data/v58.0/actions/standard/initiateTextExtraction';
+        
+        // Prepare the request body as a JSON string
+        String requestBody = JSON.serialize(new Map<String, Object>{
+            'inputs' => new List<Map<String, Object>>{
+                new Map<String, Object>{
+                    'contentDocumentId' => contentDocumentId,  // Your uploaded document ID
+                    'startPageIndex' => 1,  // Start from page 1
+                    'endPageIndex' => 20,  // You can change this based on how many pages you want to extract
+                    'ocrService' => 'AMAZON_TEXTRACT',  // Using the Textract OCR service
+                    'documentTypeId' => '0deT10000004CCbIAM'  // Optional: if you need to specify a document type ID
+                }
+            }
+        });
 
-        // POST method to submit PDF file
+        // Set up the HTTP request
+        request.setEndpoint(URL.getSalesforceBaseUrl().toExternalForm() + endpointUrl);  // Combine Salesforce base URL with the endpoint
         request.setMethod('POST');
-        request.setHeader('Content-Type', 'application/pdf');
+        request.setHeader('Content-Type', 'application/json');
+        request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());  // Use the session ID for authorization
+        request.setBody(requestBody);
 
-        // Send PDF file as the request body
-        request.setBodyAsBlob(documentData);
-
+        // Send the HTTP request
         HttpResponse response = http.send(request);
 
+        // Handle the response
         if (response.getStatusCode() == 200) {
             System.debug('OCR API response: ' + response.getBody());
+            // Extract the OCR result from the response
+            Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
+            List<Map<String, Object>> ocrResults = (List<Map<String, Object>>) responseMap.get('ocrDocumentScanResultDetails');
+            
+            // Extract the ocrDocumentScanResultId for each page
+            for (Map<String, Object> result : ocrResults) {
+                String ocrResultId = (String) result.get('ocrDocumentScanResultId');
+                System.debug('OCR Result ID: ' + ocrResultId);
+            }
+
+            // Return the OCR result ID or response for further processing
             return response.getBody();
         } else {
-            System.debug('Error calling IDR API, status: ' + response.getStatus() + ', body: ' + response.getBody());
+            System.debug('Error calling OCR API, status: ' + response.getStatus() + ', body: ' + response.getBody());
             return null;
         }
     } catch (Exception ex) {
