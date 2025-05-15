@@ -80,7 +80,7 @@ private String triggerOcrProcessing(Blob documentData) {
             Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
 
             // Check if 'results' key exists and is a list
-            if (responseMap.containsKey('results') && responseMap.get('results') instanceof List<?>) {
+            if (responseMap.containsKey('results') && responseMap.get('results') instanceof List) {
                 List<Map<String, Object>> responseList = (List<Map<String, Object>>) responseMap.get('results');
 
                 // Iterate through the response and extract the OCR details
@@ -104,6 +104,7 @@ private String triggerOcrProcessing(Blob documentData) {
         return null;
     }
 }
+
 
 
 // This method fetches the extracted text using the fetchExtractedText API
