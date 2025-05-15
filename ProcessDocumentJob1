@@ -76,53 +76,38 @@ private String triggerOcrProcessing(Blob documentData) {
 
         // Handle the response
         if (response.getStatusCode() == 200) {
-            // Deserialize the response body as a List of Maps (List<Map<String, Object>>)
+            // Deserialize the response body to extract the OCR result ID
             List<Object> responseList = (List<Object>) JSON.deserializeUntyped(response.getBody());
 
-            // Check if the response is not empty
             if (responseList != null && !responseList.isEmpty()) {
-                // Get the first item in the response list
                 Map<String, Object> resultMap = (Map<String, Object>) responseList[0];
-
-                // Check if outputValues exists in the result map
                 if (resultMap.containsKey('outputValues')) {
                     Map<String, Object> outputValues = (Map<String, Object>) resultMap.get('outputValues');
-
                     if (outputValues.containsKey('ocrDocumentScanResultDetails')) {
-                        // Extract the OCR document scan result details
                         Map<String, Object> ocrDocumentScanResultDetails = (Map<String, Object>) outputValues.get('ocrDocumentScanResultDetails');
-
                         if (ocrDocumentScanResultDetails.containsKey('ocrDocumentScanResults')) {
-                            // Extract the OCR results
                             List<Object> ocrResults = (List<Object>) ocrDocumentScanResultDetails.get('ocrDocumentScanResults');
-
-                            // Iterate over the results and extract the OCR result ID
                             for (Object ocrResultObj : ocrResults) {
-                                // Cast the object to a map for easier access to the ocrResultId
                                 Map<String, Object> ocrResult = (Map<String, Object>) ocrResultObj;
-                                String ocrResultId = (String) ocrResult.get('ocrDocumentScanResultId');
-                                System.debug('OCR Result ID: ' + ocrResultId);
+                                String ocrDocumentScanResultId = (String) ocrResult.get('ocrDocumentScanResultId');
+                                System.debug('OCR Document Scan Result ID: ' + ocrDocumentScanResultId);
 
-                            // Fetch the extracted text now
+                                // Fetch the extracted text now
                                 String extractedText = fetchExtractedText(ocrDocumentScanResultId);
                                 System.debug('Extracted Text: ' + extractedText);
                             }
                         }
                     }
                 }
-            } else {
-                System.debug('Unexpected or empty response: ' + response.getBody());
-                return 'No OCR results found'; // Provide a meaningful string in case of an empty response
             }
+
         } else {
             System.debug('Error calling OCR API, status: ' + response.getStatus() + ', body: ' + response.getBody());
-            return 'Error calling OCR API'; // Return a string indicating failure
+            return null;
         }
-
-        return 'OCR processing completed successfully'; // Return a success message if all goes well
     } catch (Exception ex) {
         System.debug('Exception during OCR processing: ' + ex.getMessage());
-        return 'Exception during OCR processing: ' + ex.getMessage(); // Return the exception message
+        return null;
     }
 }
 
