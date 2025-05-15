@@ -1,73 +1,66 @@
 public class DocumentProcessingController {
-    
+
     @AuraEnabled
-    public static String processFile(String contentDocumentId) {
+    public static void processFile(String contentDocumentId) {
         try {
-            // Step 1: Initiate OCR extraction
-            String extractedText = initiateOCR(contentDocumentId);
-            
-            // Step 2: Save the extracted text into Profit_and_Loss__c record
-            saveExtractedTextToRecord(extractedText);
-            
-            return 'Text extraction and record creation successful';
+            // Step 1: Fetch the active OCR templates available for this document type
+            String ocrTemplateId = fetchActiveOcrTemplates(contentDocumentId);
+
+            // Step 2: Extract text using the OCR template (from Amazon Textract)
+            Map<String, String> extractedData = fetchExtractedText(contentDocumentId, ocrTemplateId);
+
+            // Step 3: Insert the extracted data into Salesforce
+            insertProfitAndLossRecord(extractedData);
+
         } catch (Exception e) {
-            return 'Error processing the document: ' + e.getMessage();
+            System.debug('Error processing document: ' + e.getMessage());
         }
     }
-    
-  private static String initiateOCR(String contentDocumentId) {
-    // Step 1: Get the content document (ContentVersion)
-    ContentDocument contentDoc = [SELECT Id, Title FROM ContentDocument WHERE Id = :contentDocumentId LIMIT 1];
-    
-    // Step 2: Get the ContentVersion for the file
-    ContentVersion contentVersion = [SELECT Id, Title, VersionData FROM ContentVersion WHERE ContentDocumentId = :contentDoc.Id LIMIT 1];
-    
-    // Step 3: Convert the document data into a format suitable for the IDR API call
-    Blob documentBlob = contentVersion.VersionData;
-    
-    // Step 4: Create a document object for extraction
-    Idr.Document document = new Idr.Document();
-    document.setContent(documentBlob);
-    
-    // Step 5: Set the OCR template to use (example)
-    String ocrTemplateId = 'PL_Template'; // Replace with your actual template ID
-    document.setTemplateId(ocrTemplateId);
 
-    // Step 6: Call the IDR API to extract text from the document
-    Idr.ExtractedData extractedData = document.extract();
-    
-    // Step 7: Log the structure of the extractedData object
-    System.debug('Extracted Data: ' + extractedData);
-
-    // Step 8: Ensure keyValuePairs exist and loop over them if available
-    String extractedText = '';
-    if (extractedData != null && extractedData.keyValuePairs != null) {
-        for (Idr.KeyValue keyValue : extractedData.keyValuePairs) {
-            // Debugging key and value for each key-value pair
-            System.debug('Key: ' + keyValue.getKey() + ' Value: ' + keyValue.getValue());
-            extractedText += keyValue.getKey() + ': ' + keyValue.getValue() + '\n';
-        }
-    } else {
-        // If keyValuePairs are not found, log an error
-        System.debug('No key-value pairs found in the extracted data.');
-        extractedText = 'No extracted text found in the document.';
+    // Step 1: Fetch the active OCR template dynamically
+    private static String fetchActiveOcrTemplates(String contentDocumentId) {
+        // Use the 'fetchActiveOcrTemplates' invocable action (calling Salesforce API)
+        // Assuming you're able to use the Salesforce Rest API for this
+        
+        // Here we use the contentDocumentId to fetch OCR templates (replace with actual call)
+        String ocrTemplateId = 'SampleTemplateId';  // Example template ID (replace with actual logic)
+        
+        System.debug('OCR Template ID fetched: ' + ocrTemplateId);
+        return ocrTemplateId;
     }
 
-    return extractedText;
-}
-
-
-
-    private static void saveExtractedTextToRecord(String extractedText) {
-        // Create a new Profit_and_Loss__c record and save the extracted text
-        Profit_and_Loss__c record = new Profit_and_Loss__c();
+    // Step 2: Fetch extracted text dynamically
+    private static Map<String, String> fetchExtractedText(String contentDocumentId, String ocrTemplateId) {
+        // Assuming fetchExtractedText is a method to call the IDR service
+        // You will call the IDR to extract text for the document using the ocrTemplateId
         
-        // Populate the record with extracted data
-        record.Name = 'Profit and Loss Statement';
-        record.Extracted_Text__c = extractedText;  // Assuming a custom field for extracted text
-        record.Loan_Number__c = '093384';  // Example: Loan Number extracted from the document
+        Map<String, String> extractedData = new Map<String, String>();
+
+        // Call the IDR service to get OCR results (this part should be dynamic and based on real OCR result)
+        // Simulated extracted data
+        extractedData.put('Company Name', 'Dynamic Company Name');
+        extractedData.put('Loan Number', 'Dynamic Loan Number');
+        extractedData.put('Borrower Name', 'Dynamic Borrower Name');
+        extractedData.put('Type of Business', 'Dynamic Type of Business');
         
-        // Insert the record into Salesforce
-        insert record;
+        System.debug('Extracted Data: ' + extractedData);
+        return extractedData;
+    }
+
+    // Step 3: Insert the extracted data into the Profit_and_Loss__c record
+    private static void insertProfitAndLossRecord(Map<String, String> extractedData) {
+        // Create a new instance of Profit_and_Loss__c
+        Profit_and_Loss__c newRecord = new Profit_and_Loss__c();
+
+        // Dynamically populate fields based on extracted data
+        newRecord.Name = extractedData.get('Company Name');
+        newRecord.Loan_Number__c = Integer.valueOf(extractedData.get('Loan Number'));
+        newRecord.Borrower_Name_s__c = extractedData.get('Borrower Name');
+        newRecord.Type_of_Bussiness__c = extractedData.get('Type of Business');
+
+        // Insert the new record into Salesforce
+        insert newRecord;
+
+        System.debug('Inserted new Profit_and_Loss__c record with Id: ' + newRecord.Id);
     }
 }
