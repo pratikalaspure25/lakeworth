@@ -13,8 +13,8 @@ private String triggerOcrProcessing(Blob documentData) {
                     'contentDocumentId' => contentDocumentId,  // Your uploaded document ID
                     'startPageIndex' => 1,  // Start from page 1
                     'endPageIndex' => 20,  // You can change this based on how many pages you want to extract
-                    'ocrService' => 'AMAZON_TEXTRACT',  // Using the Textract OCR service
-                    'documentTypeId' => '0deT10000004CCbIAM'  // Optional: if you need to specify a document type ID
+                    'ocrService' => 'AMAZON_TEXTRACT'  // Using the Textract OCR service
+                    // Remove 'documentTypeId' if specifying 'ocrService'
                 }
             }
         });
