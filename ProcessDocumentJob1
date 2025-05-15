@@ -71,20 +71,30 @@ private String triggerOcrProcessing(Blob documentData) {
         // Send the HTTP request
         HttpResponse response = http.send(request);
 
+        // Log the response body for debugging
+        System.debug('OCR API response: ' + response.getBody());
+
         // Handle the response
         if (response.getStatusCode() == 200) {
-            System.debug('OCR API response: ' + response.getBody());
-            // Extract the OCR result from the response
-            List<Map<String, Object>> responseList = (List<Map<String, Object>>) JSON.deserializeUntyped(response.getBody());
+            // Assuming the response is a JSON object with a key 'results' that contains a list
+            Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
 
-            // Iterate through the response and extract the OCR details
-            for (Map<String, Object> result : responseList) {
-                String ocrResultId = (String) result.get('ocrDocumentScanResultId');
-                System.debug('OCR Result ID: ' + ocrResultId);
+            // Check if 'results' key exists and is a list
+            if (responseMap.containsKey('results') && responseMap.get('results') instanceof List<?>) {
+                List<Map<String, Object>> responseList = (List<Map<String, Object>>) responseMap.get('results');
+
+                // Iterate through the response and extract the OCR details
+                for (Map<String, Object> result : responseList) {
+                    String ocrResultId = (String) result.get('ocrDocumentScanResultId');
+                    System.debug('OCR Result ID: ' + ocrResultId);
+                }
+
+                // Return the OCR result ID or response for further processing
+                return response.getBody();
+            } else {
+                System.debug('Unexpected response structure: ' + response.getBody());
+                return null;
             }
-
-            // Return the OCR result ID or response for further processing
-            return response.getBody();
         } else {
             System.debug('Error calling OCR API, status: ' + response.getStatus() + ', body: ' + response.getBody());
             return null;
@@ -94,6 +104,7 @@ private String triggerOcrProcessing(Blob documentData) {
         return null;
     }
 }
+
 
 // This method fetches the extracted text using the fetchExtractedText API
 private String fetchExtractedText(String contentDocumentId) {
