@@ -1,0 +1,36 @@
+public class ProcessDocumentJob implements Queueable {
+    private String contentDocumentId;
+
+    // Constructor to initialize the contentDocumentId
+    public ProcessDocumentJob(String contentDocumentId) {
+        this.contentDocumentId = contentDocumentId;
+    }
+
+    // The execute method is where the actual processing happens
+    public void execute(QueueableContext context) {
+        try {
+            // Fetch the document's metadata (e.g., title, content)
+            ContentDocument contentDocument = [SELECT Id, Title FROM ContentDocument WHERE Id = :contentDocumentId LIMIT 1];
+
+            // Simulating the OCR service invocation (e.g., AWS Textract, Google Vision API)
+            String ocrResult = callOcrService(contentDocument);
+
+            // Handle OCR processing results (save data, update records, etc.)
+            System.debug('OCR Result: ' + ocrResult);
+
+            // Optionally, save the results or process further (e.g., create a custom object to store extracted data)
+            // Example: save the result in a custom object
+            // CustomOCRResult__c result = new CustomOCRResult__c(OCR_Text__c = ocrResult);
+            // insert result;
+            
+        } catch (Exception e) {
+            System.debug('Error processing document: ' + e.getMessage());
+        }
+    }
+
+    // Placeholder for calling an external OCR service like AWS Textract or Google Vision
+    private String callOcrService(ContentDocument contentDocument) {
+        // Simulated OCR processing result
+        return 'Simulated OCR result for document: ' + contentDocument.Title;
+    }
+}
