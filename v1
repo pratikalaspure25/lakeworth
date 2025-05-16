@@ -85,7 +85,7 @@ public void execute(QueueableContext context) {
 
     // Prepare the request body for OCR processing
     String requestBody = JSON.serialize(new Map<String, Object> {
-        'inputs' => new List<Map<String, Object>> {
+        'inputs' => new List<Map<String, Object>> { // Correct type argument for List
             new Map<String, Object> {
                 'contentDocumentId' => contentDocumentId,
                 'startPageIndex' => 1,
@@ -145,6 +145,7 @@ public void execute(QueueableContext context) {
         System.debug('Error fetching OCR results: ' + response.getStatus() + ', body: ' + response.getBody());
     }
 }
+
 
 
     // Process the OCR results after the job is complete
