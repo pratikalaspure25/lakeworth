@@ -1,5 +1,139 @@
-// Add delay before re-enqueueing the job
-    public static void enqueueDelayedJob(String contentDocumentId, String recordId) {
-        Integer delayInMinutes = 5; // Set delay of 5 minutes
-        System.enqueueJob(new ProcessDocumentJob(contentDocumentId, recordId), delayInMinutes);
+public class ProcessDocumentJob implements Queueable, Database.AllowsCallouts {
+    private String contentDocumentId;
+    private String recordId;
+
+    public ProcessDocumentJob(String contentDocumentId, String recordId) {
+        this.contentDocumentId = contentDocumentId;
+        this.recordId = recordId;
     }
+
+    public void execute(QueueableContext context) {
+        try {
+            // Retrieve the content of the uploaded file (PDF)
+            ContentVersion cv = [SELECT Id, Title, VersionData FROM ContentVersion WHERE ContentDocumentId = :contentDocumentId LIMIT 1];
+            if (cv == null) {
+                System.debug('No ContentVersion found for ContentDocumentId: ' + contentDocumentId);
+                return; // Exit if no record is found
+            }
+
+            // Trigger OCR processing using Intelligent Document Reader (IDR) - via HTTP callout
+            String ocrResult = triggerOcrProcessing(cv.VersionData);
+
+            if (String.isBlank(ocrResult)) {
+                System.debug('OCR result was empty.');
+                return;
+            }
+
+            // Insert new Profit_and_Loss__c record with extracted data
+            insertNewProfitAndLossRecord(ocrResult);
+
+        } catch (Exception e) {
+            System.debug('Error processing document: ' + e.getMessage());
+        }
+    }
+
+    // This method performs HTTP callout to the OCR API to trigger text extraction
+    private String triggerOcrProcessing(Blob documentData) {
+        Http http = new Http();
+        HttpRequest request = new HttpRequest();
+
+        // Salesforce REST API endpoint to initiate text extraction
+        String endpointUrl = '/services/data/v58.0/actions/standard/initiateTextExtraction';
+
+        // Prepare the request body as a JSON string
+        String requestBody = JSON.serialize(new Map<String, Object>{
+            'inputs' => new List<Map<String, Object>>{
+                new Map<String, Object>{
+                    'contentDocumentId' => contentDocumentId,  // Your uploaded document ID
+                    'startPageIndex' => 1,  // Start from page 1
+                    'endPageIndex' => 20,  // You can change this based on how many pages you want to extract
+                    'ocrService' => 'AMAZON_TEXTRACT'  // Using the Textract OCR service
+                }
+            }
+        });
+
+        // Set up the HTTP request
+        request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);  // Combine Salesforce base URL with the endpoint
+        request.setMethod('POST');
+        request.setHeader('Content-Type', 'application/json');
+        request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());  // Use the session ID for authorization
+        request.setBody(requestBody);
+
+        // Send the HTTP request
+        HttpResponse response = http.send(request);
+
+        // Log the response body for debugging
+        System.debug('OCR API response: ' + response.getBody());
+
+        // Handle the response
+        if (response.getStatusCode() == 200) {
+            // Deserialize the response body into a List of Maps (List<Map<String, Object>>)
+            List<Object> responseList = (List<Object>) JSON.deserializeUntyped(response.getBody());
+
+            if (responseList != null && !responseList.isEmpty()) {
+                // Get the first item in the response list
+                Map<String, Object> resultMap = (Map<String, Object>) responseList[0];
+
+                // Check if the status is "SUCCESS"
+                if (resultMap.containsKey('status') && 'SUCCESS'.equalsIgnoreCase((String) resultMap.get('status'))) {
+                    // Fetch the extracted text after successful OCR job
+                    return fetchExtractedText(resultMap);
+                } else {
+                    System.debug('OCR job is still in progress or failed.');
+                    return 'OCR job not successful yet.';
+                }
+            } else {
+                System.debug('Unexpected or empty response: ' + response.getBody());
+                return 'No OCR results found'; // Provide a meaningful string in case of an empty response
+            }
+        } else {
+            System.debug('Error calling OCR API, status: ' + response.getStatus() + ', body: ' + response.getBody());
+            return 'Error calling OCR API'; // Return a string indicating failure
+        }
+    }
+
+    // This method fetches the extracted text using the fetchExtractedText API
+    private String fetchExtractedText(Map<String, Object> resultMap) {
+        // Extract the OCR document scan result details
+        Map<String, Object> outputValues = (Map<String, Object>) resultMap.get('outputValues');
+
+        if (outputValues != null && outputValues.containsKey('ocrDocumentScanResultDetails')) {
+            List<Map<String, Object>> ocrDetailsList = (List<Map<String, Object>>) outputValues.get('ocrDocumentScanResultDetails');
+
+            // Extract key-value pairs from each OCR result
+            StringBuilder extractedText = new StringBuilder();
+            for (Map<String, Object> ocrDetail : ocrDetailsList) {
+                if (ocrDetail.containsKey('keyValuePairs')) {
+                    List<Map<String, Object>> keyValuePairs = (List<Map<String, Object>>) ocrDetail.get('keyValuePairs');
+                    for (Map<String, Object> pair : keyValuePairs) {
+                        String key = (String) ((Map<String, Object>) pair.get('key')).get('value');
+                        String value = (String) ((Map<String, Object>) pair.get('value')).get('value');
+                        extractedText.append(key + ": " + value + "\n");
+                    }
+                }
+            }
+            return extractedText.toString();
+        }
+        return 'No extracted text found.';
+    }
+
+    // Insert a new Profit_and_Loss__c record with extracted data
+    private void insertNewProfitAndLossRecord(String ocrResult) {
+        try {
+            Profit_and_Loss__c newRecord = new Profit_and_Loss__c();
+            // Use the extracted OCR result (this could be more structured depending on the OCR data)
+            newRecord.Extracted_Text__c = ocrResult;
+
+            // Optionally associate with a related record passed in the job
+            if (recordId != null) {
+                newRecord.Related_Record__c = recordId;
+            }
+
+            insert newRecord;
+            System.debug('Inserted Profit_and_Loss__c record with Id: ' + newRecord.Id);
+
+        } catch (Exception ex) {
+            System.debug('Failed to insert Profit_and_Loss__c record: ' + ex.getMessage());
+        }
+    }
+}
