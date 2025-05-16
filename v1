@@ -14,59 +14,138 @@ public class ProcessDocumentJob implements Queueable, Database.AllowsCallouts {
 
     // This method will be called to process the OCR job
     public void execute(QueueableContext context) {
-        Http http = new Http();
-        HttpRequest request = new HttpRequest();
+    Http http = new Http();
+    HttpRequest request = new HttpRequest();
 
-        // Prepare the request body for OCR processing
-        String requestBody = JSON.serialize(new Map<String, Object> {
-            'inputs' => new List<Map<String, Object>> {
-                new Map<String, Object> {
-                    'contentDocumentId' => contentDocumentId,
-                    'startPageIndex' => 1,
-                    'endPageIndex' => 20
-                }
+    // Prepare the request body for OCR processing
+    String requestBody = JSON.serialize(new Map<String, Object> {
+        'inputs' => new List<Map<String, Object>> {
+            new Map<String, Object> {
+                'contentDocumentId' => contentDocumentId,
+                'startPageIndex' => 1,
+                'endPageIndex' => 20
             }
-        });
+        }
+    });
 
-        String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
-        request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);
-        request.setMethod('POST');
-        request.setHeader('Content-Type', 'application/json');
-        request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());
-        request.setBody(requestBody);
+    String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
+    request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);
+    request.setMethod('POST');
+    request.setHeader('Content-Type', 'application/json');
+    request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());
+    request.setBody(requestBody);
 
-        // Send request to fetch OCR results
-        HttpResponse response = http.send(request);
-        if (response.getStatusCode() == 200) {
-            List<Object> responseList = (List<Object>) JSON.deserializeUntyped(response.getBody());
+    // Send request to fetch OCR results
+    HttpResponse response = http.send(request);
+    
+    if (response.getStatusCode() == 200) {
+        // Log the size of the response body to check if it is too large
+        Integer responseSize = response.getBody().length();
+        System.debug('Response size: ' + responseSize + ' characters');
 
-            if (responseList != null && !responseList.isEmpty()) {
-                Map<String, Object> firstResult = (Map<String, Object>) responseList.get(0);
-                Map<String, Object> outputValues = (Map<String, Object>) firstResult.get('outputValues');
+        // Deserialize the response into a Map<String, Object>
+        Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
 
-                if (outputValues != null && outputValues.containsKey('ocrDocumentScanResultDetails')) {
-                    List<Map<String, Object>> ocrDetailsList = (List<Map<String, Object>>) outputValues.get('ocrDocumentScanResultDetails');
+        // Check if 'outputValues' exists and log the relevant data
+        if (responseMap.containsKey('outputValues')) {
+            Map<String, Object> outputValues = (Map<String, Object>) responseMap.get('outputValues');
+            
+            // Check if 'ocrDocumentScanResultDetails' exists in outputValues
+            if (outputValues.containsKey('ocrDocumentScanResultDetails')) {
+                Object ocrResultObj = outputValues.get('ocrDocumentScanResultDetails');
+                
+                // If ocrDocumentScanResultDetails is a List, process it
+                if (ocrResultObj instanceof List) {
+                    List<Map<String, Object>> ocrDetailsList = (List<Map<String, Object>>) ocrResultObj;
                     
-                    for (Map<String, Object> ocrDetail : ocrDetailsList) {
-                        String status = (String) ocrDetail.get('status');
-                        
-                        if (status == 'OCR_ENQUEUE' && retryCount < maxRetries) {
-                            // Retry logic: If OCR job is still enqueued, re-enqueue the job after a delay
-                            retryCount++;
-                            System.debug('OCR job still in queue, retrying... Attempt ' + retryCount);
-                            System.enqueueJob(new ProcessDocumentJob(contentDocumentId, recordId, retryCount));
-                            return;  // Exit the current execution to avoid further processing
-                        }
+                    // Log the number of results to understand the volume of data
+                    System.debug('Number of OCR results: ' + ocrDetailsList.size());
+                    
+                    // Log just the first result (if it exists) to keep it manageable
+                    if (!ocrDetailsList.isEmpty()) {
+                        Map<String, Object> firstResult = ocrDetailsList.get(0);
+                        System.debug('First OCR result: ' + firstResult);
                     }
-
-                    // If OCR job has finished, process the results
-                    processOcrResults(ocrDetailsList);
+                } else {
+                    System.debug('Unexpected format for ocrDocumentScanResultDetails');
                 }
+            } else {
+                System.debug('No ocrDocumentScanResultDetails found in the response.');
             }
         } else {
-            System.debug('Error fetching OCR results: ' + response.getStatus() + ', body: ' + response.getBody());
+            System.debug('No outputValues found in the response.');
         }
+    } else {
+        System.debug('Error fetching OCR results: ' + response.getStatus() + ', body: ' + response.getBody());
     }
+}
+public void execute(QueueableContext context) {
+    Http http = new Http();
+    HttpRequest request = new HttpRequest();
+
+    // Prepare the request body for OCR processing
+    String requestBody = JSON.serialize(new Map<String, Object> {
+        'inputs' => new List<Map<String, Object>> {
+            new Map<String, Object> {
+                'contentDocumentId' => contentDocumentId,
+                'startPageIndex' => 1,
+                'endPageIndex' => 20
+            }
+        }
+    });
+
+    String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
+    request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);
+    request.setMethod('POST');
+    request.setHeader('Content-Type', 'application/json');
+    request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());
+    request.setBody(requestBody);
+
+    // Send request to fetch OCR results
+    HttpResponse response = http.send(request);
+    
+    if (response.getStatusCode() == 200) {
+        // Log the size of the response body to check if it is too large
+        Integer responseSize = response.getBody().length();
+        System.debug('Response size: ' + responseSize + ' characters');
+
+        // Deserialize the response into a Map<String, Object>
+        Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
+
+        // Check if 'outputValues' exists and log the relevant data
+        if (responseMap.containsKey('outputValues')) {
+            Map<String, Object> outputValues = (Map<String, Object>) responseMap.get('outputValues');
+            
+            // Check if 'ocrDocumentScanResultDetails' exists in outputValues
+            if (outputValues.containsKey('ocrDocumentScanResultDetails')) {
+                Object ocrResultObj = outputValues.get('ocrDocumentScanResultDetails');
+                
+                // If ocrDocumentScanResultDetails is a List, process it
+                if (ocrResultObj instanceof List) {
+                    List<Map<String, Object>> ocrDetailsList = (List<Map<String, Object>>) ocrResultObj;
+                    
+                    // Log the number of results to understand the volume of data
+                    System.debug('Number of OCR results: ' + ocrDetailsList.size());
+                    
+                    // Log just the first result (if it exists) to keep it manageable
+                    if (!ocrDetailsList.isEmpty()) {
+                        Map<String, Object> firstResult = ocrDetailsList.get(0);
+                        System.debug('First OCR result: ' + firstResult);
+                    }
+                } else {
+                    System.debug('Unexpected format for ocrDocumentScanResultDetails');
+                }
+            } else {
+                System.debug('No ocrDocumentScanResultDetails found in the response.');
+            }
+        } else {
+            System.debug('No outputValues found in the response.');
+        }
+    } else {
+        System.debug('Error fetching OCR results: ' + response.getStatus() + ', body: ' + response.getBody());
+    }
+}
+
 
     // Process the OCR results after the job is complete
     private void processOcrResults(List<Map<String, Object>> ocrDetailsList) {
