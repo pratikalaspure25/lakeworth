@@ -54,13 +54,14 @@ public class ProcessDocumentJob implements Queueable, Database.AllowsCallouts {
             if (outputValues.containsKey('ocrDocumentScanResultDetails')) {
                 Object ocrResultObj = outputValues.get('ocrDocumentScanResultDetails');
                 
-                // If ocrDocumentScanResultDetails is a List, process it
+                // If ocrDocumentScanResultDetails is a list, process it
                 if (ocrResultObj instanceof List) {
+                    // Correctly specify the type for List and Map
                     List<Map<String, Object>> ocrDetailsList = (List<Map<String, Object>>) ocrResultObj;
-                    
+                
                     // Log the number of results to understand the volume of data
                     System.debug('Number of OCR results: ' + ocrDetailsList.size());
-                    
+                
                     // Log just the first result (if it exists) to keep it manageable
                     if (!ocrDetailsList.isEmpty()) {
                         Map<String, Object> firstResult = ocrDetailsList.get(0);
@@ -69,6 +70,7 @@ public class ProcessDocumentJob implements Queueable, Database.AllowsCallouts {
                 } else {
                     System.debug('Unexpected format for ocrDocumentScanResultDetails');
                 }
+
             } else {
                 System.debug('No ocrDocumentScanResultDetails found in the response.');
             }
