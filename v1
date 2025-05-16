@@ -93,29 +93,35 @@ public class ProcessDocumentJob implements Queueable, Database.AllowsCallouts {
     }
 
     // This method fetches the extracted text using the fetchExtractedText API
-    private String fetchExtractedText(Map<String, Object> resultMap) {
-        // Extract the OCR document scan result details
-        Map<String, Object> outputValues = (Map<String, Object>) resultMap.get('outputValues');
+   private String fetchExtractedText(Map<String, Object> resultMap) {
+    // Extract the OCR document scan result details
+    Map<String, Object> outputValues = (Map<String, Object>) resultMap.get('outputValues');
 
-        if (outputValues != null && outputValues.containsKey('ocrDocumentScanResultDetails')) {
-            List<Map<String, Object>> ocrDetailsList = (List<Map<String, Object>>) outputValues.get('ocrDocumentScanResultDetails');
+    if (outputValues != null && outputValues.containsKey('ocrDocumentScanResultDetails')) {
+        List<Map<String, Object>> ocrDetailsList = (List<Map<String, Object>>) outputValues.get('ocrDocumentScanResultDetails');
 
-            // Extract key-value pairs from each OCR result
-            StringBuilder extractedText = new StringBuilder();
-            for (Map<String, Object> ocrDetail : ocrDetailsList) {
-                if (ocrDetail.containsKey('keyValuePairs')) {
-                    List<Map<String, Object>> keyValuePairs = (List<Map<String, Object>>) ocrDetail.get('keyValuePairs');
-                    for (Map<String, Object> pair : keyValuePairs) {
-                        String key = (String) ((Map<String, Object>) pair.get('key')).get('value');
-                        String value = (String) ((Map<String, Object>) pair.get('value')).get('value');
-                        extractedText.append(key + ": " + value + "\n");
-                    }
+        // Initialize StringBuilder to hold the extracted text
+        StringBuilder extractedText = new StringBuilder();
+
+        // Extract key-value pairs from each OCR result
+        for (Map<String, Object> ocrDetail : ocrDetailsList) {
+            if (ocrDetail.containsKey('keyValuePairs')) {
+                List<Map<String, Object>> keyValuePairs = (List<Map<String, Object>>) ocrDetail.get('keyValuePairs');
+                for (Map<String, Object> pair : keyValuePairs) {
+                    String key = (String) ((Map<String, Object>) pair.get('key')).get('value');
+                    String value = (String) ((Map<String, Object>) pair.get('value')).get('value');
+                    extractedText.append(key + ": " + value + "\n"); // Append each key-value pair
                 }
             }
-            return extractedText.toString();
         }
-        return 'No extracted text found.';
+
+        // Return the full extracted text
+        return extractedText.toString();
     }
+
+    return 'No extracted text found.'; // In case no details are found
+}
+
 
     // Insert a new Profit_and_Loss__c record with extracted data
     private void insertNewProfitAndLossRecord(String ocrResult) {
