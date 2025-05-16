@@ -1,4 +1,5 @@
 public class FetchExtractedTextWithDelayJob implements Queueable, Database.AllowsCallouts {
+
     private String ocrDocumentScanResultId;
     private String contentDocumentId;
 
@@ -10,11 +11,29 @@ public class FetchExtractedTextWithDelayJob implements Queueable, Database.Allow
 
     // Implement the execute method
     public void execute(QueueableContext context) {
-        // Call the fetchExtractedText method inside the execute method
-        fetchExtractedText(ocrDocumentScanResultId, contentDocumentId);
+        // Fetch the OCR text using the fetchExtractedText method
+        String extractedText = fetchExtractedText(ocrDocumentScanResultId, contentDocumentId);
+        
+        if (extractedText != null) {
+            // Create the TransformDocumentDetailsRequest to pass to TransformDocument
+            List<TransformDocumentDetailsRequest> requestList = new List<TransformDocumentDetailsRequest>();
+
+            // Set the contentDocumentID and targetObjectApiName (which is Profit_and_Loss__c here)
+            TransformDocumentDetailsRequest request = new TransformDocumentDetailsRequest();
+            request.contentDocumentID = contentDocumentId;
+            request.targetObjectApiName = 'Profit_and_Loss__c'; // Specify your target Salesforce object
+
+            requestList.add(request);
+
+            // Pass the request list to TransformDocument to process the OCR data
+            TransformDocument.transform(requestList);
+        } else {
+            System.debug('No extracted text found or failed to fetch OCR results');
+        }
     }
 
-    private void fetchExtractedText(String ocrDocumentScanResultId, String contentDocumentId) {
+    // This method fetches the extracted text using the fetchExtractedText API
+    private String fetchExtractedText(String ocrDocumentScanResultId, String contentDocumentId) {
         Http http = new Http();
         HttpRequest request = new HttpRequest();
 
@@ -22,19 +41,19 @@ public class FetchExtractedTextWithDelayJob implements Queueable, Database.Allow
         String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
 
         // Prepare the request body as a JSON string
-        String requestBody = JSON.serialize(new Map<String, Object> {
-            'inputs' => new List<Map<String, Object>> {
-                new Map<String, Object> {
-                    'ocrDocumentScanResultId' => ocrDocumentScanResultId,  // OCR result ID obtained from the first step
-                    'contentDocumentId' => contentDocumentId,  // Ensure you pass the contentDocumentId as well
-                    'startPageIndex' => 1,  // Start from page 1
-                    'endPageIndex' => 20   // You can change the number of pages to extract
+        String requestBody = JSON.serialize(new Map<String, Object>{
+            'inputs' => new List<Map<String, Object>>{
+                new Map<String, Object>{
+                    'ocrDocumentScanResultId' => ocrDocumentScanResultId,
+                    'contentDocumentId' => contentDocumentId,
+                    'startPageIndex' => 1,
+                    'endPageIndex' => 20
                 }
             }
         });
 
         // Set up the HTTP request
-        request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);  // Combine Salesforce base URL with the endpoint
+        request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);
         request.setMethod('POST');
         request.setHeader('Content-Type', 'application/json');
         request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());  // Use the session ID for authorization
@@ -43,9 +62,6 @@ public class FetchExtractedTextWithDelayJob implements Queueable, Database.Allow
         // Send the HTTP request
         HttpResponse response = http.send(request);
 
-        // Log the response for debugging
-        System.debug('Extracted Text API response: ' + response.getBody());
-
         // Handle the response
         if (response.getStatusCode() == 200) {
             // Deserialize the response body into a List<Object>
@@ -53,47 +69,23 @@ public class FetchExtractedTextWithDelayJob implements Queueable, Database.Allow
             Map<String, Object> outputValues = (Map<String, Object>) responseMap.get('outputValues');
             Map<String, Object> detailsMap = (Map<String, Object>) outputValues.get('ocrDocumentScanResultDetails');
 
-            // Extract the key-value pairs from OCR result
+            // Extract key-value pairs
             List<Map<String, Object>> keyValuePairs = (List<Map<String, Object>>) detailsMap.get('keyValuePairs');
 
-            // Prepare a map to store values to insert into Profit_and_Loss__c object
-            Map<String, String> extractedData = new Map<String, String>();
+            // Store the extracted values
+            Map<String, String> extractedValues = new Map<String, String>();
 
-            // Loop through the key-value pairs and extract values
             for (Map<String, Object> keyValuePair : keyValuePairs) {
-                Map<String, Object> keyMap = (Map<String, Object>) keyValuePair.get('key');
-                Map<String, Object> valueMap = (Map<String, Object>) keyValuePair.get('value');
-
-                String key = (String) keyMap.get('value');
-                String value = (String) valueMap.get('value');
-
-                // Save the extracted data in the map
-                extractedData.put(key, value);
+                String keyText = (String) keyValuePair.get('key');
+                String valueText = (String) keyValuePair.get('value');
+                extractedValues.put(keyText, valueText);
             }
 
-            // Now insert the data into Profit_and_Loss__c record
-            Profit_and_Loss__c newRecord = new Profit_and_Loss__c();
-            
-            // Map values to corresponding fields in Profit_and_Loss__c
-            if (extractedData.containsKey('Borrower Name(s):')) {
-                newRecord.Borrower_Name_s__c = extractedData.get('Borrower Name(s):');
-            }
-            if (extractedData.containsKey('Company Name:')) {
-                newRecord.Name = extractedData.get('Company Name:');
-            }
-            if (extractedData.containsKey('Loan Number:')) {
-                newRecord.Loan_Number_c = Decimal.valueOf(extractedData.get('Loan Number:'));
-            }
-            if (extractedData.containsKey('Total REVENUE BEFORE TAXES (LOSS)')) {
-                newRecord.Description = extractedData.get('Total REVENUE BEFORE TAXES (LOSS)');
-            }
-
-            // Insert the record
-            insert newRecord;
-            System.debug('Profit_and_Loss__c record created with ID: ' + newRecord.Id);
-
+            // Return the extracted values as a JSON string to pass to TransformDocument
+            return JSON.serialize(extractedValues);
         } else {
             System.debug('Error calling Extracted Text API, status: ' + response.getStatus() + ', body: ' + response.getBody());
+            return null;
         }
     }
 }
