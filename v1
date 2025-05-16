@@ -1,0 +1,100 @@
+public class ProcessDocumentJob implements Queueable, Database.AllowsCallouts {
+    private String contentDocumentId;
+    private String recordId;
+    private Integer maxRetries;
+    private Integer retryCount;
+
+    // Constructor to initialize job with contentDocumentId, recordId, and retry count
+    public ProcessDocumentJob(String contentDocumentId, String recordId, Integer retryCount) {
+        this.contentDocumentId = contentDocumentId;
+        this.recordId = recordId;
+        this.maxRetries = 5;  // Max number of retries
+        this.retryCount = retryCount == null ? 0 : retryCount;  // Default retry count if not provided
+    }
+
+    // This method will be called to process the OCR job
+    public void execute(QueueableContext context) {
+        Http http = new Http();
+        HttpRequest request = new HttpRequest();
+
+        // Prepare the request body for OCR processing
+        String requestBody = JSON.serialize(new Map<String, Object> {
+            'inputs' => new List<Map<String, Object>> {
+                new Map<String, Object> {
+                    'contentDocumentId' => contentDocumentId,
+                    'startPageIndex' => 1,
+                    'endPageIndex' => 20
+                }
+            }
+        });
+
+        String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
+        request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);
+        request.setMethod('POST');
+        request.setHeader('Content-Type', 'application/json');
+        request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());
+        request.setBody(requestBody);
+
+        // Send request to fetch OCR results
+        HttpResponse response = http.send(request);
+        if (response.getStatusCode() == 200) {
+            List<Object> responseList = (List<Object>) JSON.deserializeUntyped(response.getBody());
+
+            if (responseList != null && !responseList.isEmpty()) {
+                Map<String, Object> firstResult = (Map<String, Object>) responseList.get(0);
+                Map<String, Object> outputValues = (Map<String, Object>) firstResult.get('outputValues');
+
+                if (outputValues != null && outputValues.containsKey('ocrDocumentScanResultDetails')) {
+                    List<Map<String, Object>> ocrDetailsList = (List<Map<String, Object>>) outputValues.get('ocrDocumentScanResultDetails');
+                    
+                    for (Map<String, Object> ocrDetail : ocrDetailsList) {
+                        String status = (String) ocrDetail.get('status');
+                        
+                        if (status == 'OCR_ENQUEUE' && retryCount < maxRetries) {
+                            // Retry logic: If OCR job is still enqueued, re-enqueue the job after a delay
+                            retryCount++;
+                            System.debug('OCR job still in queue, retrying... Attempt ' + retryCount);
+                            System.enqueueJob(new ProcessDocumentJob(contentDocumentId, recordId, retryCount));
+                            return;  // Exit the current execution to avoid further processing
+                        }
+                    }
+
+                    // If OCR job has finished, process the results
+                    processOcrResults(ocrDetailsList);
+                }
+            }
+        } else {
+            System.debug('Error fetching OCR results: ' + response.getStatus() + ', body: ' + response.getBody());
+        }
+    }
+
+    // Process the OCR results after the job is complete
+    private void processOcrResults(List<Map<String, Object>> ocrDetailsList) {
+        // Here, extract key-value pairs and process them
+        for (Map<String, Object> ocrDetail : ocrDetailsList) {
+            List<Map<String, Object>> keyValuePairs = (List<Map<String, Object>>) ocrDetail.get('keyValuePairs');
+            
+            if (keyValuePairs != null) {
+                for (Map<String, Object> pair : keyValuePairs) {
+                    Map<String, Object> key = (Map<String, Object>) pair.get('key');
+                    Map<String, Object> value = (Map<String, Object>) pair.get('value');
+                    
+                    String keyValue = (String) key.get('value');
+                    String valueValue = (String) value.get('value');
+                    System.debug('Key: ' + keyValue + ', Value: ' + valueValue);
+                }
+            }
+        }
+
+        // Insert a new Profit_and_Loss record if necessary
+        insertNewProfitAndLossRecord();
+    }
+
+    // Method to insert a new Profit_and_Loss record
+    private void insertNewProfitAndLossRecord() {
+        // Create and insert new record (if needed based on OCR processing)
+        Profit_and_Loss__c newRecord = new Profit_and_Loss__c();
+        insert newRecord;
+        System.debug('Inserted new Profit_and_Loss record: ' + newRecord.Id);
+    }
+}
