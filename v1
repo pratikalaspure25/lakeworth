@@ -116,6 +116,7 @@ private String checkOCRStatus(String ocrDocumentScanResultId) {
         return status;  // Return the current OCR status
     } else {
         System.debug('Error checking OCR status: ' + response.getStatus());
-        return "Unknown";  // Return Unknown if an error occurs
+        return 'Unknown';  // Ensure to return 'Unknown' as a string
     }
 }
+
