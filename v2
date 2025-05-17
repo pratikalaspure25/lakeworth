@@ -1,0 +1,91 @@
+// -------------------------------------------------------
+// 2) ProfitAndLossSaverJob
+//    - deserializes the raw JSON
+//    - walks the nested arrays/maps
+//    - maps key/value pairs into your Profit_and_Loss__c fields
+//    - inserts a new record
+// -------------------------------------------------------
+public class ProfitAndLossSaverJob implements Queueable {
+
+    private String rawJson;
+
+    public ProfitAndLossSaverJob(String rawJson) {
+        this.rawJson = rawJson;
+    }
+
+    public void execute(QueueableContext context) {
+        if (String.isBlank(rawJson)) {
+            System.debug('No JSON payload passed into saver job.');
+            return;
+        }
+
+        // Top-level array
+        List<Object> wrapperList = (List<Object>) JSON.deserializeUntyped(rawJson);
+        if (wrapperList.isEmpty()) {
+            System.debug('Empty response array.');
+            return;
+        }
+
+        // Only using the first action response
+        Map<String, Object> actionResp = (Map<String, Object>) wrapperList[0];
+        Map<String, Object> outputValues = (Map<String, Object>) actionResp.get('outputValues');
+        if (outputValues == null || !outputValues.containsKey('ocrDocumentScanResultDetails')) {
+            System.debug('No OCR details in outputValues.');
+            return;
+        }
+
+        // Drill into the nested details wrapper
+        Map<String, Object> detailsWrap = 
+            (Map<String, Object>) outputValues.get('ocrDocumentScanResultDetails');
+        List<Object> pages = 
+            (List<Object>) detailsWrap.get('ocrDocumentScanResultDetails');
+        if (pages == null || pages.isEmpty()) {
+            System.debug('No pages returned.');
+            return;
+        }
+
+        // Build a single Profit_and_Loss__c record
+        Profit_and_Loss__c pl = new Profit_and_Loss__c();
+
+        // Iterate each page
+        for (Object pgObj : pages) {
+            Map<String, Object> pageMap = (Map<String, Object>) pgObj;
+            List<Object> kvps = (List<Object>) pageMap.get('keyValuePairs');
+            if (kvps == null) continue;
+
+            // Iterate each key/value pair
+            for (Object kvpObj : kvps) {
+                Map<String, Object> pair    = (Map<String, Object>) kvpObj;
+                Map<String, Object> keyMap   = (Map<String, Object>) pair.get('key');
+                Map<String, Object> valueMap = (Map<String, Object>) pair.get('value');
+                if (keyMap == null || valueMap == null) continue;
+
+                String label = (String) keyMap.get('value');
+                String text  = (String) valueMap.get('value');
+                if (label == null || text == null) continue;
+
+                String norm = label.replaceAll('[^a-zA-Z0-9]', '').toLowerCase();
+
+                // YOUR MAPPING LOGIC
+                if (norm.contains('borrowernames')) {
+                    pl.Borrower_Name_s__c = text;
+                } else if (norm.contains('companyname')) {
+                    pl.Name = text;
+                } else if (norm.contains('loannumber')) {
+                    pl.Loan_Number__c = text;
+                } else if (norm.contains('typeofbusiness')) {
+                    pl.Type_of_Bussiness__c = text;
+                }
+                // …add as many else/if branches as you need…
+            }
+        }
+
+        // Insert the record
+        try {
+            insert pl;
+            System.debug('Inserted Profit_and_Loss__c record with Id: ' + pl.Id);
+        } catch (DmlException e) {
+            System.debug('Failed to insert Profit_and_Loss__c: ' + e.getMessage());
+        }
+    }
+}
