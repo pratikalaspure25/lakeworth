@@ -75,8 +75,16 @@ public class ProfitAndLossSaverJob implements Queueable {
                     pl.Loan_Number__c = text;
                 } else if (norm.contains('typeofbusiness')) {
                     pl.Type_of_Bussiness__c = text;
-                }
-                // …add as many else/if branches as you need…
+                } else if (norm.contains('loannumber')) {
+        // strip out everything except digits and decimal point
+        String cleaned = text.replaceAll('[^0-9.]','');
+        if (!String.isBlank(cleaned)) {
+            // Because your field is Number(18,0), you can parse to Decimal and drop any fraction
+            Decimal num = Decimal.valueOf(cleaned);
+            pl.Loan_Number__c = num.setScale(0, RoundingMode.DOWN);
+        }
+    }
+                
             }
         }
 
