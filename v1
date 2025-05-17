@@ -1,4 +1,10 @@
-public class FetchExtractedTextWithDelayJob implements Queueable, Database.AllowsCallouts {
+// -------------------------------------------------------
+// 1) FetchExtractedTextWithDelayJob
+//    - calls the OCR action
+//    - returns the raw JSON body
+//    - enqueues ProfitAndLossSaverJob
+// -------------------------------------------------------
+public class FetchExtractedTextWithDelayJob implements Queueable, Database.AllowsCallouts { 
 
     private String ocrDocumentScanResultId;
     private String contentDocumentId;
@@ -6,85 +12,58 @@ public class FetchExtractedTextWithDelayJob implements Queueable, Database.Allow
     // Constructor to pass the parameters to the queueable job
     public FetchExtractedTextWithDelayJob(String ocrDocumentScanResultId, String contentDocumentId) {
         this.ocrDocumentScanResultId = ocrDocumentScanResultId;
-        this.contentDocumentId = contentDocumentId;
+        this.contentDocumentId       = contentDocumentId;
     }
 
-    // Implement the execute method
+    // Execute method
     public void execute(QueueableContext context) {
-        // Fetch the OCR text using the fetchExtractedText method
-        String extractedText = fetchExtractedText(ocrDocumentScanResultId, contentDocumentId);
-        
-        if (extractedText != null) {
-            // Create the TransformDocumentDetailsRequest to pass to TransformDocument
-            List<TransformDocumentDetailsRequest> requestList = new List<TransformDocumentDetailsRequest>();
+        String rawJson = fetchExtractedText(ocrDocumentScanResultId, contentDocumentId);
+        System.debug('Raw OCR JSON: ' + rawJson);
 
-            // Set the contentDocumentID and targetObjectApiName (which is Profit_and_Loss__c here)
-            TransformDocumentDetailsRequest request = new TransformDocumentDetailsRequest();
-            request.contentDocumentID = contentDocumentId;
-            request.targetObjectApiName = 'Profit_and_Loss__c'; // Specify your target Salesforce object
-
-            requestList.add(request);
-
-            // Pass the request list to TransformDocument to process the OCR data
-            TransformDocument.transform(requestList);
+        if (rawJson != null) {
+            // Pass the entire JSON into the next job
+            System.enqueueJob(new ProfitAndLossSaverJob(rawJson));
         } else {
-            System.debug('No extracted text found or failed to fetch OCR results');
+            System.debug('No OCR payload to enqueue.');
         }
     }
 
     // This method fetches the extracted text using the fetchExtractedText API
     private String fetchExtractedText(String ocrDocumentScanResultId, String contentDocumentId) {
-        Http http = new Http();
-        HttpRequest request = new HttpRequest();
+        Http http       = new Http();
+        HttpRequest req = new HttpRequest();
 
-        // Salesforce REST API endpoint to fetch extracted text using the OCR result ID
+        // Endpoint
         String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
 
-        // Prepare the request body as a JSON string
-        String requestBody = JSON.serialize(new Map<String, Object>{
-            'inputs' => new List<Map<String, Object>>{
-                new Map<String, Object>{
-                    'ocrDocumentScanResultId' => ocrDocumentScanResultId,
-                    'contentDocumentId' => contentDocumentId,
-                    'startPageIndex' => 1,
-                    'endPageIndex' => 20
-                }
-            }
-        });
+        // Build request body
+        Map<String, Object> singleInput = new Map<String, Object>{
+            'ocrDocumentScanResultId' => ocrDocumentScanResultId,
+            'contentDocumentId'       => contentDocumentId,
+            'startPageIndex'          => 1,
+            'endPageIndex'            => 20
+        };
+        Map<String, Object> payload = new Map<String, Object>{
+            'inputs' => new List<Map<String, Object>>{ singleInput }
+        };
 
-        // Set up the HTTP request
-        request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);
-        request.setMethod('POST');
-        request.setHeader('Content-Type', 'application/json');
-        request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());  // Use the session ID for authorization
-        request.setBody(requestBody);
+        req.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);
+        req.setMethod('POST');
+        req.setHeader('Content-Type', 'application/json');
+        req.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());
+        req.setBody(JSON.serialize(payload));
 
-        // Send the HTTP request
-        HttpResponse response = http.send(request);
+        // Send
+        HttpResponse resp = http.send(req);
+        System.debug('Extracted Text API response status: ' + resp.getStatus());
+        System.debug('Extracted Text API response body: '   + resp.getBody());
 
-        // Handle the response
-        if (response.getStatusCode() == 200) {
-            // Deserialize the response body into a List<Object>
-            Map<String, Object> responseMap = (Map<String, Object>) JSON.deserializeUntyped(response.getBody());
-            Map<String, Object> outputValues = (Map<String, Object>) responseMap.get('outputValues');
-            Map<String, Object> detailsMap = (Map<String, Object>) outputValues.get('ocrDocumentScanResultDetails');
-
-            // Extract key-value pairs
-            List<Map<String, Object>> keyValuePairs = (List<Map<String, Object>>) detailsMap.get('keyValuePairs');
-
-            // Store the extracted values
-            Map<String, String> extractedValues = new Map<String, String>();
-
-            for (Map<String, Object> keyValuePair : keyValuePairs) {
-                String keyText = (String) keyValuePair.get('key');
-                String valueText = (String) keyValuePair.get('value');
-                extractedValues.put(keyText, valueText);
-            }
-
-            // Return the extracted values as a JSON string to pass to TransformDocument
-            return JSON.serialize(extractedValues);
+        if (resp.getStatusCode() == 200) {
+            // Return the raw JSON string so the next job can parse it
+            return resp.getBody();
         } else {
-            System.debug('Error calling Extracted Text API, status: ' + response.getStatus() + ', body: ' + response.getBody());
+            System.debug('Error calling fetchExtractedText: ' 
+                + resp.getStatus() + ' / ' + resp.getBody());
             return null;
         }
     }
