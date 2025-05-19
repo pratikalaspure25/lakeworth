@@ -1,3 +1,11 @@
+Integer totalWait = 20;
+System.enqueueJob(
+  new DelayedFetchJob(ocrResultId, contentDocId, totalWait),
+  Math.min(totalWait, 10)
+);
+
+
+
 // -------------------------------------------------------
 // 2) ProfitAndLossSaverJob
 //    - deserializes the raw JSON
