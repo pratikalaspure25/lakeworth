@@ -52,3 +52,110 @@ export default class DocumentChecklist extends LightningElement {
         this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
     }
 }
+
+
+
+ @AuraEnabled
+    public static Boolean validateDlImage(Id contentDocumentId) {
+        // 1) Retrieve the binary
+        ContentVersion cv = [
+            SELECT VersionData
+            FROM ContentVersion
+            WHERE ContentDocumentId = :contentDocumentId
+            ORDER BY CreatedDate DESC
+            LIMIT 1
+        ];
+        if (cv == null) {
+            return false;
+        }
+
+        // 2) Initiate OCR
+        String ocrId = initiateTextExtraction(contentDocumentId);
+        if (String.isBlank(ocrId)) {
+            return false;
+        }
+
+        // 3) Fetch extracted JSON
+        String rawJson = fetchExtractedText(ocrId, contentDocumentId);
+        if (String.isBlank(rawJson)) {
+            return false;
+        }
+
+        // 4) Simple pattern check: at least one alphanumeric block ≥4
+        Pattern p = Pattern.compile('([A-Z0-9]{4,})');
+        Matcher m = p.matcher(rawJson.toUpperCase());
+        return m.find();
+    }
+
+    /** Enqueue the normal async processing job */
+    @AuraEnabled
+    public static void processFile(Id contentDocumentId, Id recordId) {
+        System.enqueueJob(new ProcessDocumentJob(contentDocumentId, recordId));
+    }
+
+    // ————————————————————————————————————
+    // OCR helper methods
+    // ————————————————————————————————————
+
+    private static String initiateTextExtraction(Id contentDocumentId) {
+        Http        http = new Http();
+        HttpRequest req  = new HttpRequest();
+        String      endpoint = '/services/data/v58.0/actions/standard/initiateTextExtraction';
+
+        Map<String,Object> input = new Map<String,Object>{
+            'contentDocumentId' => contentDocumentId,
+            'startPageIndex'    => 1,
+            'endPageIndex'      => 20,
+            'ocrService'        => 'AMAZON_TEXTRACT'
+        };
+        Map<String,Object> payload = new Map<String,Object>{
+            'inputs' => new List<Object>{ input }
+        };
+
+        req.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpoint);
+        req.setMethod('POST');
+        req.setHeader('Content-Type','application/json');
+        req.setHeader('Authorization','Bearer ' + UserInfo.getSessionId());
+        req.setBody(JSON.serialize(payload));
+
+        HttpResponse resp = http.send(req);
+        if (resp.getStatusCode() != 200) {
+            return null;
+        }
+
+        List<Object> respList = (List<Object>) JSON.deserializeUntyped(resp.getBody());
+        if (respList.isEmpty()) return null;
+
+        Map<String,Object> first = (Map<String,Object>) respList[0];
+        Map<String,Object> out   = (Map<String,Object>) first.get('outputValues');
+        Map<String,Object> details = (Map<String,Object>) out.get('ocrDocumentScanResultDetails');
+        List<Object> results = (List<Object>) details.get('ocrDocumentScanResults');
+        if (results.isEmpty()) return null;
+
+        return (String) ((Map<String,Object>)results[0]).get('ocrDocumentScanResultId');
+    }
+
+    private static String fetchExtractedText(String ocrResultId, Id contentDocumentId) {
+        Http        http = new Http();
+        HttpRequest req  = new HttpRequest();
+        String      endpoint = '/services/data/v58.0/actions/standard/fetchExtractedText';
+
+        Map<String,Object> single = new Map<String,Object>{
+            'ocrDocumentScanResultId' => ocrResultId,
+            'contentDocumentId'       => contentDocumentId,
+            'startPageIndex'          => 1,
+            'endPageIndex'            => 20
+        };
+        Map<String,Object> payload = new Map<String,Object>{
+            'inputs' => new List<Object>{ single }
+        };
+
+        req.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpoint);
+        req.setMethod('POST');
+        req.setHeader('Content-Type','application/json');
+        req.setHeader('Authorization','Bearer ' + UserInfo.getSessionId());
+        req.setBody(JSON.serialize(payload));
+
+        HttpResponse resp = http.send(req);
+        return (resp.getStatusCode() == 200) ? resp.getBody() : null;
+    }
