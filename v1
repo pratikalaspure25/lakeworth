@@ -4,54 +4,51 @@ import validateDlImage          from '@salesforce/apex/DocumentProcessingControl
 import processFile              from '@salesforce/apex/DocumentProcessingController.processFile';
 
 export default class DocumentChecklist extends LightningElement {
-    @api recordId;
+  @api recordId;
+  acceptedFormats = ['.png', '.jpg', '.jpeg'];
 
-    // Only image formats
-    acceptedFormats = ['.png','.jpg','.jpeg'];
+  handleUploadFinished(event) {
+    const files = event.detail.files;
+    if (!files.length) {
+      this.showToast('Error', 'Please upload a valid DL image', 'error');
+      return;
+    }
 
-    handleUploadFinished(event) {
-        const files = event.detail.files;
-        if (!files || !files.length) {
-            return this.showToast('Error', 'Please upload a valid DL image', 'error');
+    const { documentId, name } = files[0];
+    const lower = name.toLowerCase();
+    if (!lower.endsWith('.png') && !lower.endsWith('.jpg') && !lower.endsWith('.jpeg')) {
+      this.showToast('Invalid File', 'Please upload a PNG/JPG image', 'error');
+      return;
+    }
+
+    validateDlImage({ contentDocumentId: documentId })
+      .then(isValid => {
+        if (!isValid) {
+          // throw to jump to .catch, skipping the success toast
+          throw new Error('Please upload a valid Driving License image');
         }
-        const { documentId, name } = files[0];
-        const lower = name.toLowerCase();
-        if (
-            !lower.endsWith('.png') &&
-            !lower.endsWith('.jpg') &&
-            !lower.endsWith('.jpeg')
-        ) {
-            return this.showToast('Invalid File', 'Please upload a PNG/JPG image', 'error');
-        }
+        // only if valid do we kick off the async processing
+        return processFile({ contentDocumentId: documentId, recordId: this.recordId });
+      })
+      .then(() => {
+        // this only runs if processFile() was called
+        this.showToast('Success', 'Driving license sent for processing', 'success');
+      })
+      .catch(error => {
+        // catch either validation or processFile errors
+        this.showToast('Invalid DL', error.message, 'error');
+      });
+  }
 
-        // 1) Validate via OCR
-        validateDlImage({ contentDocumentId: documentId })
-            .then(isValid => {
-                if (!isValid) {
-                    return this.showToast('Invalid DL', 'Please upload a valid Driving License image', 'error');
-                }
-                // 2) Kick off async processing
-                return processFile({ contentDocumentId: documentId, recordId: this.recordId });
-            })
-            .then(() => {
-                // Only show if processFile ran
-                this.showToast('Success', 'Driving license sent for processing', 'success');
-            })
-            .catch(error => {
-                // Either validation or processing error
-                console.error(error);
-                this.showToast('Error', error.body?.message || 'There was a problem processing your DL', 'error');
-            });
-    }
+  handleUploadError() {
+    this.showToast('Upload Failed', 'Please upload a valid DL image', 'error');
+  }
 
-    handleUploadError() {
-        this.showToast('Upload Failed', 'Please upload a valid DL image', 'error');
-    }
-
-    showToast(title, message, variant) {
-        this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
-    }
+  showToast(title, message, variant) {
+    this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
+  }
 }
+
 
 
 
