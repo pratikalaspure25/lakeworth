@@ -164,3 +164,61 @@ export default class DocumentChecklist extends LightningElement {
             // Delay by 1 minute to let OCR complete
             System.enqueueJob(new FetchExtractedTextWithDelayJob(ocrId, contentDocumentId), 1);
         }
+
+
+
+@AuraEnabled
+public static Boolean validateDlImage(Id contentDocumentId) {
+    // 1) Fetch the raw OCR JSON
+    String ocrId   = initiateTextExtraction(contentDocumentId);
+    if (String.isBlank(ocrId)) return false;
+    String rawJson = fetchExtractedText(ocrId, contentDocumentId);
+    if (String.isBlank(rawJson)) return false;
+
+    // 2) Parse the top‐level list
+    List<Object> respList = (List<Object>) JSON.deserializeUntyped(rawJson);
+    if (respList.isEmpty()) return false;
+
+    Map<String,Object> actionResp = (Map<String,Object>) respList[0];
+    Map<String,Object> outputVals = (Map<String,Object>) actionResp.get('outputValues');
+    if (outputVals == null ||
+        !outputVals.containsKey('ocrDocumentScanResultDetails')) {
+      return false;
+    }
+
+    // 3) Drill into the pages array
+    Map<String,Object> detailsWrap = 
+        (Map<String,Object>) outputVals.get('ocrDocumentScanResultDetails');
+    // this key is the same one you used in your saver job
+    List<Object> pages = (List<Object>) detailsWrap.get('ocrDocumentScanResults');
+    if (pages == null || pages.isEmpty()) return false;
+
+    // 4) Look for a non-blank Driving License Number on any page
+    for (Object pg : pages) {
+        Map<String,Object> pageMap = (Map<String,Object>) pg;
+        List<Object> kvps = (List<Object>) pageMap.get('keyValuePairs');
+        if (kvps == null) continue;
+
+        for (Object kvp : kvps) {
+            Map<String,Object> pair     = (Map<String,Object>) kvp;
+            Map<String,Object> keyMap   = (Map<String,Object>) pair.get('key');
+            Map<String,Object> valueMap = (Map<String,Object>) pair.get('value');
+            if (keyMap == null || valueMap == null) continue;
+
+            String label = ((String) keyMap.get('value')).toLowerCase();
+            String text  = (String) valueMap.get('value');
+            if (text == null || text.trim().isEmpty()) {
+                continue;
+            }
+
+            // You can adjust this to match whatever label your IDR returns
+            if (label.contains('driving') && label.contains('license') && text.trim().length() > 3) {
+                return true;
+            }
+        }
+    }
+
+    // no DL number found → invalid
+    return false;
+}
+
