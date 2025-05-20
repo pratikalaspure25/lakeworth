@@ -109,27 +109,31 @@ public class IdentificationSaverJob implements Queueable {
      *                   FeedElementType feedElementType,
      *                   String text)
      */
-    private void postChatterError(String message) {
-        // (Optional) grab the record Name for friendlier text
-        String appName;
-        try {
-            appName = [SELECT Name FROM LLC_BI_Application__c WHERE Id = :parentId].Name;
-        } catch (Exception e) {
-            appName = parentId;
-        }
-
-        // Build your plain-text body
-        String bodyText = '⚠️ Error processing document on "' 
-                        + appName 
-                        + '": ' 
-                        + message;
-
-        // Fire the feed
-        ConnectApi.ChatterFeeds.postFeedElement(
-            /* communityId    */ null,
-            /* subjectId      */ parentId.toString(),
-            /* feedElementType*/ ConnectApi.FeedElementType.FeedItem,
-            /* text           */ bodyText
+   private void postChatterError(String message) {
+    // try to grab Name via dynamic SOQL
+    String appName;
+    try {
+        // Note: this will compile even if there's no static SObject type
+        SObject rec = Database.query(
+            'SELECT Name FROM LLC_BI_Application__c WHERE Id = \'' 
+            + parentId + '\''
         );
+        appName = (String) rec.get('Name');
+    } catch (Exception e) {
+        appName = parentId.toString();
     }
+
+    String bodyText = '⚠️ Error processing document on "' 
+                    + appName 
+                    + '": ' 
+                    + message;
+
+    ConnectApi.ChatterFeeds.postFeedElement(
+        /* communityId    */ null,
+        /* subjectId      */ parentId.toString(),
+        /* feedElementType*/ ConnectApi.FeedElementType.FeedItem,
+        /* text           */ bodyText
+    );
+}
+
 }
