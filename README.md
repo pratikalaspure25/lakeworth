@@ -1,11 +1,130 @@
-if (ocrResult == null
-            || ocrResult.startsWith('Error')
-            || ocrResult.contains('No OCR results')) {
-          FeedItem f = new FeedItem(
-            ParentId = parentId,
-            Body     = '⚠️ Document processing failed: ' + ocrResult +
-                       '. Please upload a clear Driver’s License image.'
-          );
-          insert f;
-          return;
+// IdentificationSaverJob.cls
+public class IdentificationSaverJob implements Queueable, Database.AllowsCallouts {
+    private String rawJson;
+    private Id     parentId;
+
+    public IdentificationSaverJob(String rawJson, Id parentId) {
+        this.rawJson  = rawJson;
+        this.parentId = parentId;
+    }
+
+    public void execute(QueueableContext ctx) {
+        // 1) Nothing to parse?
+        if (String.isBlank(rawJson)) {
+            postChatterError('OCR payload was empty—no data to save.');
+            return;
         }
+
+        // 2) Top-level array
+        List<Object> wrapper = (List<Object>) JSON.deserializeUntyped(rawJson);
+        if (wrapper.isEmpty()) {
+            postChatterError('Unexpected OCR response: empty array.');
+            return;
+        }
+
+        // 3) Drill into outputValues → ocrDocumentScanResultDetails → ocrDocumentScanResults
+        Object ov = ((Map<String,Object>)wrapper.get(0)).get('outputValues');
+        if (!(ov instanceof Map<String,Object>)) {
+            postChatterError('Malformed OCR JSON: missing outputValues.');
+            return;
+        }
+        Map<String,Object> output = (Map<String,Object>) ov;
+
+        Object detailsObj = output.get('ocrDocumentScanResultDetails');
+        if (!(detailsObj instanceof Map<String,Object>)) {
+            postChatterError('Malformed OCR JSON: missing scan result details.');
+            return;
+        }
+        Map<String,Object> details = (Map<String,Object>) detailsObj;
+
+        Object pagesObj = details.get('ocrDocumentScanResults');
+        if (!(pagesObj instanceof List<Object>)) {
+            postChatterError('Malformed OCR JSON: pages list missing.');
+            return;
+        }
+        List<Object> pages = (List<Object>) pagesObj;
+        if (pages.isEmpty()) {
+            postChatterError('No pages found in OCR details.');
+            return;
+        }
+
+        // 4) Map KVPs into a new Identification__c record
+        Identification__c rec = new Identification__c();
+        for (Object pg : pages) {
+            if (!(pg instanceof Map<String,Object>)) continue;
+            List<Object> kvps = (List<Object>) ((Map<String,Object>)pg).get('keyValuePairs');
+            if (kvps == null) continue;
+
+            for (Object kvpObj : kvps) {
+                if (!(kvpObj instanceof Map<String,Object>)) {
+                    postChatterError('Malformed OCR JSON: entry is not a key-value map.');
+                    continue;
+                }
+                Map<String,Object> pair = (Map<String,Object>) kvpObj;
+
+                Object keyObj = pair.get('key');
+                Object valObj = pair.get('value');
+                if (!(keyObj instanceof Map<String,Object>) ||
+                    !(valObj instanceof Map<String,Object>)) {
+                    postChatterError('Malformed OCR JSON: key or value not an object.');
+                    continue;
+                }
+
+                Map<String,Object> keyMap   = (Map<String,Object>) keyObj;
+                Map<String,Object> valueMap = (Map<String,Object>) valObj;
+                String label = (String) keyMap.get('value');
+                String text  = (String) valueMap.get('value');
+                if (label == null || text == null) continue;
+
+                // ► Your mapping logic:
+                String norm = label.replaceAll('[^a-zA-Z0-9]', '').toLowerCase();
+                if (norm.contains('4bexp'))      rec.Expiration_Date__c          = text;
+                else if (norm.contains('8'))     rec.Address__c                  = text;
+                else if (norm.contains('15sex')) rec.Sex__c                      = text;
+                else if (norm.contains('3dob'))  rec.Date_of_Birth__c            = text;
+                else if (norm.contains('4ddln')) rec.Driving_License_Number__c  = text;
+            }
+        }
+
+        // 5) Save it (or post another error)
+        try {
+            insert rec;
+        } catch (DmlException ex) {
+            postChatterError('Failed to save Identification record: ' + ex.getMessage());
+        }
+    }
+
+
+    // Helper to post a Chatter feed on the parent record, with a live link back to it
+    private void postChatterError(String message) {
+        // Build a rich-body: text + [record link] + more text
+        ConnectApi.MessageBodyInput body = new ConnectApi.MessageBodyInput();
+        body.messageSegments = new List<ConnectApi.MessageSegmentInput>();
+
+        // 1) Leading text
+        ConnectApi.TextSegmentInput seg1 = new ConnectApi.TextSegmentInput();
+        seg1.text = '⚠️ Document-processing error on ';
+        body.messageSegments.add(seg1);
+
+        // 2) Entity link to the parent record (it renders as “LLC_BI_Application__c Name”)
+        ConnectApi.EntityLinkSegmentInput linkSeg = new ConnectApi.EntityLinkSegmentInput();
+        linkSeg.id = parentId;
+        body.messageSegments.add(linkSeg);
+
+        // 3) Trailing explanation
+        ConnectApi.TextSegmentInput seg2 = new ConnectApi.TextSegmentInput();
+        seg2.text = ': ' + message;
+        body.messageSegments.add(seg2);
+
+        // Put it all into a FeedItemInput and post it
+        ConnectApi.FeedItemInput feedItem = new ConnectApi.FeedItemInput();
+        feedItem.body = body;
+
+        ConnectApi.ChatterFeeds.postFeedItem(
+            null,                          // current community
+            ConnectApi.FeedType.Record,
+            parentId,
+            feedItem
+        );
+    }
+}
