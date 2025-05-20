@@ -59,7 +59,6 @@ public class IdentificationSaverJob implements Queueable {
                 continue;
             }
             Map<String,Object> pageMap = (Map<String,Object>) pg;
-
             List<Object> kvps = (List<Object>) pageMap.get('keyValuePairs');
             if (kvps == null) continue;
 
@@ -103,39 +102,34 @@ public class IdentificationSaverJob implements Queueable {
     }
 
     /**
-     * Posts a Chatter feed element to the parent record, with a link back to it.
-     * Uses the newer postFeedElement API.
+     * Posts a plain-text Chatter feed element on the parent record.
+     * Uses the v31+ signature:
+     *   postFeedElement(String communityId,
+     *                   String subjectId,
+     *                   FeedElementType feedElementType,
+     *                   String text)
      */
     private void postChatterError(String message) {
-        // Build up the body: text + record-link + text
-        ConnectApi.MessageBodyInput body = new ConnectApi.MessageBodyInput();
-        body.messageSegments = new List<ConnectApi.MessageSegmentInput>();
+        // (Optional) grab the record Name for friendlier text
+        String appName;
+        try {
+            appName = [SELECT Name FROM LLC_BI_Application__c WHERE Id = :parentId].Name;
+        } catch (Exception e) {
+            appName = parentId;
+        }
 
-        // 1) Leading text
-        ConnectApi.TextSegmentInput seg1 = new ConnectApi.TextSegmentInput();
-        seg1.text = '⚠️ Document-processing error on ';
-        body.messageSegments.add(seg1);
+        // Build your plain-text body
+        String bodyText = '⚠️ Error processing document on "' 
+                        + appName 
+                        + '": ' 
+                        + message;
 
-        // 2) Clickable link to the record
-        ConnectApi.EntityLinkSegmentInput linkSeg = new ConnectApi.EntityLinkSegmentInput();
-        linkSeg.id = parentId.toString();
-        body.messageSegments.add(linkSeg);
-
-        // 3) Trailing text
-        ConnectApi.TextSegmentInput seg2 = new ConnectApi.TextSegmentInput();
-        seg2.text = ': ' + message;
-        body.messageSegments.add(seg2);
-
-        // Wrap it in a FeedItemInput (which extends FeedElementInput)
-        ConnectApi.FeedItemInput feedItemInput = new ConnectApi.FeedItemInput();
-        feedItemInput.body = body;
-
-        // Use postFeedElement instead of the removed postFeedItem
+        // Fire the feed
         ConnectApi.ChatterFeeds.postFeedElement(
-            (String)null,                     // community/network (null = internal)
-            ConnectApi.FeedType.Record,      // post to a record’s feed
-            parentId.toString(),             // record Id as String
-            feedItemInput                    // your prepared body
+            /* communityId    */ null,
+            /* subjectId      */ parentId.toString(),
+            /* feedElementType*/ ConnectApi.FeedElementType.FeedItem,
+            /* text           */ bodyText
         );
     }
 }
