@@ -1,5 +1,3 @@
-// IdentificationSaverJob.cls
-
 public class IdentificationSaverJob implements Queueable {
     private String rawJson;
     private Id     parentId;
@@ -28,7 +26,7 @@ public class IdentificationSaverJob implements Queueable {
         }
 
         // 3) Drill into outputValues → ocrDocumentScanResultDetails → ocrDocumentScanResults
-        Object ov = ((Map<String,Object>)wrapper.get(0)).get('outputValues');
+        Object ov = ((Map<String,Object>) wrapper.get(0)).get('outputValues');
         if (!(ov instanceof Map<String,Object>)) {
             postChatterError('Malformed OCR JSON: missing outputValues.');
             return;
@@ -86,7 +84,7 @@ public class IdentificationSaverJob implements Queueable {
                 String text  = (String) valueMap.get('value');
                 if (label == null || text == null) continue;
 
-                // ► Your mapping logic (example):
+                // ► Your mapping logic here
                 String norm = label.replaceAll('[^a-zA-Z0-9]', '').toLowerCase();
                 if (norm.contains('4bexp'))      rec.Expiration_Date__c         = text;
                 else if (norm.contains('8'))     rec.Address__c                 = text;
@@ -105,10 +103,11 @@ public class IdentificationSaverJob implements Queueable {
     }
 
     /**
-     * Posts a Chatter feed item to the parent record, with a link back to it.
+     * Posts a Chatter feed element to the parent record, with a link back to it.
+     * Uses the newer postFeedElement API.
      */
     private void postChatterError(String message) {
-        // Build rich body: text + link + text
+        // Build up the body: text + record-link + text
         ConnectApi.MessageBodyInput body = new ConnectApi.MessageBodyInput();
         body.messageSegments = new List<ConnectApi.MessageSegmentInput>();
 
@@ -119,23 +118,24 @@ public class IdentificationSaverJob implements Queueable {
 
         // 2) Clickable link to the record
         ConnectApi.EntityLinkSegmentInput linkSeg = new ConnectApi.EntityLinkSegmentInput();
-        linkSeg.id = parentId.toString();     // MUST be String
+        linkSeg.id = parentId.toString();
         body.messageSegments.add(linkSeg);
 
-        // 3) Trailing message
+        // 3) Trailing text
         ConnectApi.TextSegmentInput seg2 = new ConnectApi.TextSegmentInput();
         seg2.text = ': ' + message;
         body.messageSegments.add(seg2);
 
-        // Wrap and post
-        ConnectApi.FeedItemInput feedItem = new ConnectApi.FeedItemInput();
-        feedItem.body = body;
+        // Wrap it in a FeedItemInput (which extends FeedElementInput)
+        ConnectApi.FeedItemInput feedItemInput = new ConnectApi.FeedItemInput();
+        feedItemInput.body = body;
 
-        ConnectApi.ChatterFeeds.postFeedItem(
-            null,                             // current community
-            ConnectApi.FeedType.Record,      // feed on a record
+        // Use postFeedElement instead of the removed postFeedItem
+        ConnectApi.ChatterFeeds.postFeedElement(
+            (String)null,                     // community/network (null = internal)
+            ConnectApi.FeedType.Record,      // post to a record’s feed
             parentId.toString(),             // record Id as String
-            feedItem
+            feedItemInput                    // your prepared body
         );
     }
 }
