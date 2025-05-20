@@ -1,0 +1,227 @@
+# Universal Document Upload & Processing
+
+This solution consolidates everything into a single LWC and shared Apex pipeline, driven by Custom Metadata.
+
+---
+
+## 1) LWC: `universalDocumentUploader`
+
+**universalDocumentUploader.html**
+
+```html
+<template>
+  <lightning-card title={cardTitle}>
+    <div class="slds-p-around_medium">
+      <lightning-file-upload
+        label="Upload Files"
+        name="fileUploader"
+        accept={acceptedFormats}
+        record-id={recordId}
+        onuploadfinished={handleUploadFinished}>
+      </lightning-file-upload>
+    </div>
+  </lightning-card>
+</template>
+```
+
+**universalDocumentUploader.js**
+
+```js
+import { LightningElement, api } from 'lwc';
+import processFile from '@salesforce/apex/DocumentProcessingController.processFile';
+
+export default class UniversalDocumentUploader extends LightningElement {
+  @api recordId;
+  @api documentType;  // e.g. 'DL' or 'PL'
+
+  acceptedFormats = ['.pdf','.jpg','.png','.jpeg','.docx','.xlsx'];
+
+  get cardTitle() {
+    return this.documentType === 'PL'
+      ? 'Profit & Loss Upload'
+      : 'Driving License Upload';
+  }
+
+  handleUploadFinished(event) {
+    const contentDocumentId = event.detail.files[0].documentId;
+    processFile({ contentDocumentId, recordId: this.recordId, documentType: this.documentType })
+      .then(() => console.log('File enqueued'))
+      .catch(error => console.error(error));
+  }
+}
+```
+
+**universalDocumentUploader.js-meta.xml**
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+  <apiVersion>58.0</apiVersion>
+  <isExposed>true</isExposed>
+  <targets>
+    <target>lightning__RecordPage</target>
+  </targets>
+  <targetConfig targets="lightning__RecordPage">
+    <property name="documentType" type="String" label="Document Type" description="DL or PL or other" />
+  </targetConfig>
+</LightningComponentBundle>
+```
+
+---
+
+## 2) Apex Controller: `DocumentProcessingController`
+
+```java
+public with sharing class DocumentProcessingController {
+  @AuraEnabled
+  public static void processFile(
+      String contentDocumentId,
+      String recordId,
+      String documentType
+  ) {
+    System.enqueueJob(
+      new ProcessDocumentJob(contentDocumentId, recordId, documentType)
+    );
+  }
+}
+```
+
+---
+
+## 3) OCR Job: `ProcessDocumentJob`
+
+```java
+public class ProcessDocumentJob implements Queueable, Database.AllowsCallouts {
+  private String contentDocumentId, recordId, documentType;
+  public ProcessDocumentJob(String cdi, String rid, String dt) {
+    contentDocumentId = cdi; recordId = rid; documentType = dt;
+  }
+  public void execute(QueueableContext ctx) {
+    ContentVersion cv = [
+      SELECT VersionData FROM ContentVersion
+      WHERE ContentDocumentId = :contentDocumentId LIMIT 1
+    ];
+    String ocrResult = triggerOcrProcessing(cv.VersionData);
+    if (String.isBlank(ocrResult)) return;
+    System.enqueueJob(
+      new FetchExtractedTextJob(ocrResult, recordId, documentType),
+      /*delayMinutes=*/1
+    );
+  }
+  private String triggerOcrProcessing(Blob documentData) {
+    Http http = new Http();
+    HttpRequest req = new HttpRequest();
+    String endpoint = URL.getOrgDomainUrl().toExternalForm()
+      + '/services/data/v58.0/actions/standard/initiateTextExtraction';
+    Map<String,Object> payload = new Map<String,Object>{
+      'inputs' => List.of(new Map<String,Object>{
+        'contentDocumentId' => contentDocumentId,
+        'startPageIndex'    => 1,
+        'endPageIndex'      => 20,
+        'ocrService'        => 'AMAZON_TEXTRACT'
+      })
+    };
+    req.setEndpoint(endpoint);
+    req.setMethod('POST');
+    req.setHeader('Content-Type','application/json');
+    req.setHeader('Authorization','Bearer ' + UserInfo.getSessionId());
+    req.setBody(JSON.serialize(payload));
+    HttpResponse resp = http.send(req);
+    return resp.getStatusCode() == 200 ? resp.getBody() : null;
+  }
+}
+```
+
+---
+
+## 4) Fetch & Save Job: `FetchExtractedTextJob`
+
+```java
+public class FetchExtractedTextJob implements Queueable {
+  private String rawJson, recordId, documentType;
+  public FetchExtractedTextJob(String rj, String rid, String dt) {
+    rawJson = rj; recordId = rid; documentType = dt;
+  }
+  public void execute(QueueableContext ctx) {
+    List<Object> actions = (List<Object>) JSON.deserializeUntyped(rawJson);
+    if (actions.isEmpty()) return;
+    Map<String,Object> out = (Map<String,Object>)((Map<String,Object>)actions[0]).get('outputValues');
+    Map<String,Object> details = (Map<String,Object>) out.get('ocrDocumentScanResultDetails');
+    List<Object> pages = (List<Object>) details.get('ocrDocumentScanResults');
+
+    // load mappings
+    Map<String,String> mapping = new Map<String,String>();
+    for (Document_Field_Mapping__mdt m : [
+      SELECT Key_Normalized__c, Target_Field__c
+      FROM Document_Field_Mapping__mdt
+      WHERE Document_Type__c = :documentType
+    ]) {
+      mapping.put(m.Key_Normalized__c.toLowerCase(), m.Target_Field__c);
+    }
+
+    // dynamic SObject
+    String sObjName = mapping.values().iterator().next().split('\.',2)[0];
+    SObject rec = Schema.getGlobalDescribe().get(sObjName).newSObject();
+    rec.put('Id', recordId);
+
+    for (Object pg : pages) {
+      for (Object kvp : (List<Object>)((Map<String,Object>)pg).get('keyValuePairs')) {
+        Map<String,Object> pair = (Map<String,Object>) kvp;
+        String keyNorm = ((String)((Map<String,Object>)pair.get('key')).get('value'))
+                         .replaceAll('[^a-zA-Z0-9]','').toLowerCase();
+        if (!mapping.containsKey(keyNorm)) continue;
+        String target = mapping.get(keyNorm);
+        String[] parts = target.split('\.',2);
+        String fieldApi = parts[1];
+        String text = (String)((Map<String,Object>)pair.get('value')).get('value');
+        rec.put(fieldApi, text);
+      }
+    }
+    upsert rec;
+  }
+}
+```
+
+---
+
+## 5) Custom Metadata: `Document_Field_Mapping__mdt`
+
+1. **Fields**:
+
+   * `Document_Type__c` (Text)
+   * `Key_Normalized__c` (Text)
+   * `Target_Field__c` (Text)
+
+2. **Sample Records**:
+
+**DL – Expiration Date**
+
+```xml
+<CustomMetadata>
+  <label>DL: Expiration Date</label>
+  <values><field>Document_Type__c</field><value>DL</value></values>
+  <values><field>Key_Normalized__c</field><value>4bexp</value></values>
+  <values><field>Target_Field__c</field><value>Identification__c.Expiration_Date__c</value></values>
+</CustomMetadata>
+```
+
+**PL – Borrower Name**
+
+```xml
+<CustomMetadata>
+  <label>PL: Borrower Name</label>
+  <values><field>Document_Type__c</field><value>PL</value></values>
+  <values><field>Key_Normalized__c</field><value>borrowernames</value></values>
+  <values><field>Target_Field__c</field><value>Profit_and_Loss__c.Borrower_Name_s__c</value></values>
+</CustomMetadata>
+```
+
+---
+
+### Usage
+
+1. Deploy everything.
+2. On any record page, drop `<c-universalDocumentUploader document-type="DL" record-id="{!recordId}"/>` for DL, or `document-type="PL"` for P\&L.
+3. Upload your file and watch the OCR-driven fields populate on the target record.
+
+This single pipeline handles all document types—just add new metadata records for new types!
