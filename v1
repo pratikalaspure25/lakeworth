@@ -159,3 +159,11 @@ export default class DocumentChecklist extends LightningElement {
         HttpResponse resp = http.send(req);
         return (resp.getStatusCode() == 200) ? resp.getBody() : null;
     }
+
+
+ // Initiate OCR asynchronously
+        String ocrId = DocumentProcessingController.initiateTextExtraction(contentDocumentId);
+        if (ocrId != null) {
+            // Delay by 1 minute to let OCR complete
+            System.enqueueJob(new FetchExtractedTextWithDelayJob(ocrId, contentDocumentId), 1);
+        }
