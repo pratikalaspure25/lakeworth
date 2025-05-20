@@ -1,9 +1,13 @@
 // IdentificationSaverJob.cls
 
-public class IdentificationSaverJob implements Queueable, Database.AllowsCallouts {
+public class IdentificationSaverJob implements Queueable {
     private String rawJson;
     private Id     parentId;
 
+    /**
+     * @param rawJson   The full JSON payload from the OCR fetch call
+     * @param parentId  The Id of the LLC_BI_Application__c record to post Chatter to
+     */
     public IdentificationSaverJob(String rawJson, Id parentId) {
         this.rawJson  = rawJson;
         this.parentId = parentId;
@@ -49,16 +53,21 @@ public class IdentificationSaverJob implements Queueable, Database.AllowsCallout
             return;
         }
 
-        // 4) Map KVPs into a new Identification__c record
+        // 4) Map key/value pairs into a new Identification__c record
         Identification__c rec = new Identification__c();
         for (Object pg : pages) {
-            if (!(pg instanceof Map<String,Object>)) continue;
-            List<Object> kvps = (List<Object>) ((Map<String,Object>)pg).get('keyValuePairs');
+            if (!(pg instanceof Map<String,Object>)) {
+                postChatterError('Malformed OCR JSON: page entry not an object.');
+                continue;
+            }
+            Map<String,Object> pageMap = (Map<String,Object>) pg;
+
+            List<Object> kvps = (List<Object>) pageMap.get('keyValuePairs');
             if (kvps == null) continue;
 
             for (Object kvpObj : kvps) {
                 if (!(kvpObj instanceof Map<String,Object>)) {
-                    postChatterError('Malformed OCR JSON: entry is not a key-value map.');
+                    postChatterError('Malformed OCR JSON: keyValuePairs entry not a map.');
                     continue;
                 }
                 Map<String,Object> pair = (Map<String,Object>) kvpObj;
@@ -77,17 +86,17 @@ public class IdentificationSaverJob implements Queueable, Database.AllowsCallout
                 String text  = (String) valueMap.get('value');
                 if (label == null || text == null) continue;
 
-                // ► Your mapping logic:
+                // ► Your mapping logic (example):
                 String norm = label.replaceAll('[^a-zA-Z0-9]', '').toLowerCase();
-                if (norm.contains('4bexp'))      rec.Expiration_Date__c          = text;
-                else if (norm.contains('8'))     rec.Address__c                  = text;
-                else if (norm.contains('15sex')) rec.Sex__c                      = text;
-                else if (norm.contains('3dob'))  rec.Date_of_Birth__c            = text;
-                else if (norm.contains('4ddln')) rec.Driving_License_Number__c  = text;
+                if (norm.contains('4bexp'))      rec.Expiration_Date__c         = text;
+                else if (norm.contains('8'))     rec.Address__c                 = text;
+                else if (norm.contains('15sex')) rec.Sex__c                     = text;
+                else if (norm.contains('3dob'))  rec.Date_of_Birth__c           = text;
+                else if (norm.contains('4ddln')) rec.Driving_License_Number__c = text;
             }
         }
 
-        // 5) Save it (or post another error)
+        // 5) Save the record (or report a DML error)
         try {
             insert rec;
         } catch (DmlException ex) {
@@ -95,10 +104,11 @@ public class IdentificationSaverJob implements Queueable, Database.AllowsCallout
         }
     }
 
-
-    // Helper to post a Chatter feed on the parent record, with a live link back to it
+    /**
+     * Posts a Chatter feed item to the parent record, with a link back to it.
+     */
     private void postChatterError(String message) {
-        // Build a rich-body: text + [record link] + more text
+        // Build rich body: text + link + text
         ConnectApi.MessageBodyInput body = new ConnectApi.MessageBodyInput();
         body.messageSegments = new List<ConnectApi.MessageSegmentInput>();
 
@@ -107,24 +117,24 @@ public class IdentificationSaverJob implements Queueable, Database.AllowsCallout
         seg1.text = '⚠️ Document-processing error on ';
         body.messageSegments.add(seg1);
 
-        // 2) Entity link to the parent record (it renders as “LLC_BI_Application__c Name”)
+        // 2) Clickable link to the record
         ConnectApi.EntityLinkSegmentInput linkSeg = new ConnectApi.EntityLinkSegmentInput();
-        linkSeg.id = parentId;
+        linkSeg.id = parentId.toString();     // MUST be String
         body.messageSegments.add(linkSeg);
 
-        // 3) Trailing explanation
+        // 3) Trailing message
         ConnectApi.TextSegmentInput seg2 = new ConnectApi.TextSegmentInput();
         seg2.text = ': ' + message;
         body.messageSegments.add(seg2);
 
-        // Put it all into a FeedItemInput and post it
+        // Wrap and post
         ConnectApi.FeedItemInput feedItem = new ConnectApi.FeedItemInput();
         feedItem.body = body;
 
         ConnectApi.ChatterFeeds.postFeedItem(
-            null,                          // current community
-            ConnectApi.FeedType.Record,
-            parentId,
+            null,                             // current community
+            ConnectApi.FeedType.Record,      // feed on a record
+            parentId.toString(),             // record Id as String
             feedItem
         );
     }
