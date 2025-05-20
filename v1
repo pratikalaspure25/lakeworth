@@ -1,53 +1,70 @@
-import { LightningElement, api } from 'lwc';
-import { ShowToastEvent }       from 'lightning/platformShowToastEvent';
-import validateDlImage          from '@salesforce/apex/DocumentProcessingController.validateDlImage';
-import processFile              from '@salesforce/apex/DocumentProcessingController.processFile';
+import { LightningElement, api }            from 'lwc';
+import { ShowToastEvent }                  from 'lightning/platformShowToastEvent';
+import processFile                         from '@salesforce/apex/DocumentProcessingController.processFile';
 
 export default class DocumentChecklist extends LightningElement {
-  @api recordId;
-  acceptedFormats = ['.png', '.jpg', '.jpeg'];
+    @api recordId;
 
-  handleUploadFinished(event) {
-    const files = event.detail.files;
-    if (!files.length) {
-      this.showToast('Error', 'Please upload a valid DL image', 'error');
-      return;
-    }
+    // only allow image files
+    acceptedFormats = ['.png','.jpg','.jpeg'];
 
-    const { documentId, name } = files[0];
-    const lower = name.toLowerCase();
-    if (!lower.endsWith('.png') && !lower.endsWith('.jpg') && !lower.endsWith('.jpeg')) {
-      this.showToast('Invalid File', 'Please upload a PNG/JPG image', 'error');
-      return;
-    }
-
-    validateDlImage({ contentDocumentId: documentId })
-      .then(isValid => {
-        if (!isValid) {
-          // throw to jump to .catch, skipping the success toast
-          throw new Error('Please upload a valid Driving License image');
+    handleUploadFinished(event) {
+        const files = event.detail.files;
+        if (!files || files.length === 0) {
+            this.showError();
+            return;
         }
-        // only if valid do we kick off the async processing
-        return processFile({ contentDocumentId: documentId, recordId: this.recordId });
-      })
-      .then(() => {
-        // this only runs if processFile() was called
-        this.showToast('Success', 'Driving license sent for processing', 'success');
-      })
-      .catch(error => {
-        // catch either validation or processFile errors
-        this.showToast('Invalid DL', error.message, 'error');
-      });
-  }
 
-  handleUploadError() {
-    this.showToast('Upload Failed', 'Please upload a valid DL image', 'error');
-  }
+        const { documentId, name } = files[0];
+        const lower = name.toLowerCase();
+        if (
+            !lower.endsWith('.png') &&
+            !lower.endsWith('.jpg') &&
+            !lower.endsWith('.jpeg')
+        ) {
+            this.showError();
+            return;
+        }
 
-  showToast(title, message, variant) {
-    this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
-  }
+        // ok, kick off your Apex processing
+        processFile({ contentDocumentId: documentId, recordId: this.recordId })
+            .then(() => {
+                this.showToast('Success', 'DL sent for processing', 'success');
+            })
+            .catch(err => {
+                console.error(err);
+                this.showToast('Error', 'There was a problem processing your DL', 'error');
+            });
+    }
+
+    handleUploadError() {
+        this.showError();
+    }
+
+    showError() {
+        this.showToast('Invalid DL', 'Please upload valid DL image', 'error');
+    }
+
+    showToast(title, message, variant) {
+        this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
+    }
 }
+
+<template>
+    <lightning-card title="DL Upload">
+        <div class="slds-p-around_medium">
+            <!-- File upload component -->
+            <lightning-file-upload 
+                label="Upload DL Image" 
+                name="fileUploader" 
+                accept={acceptedFormats} 
+                record-id={recordId} 
+                onuploadfinished={handleUploadFinished}
+                onerror={handleUploadError}>
+            </lightning-file-upload>
+        </div>
+    </lightning-card>
+</template>
 
 
 
