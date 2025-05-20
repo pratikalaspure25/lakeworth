@@ -1,70 +1,54 @@
-// -------------------------------------------------------
-// 1) FetchExtractedTextWithDelayJob
-//    - calls the OCR action
-//    - returns the raw JSON body
-//    - enqueues ProfitAndLossSaverJob
-// -------------------------------------------------------
-public class FetchExtractedTextWithDelayJob implements Queueable, Database.AllowsCallouts { 
+import { LightningElement, api } from 'lwc';
+import { ShowToastEvent }       from 'lightning/platformShowToastEvent';
+import validateDlImage          from '@salesforce/apex/DocumentProcessingController.validateDlImage';
+import processFile              from '@salesforce/apex/DocumentProcessingController.processFile';
 
-    private String ocrDocumentScanResultId;
-    private String contentDocumentId;
+export default class DocumentChecklist extends LightningElement {
+    @api recordId;
 
-    // Constructor to pass the parameters to the queueable job
-    public FetchExtractedTextWithDelayJob(String ocrDocumentScanResultId, String contentDocumentId) {
-        this.ocrDocumentScanResultId = ocrDocumentScanResultId;
-        this.contentDocumentId       = contentDocumentId;
+    // Only image formats
+    acceptedFormats = ['.png','.jpg','.jpeg'];
+
+    handleUploadFinished(event) {
+        const files = event.detail.files;
+        if (!files || !files.length) {
+            return this.showToast('Error', 'Please upload a valid DL image', 'error');
+        }
+        const { documentId, name } = files[0];
+        const lower = name.toLowerCase();
+        if (
+            !lower.endsWith('.png') &&
+            !lower.endsWith('.jpg') &&
+            !lower.endsWith('.jpeg')
+        ) {
+            return this.showToast('Invalid File', 'Please upload a PNG/JPG image', 'error');
+        }
+
+        // 1) Validate via OCR
+        validateDlImage({ contentDocumentId: documentId })
+            .then(isValid => {
+                if (!isValid) {
+                    return this.showToast('Invalid DL', 'Please upload a valid Driving License image', 'error');
+                }
+                // 2) Kick off async processing
+                return processFile({ contentDocumentId: documentId, recordId: this.recordId });
+            })
+            .then(() => {
+                // Only show if processFile ran
+                this.showToast('Success', 'Driving license sent for processing', 'success');
+            })
+            .catch(error => {
+                // Either validation or processing error
+                console.error(error);
+                this.showToast('Error', error.body?.message || 'There was a problem processing your DL', 'error');
+            });
     }
 
-    // Execute method
-    public void execute(QueueableContext context) {
-        String rawJson = fetchExtractedText(ocrDocumentScanResultId, contentDocumentId);
-        System.debug('Raw OCR JSON: ' + rawJson);
-
-        if (rawJson != null) {
-            // Pass the entire JSON into the next job
-            System.enqueueJob(new ProfitAndLossSaverJob(rawJson));
-        } else {
-            System.debug('No OCR payload to enqueue.');
-        }
+    handleUploadError() {
+        this.showToast('Upload Failed', 'Please upload a valid DL image', 'error');
     }
 
-    // This method fetches the extracted text using the fetchExtractedText API
-    private String fetchExtractedText(String ocrDocumentScanResultId, String contentDocumentId) {
-        Http http       = new Http();
-        HttpRequest req = new HttpRequest();
-
-        // Endpoint
-        String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
-
-        // Build request body
-        Map<String, Object> singleInput = new Map<String, Object>{
-            'ocrDocumentScanResultId' => ocrDocumentScanResultId,
-            'contentDocumentId'       => contentDocumentId,
-            'startPageIndex'          => 1,
-            'endPageIndex'            => 20
-        };
-        Map<String, Object> payload = new Map<String, Object>{
-            'inputs' => new List<Map<String, Object>>{ singleInput }
-        };
-
-        req.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);
-        req.setMethod('POST');
-        req.setHeader('Content-Type', 'application/json');
-        req.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());
-        req.setBody(JSON.serialize(payload));
-
-        // Send
-        HttpResponse resp = http.send(req);
-        System.debug('Extracted Text API response status: ' + resp.getStatus());
-        System.debug('Extracted Text API response body: '   + resp.getBody());
-
-        if (resp.getStatusCode() == 200) {
-            // Return the raw JSON string so the next job can parse it
-            return resp.getBody();
-        } else {
-            System.debug('Error calling fetchExtractedText: ' 
-                + resp.getStatus() + ' / ' + resp.getBody());
-            return null;
-        }
+    showToast(title, message, variant) {
+        this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
     }
 }
