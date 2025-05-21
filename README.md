@@ -1,3 +1,118 @@
+
+public class IdentificationSaverJob implements Queueable {
+    private String rawJson;
+    private Id     recordId;
+
+    public IdentificationSaverJob(String rawJson, Id recordId) {
+        this.rawJson  = rawJson;
+        this.recordId = recordId;
+    }
+
+    public void execute(QueueableContext ctx) {
+        // 1) Validate incoming JSON
+        if (String.isBlank(rawJson)) {
+            postToChatter(
+                ' OCR failed: no data received. Please upload a clear image of your driver’s license.'
+            );
+            return;
+        }
+
+        // 2) Deserialize top-level array
+        List<Object> wrapperList = (List<Object>) JSON.deserializeUntyped(rawJson);
+        if (wrapperList.isEmpty()) {
+            postToChatter(
+                ' OCR failed: empty response. Please upload a valid driver’s license image.'
+            );
+            return;
+        }
+
+        // 3) Navigate into the first action’s outputValues
+        Map<String, Object> actionResp   = (Map<String, Object>) wrapperList[0];
+        Map<String, Object> outputValues = (Map<String, Object>) actionResp.get('outputValues');
+        if (outputValues == null
+            || !outputValues.containsKey('ocrDocumentScanResultDetails')) {
+            postToChatter(
+                ' OCR failed: no document details found. Please upload a clear image of your driver’s license.'
+            );
+            return;
+        }
+
+        // 4) Drill into the nested details wrapper
+        Map<String, Object> detailsWrap = 
+            (Map<String, Object>) outputValues.get('ocrDocumentScanResultDetails');
+        List<Object> pages = 
+            (List<Object>) detailsWrap.get('ocrDocumentScanResultDetails');
+
+        if (pages == null || pages.isEmpty()) {
+            postToChatter(
+                ' OCR failed: unable to detect any pages. Please upload a valid driver’s license image.'
+            );
+            return;
+        }
+
+        // 5) Build the Identification__c record
+        Identification__c idRec = new Identification__c();
+        idRec.Application__c = recordId;
+
+        // 6) Your existing key/value‐mapping logic exactly as before
+        for (Object pgObj : pages) {
+            Map<String, Object> pageMap = (Map<String, Object>) pgObj;
+            List<Object> kvps = (List<Object>) pageMap.get('keyValuePairs');
+            if (kvps == null) continue;
+
+            for (Object kvpObj : kvps) {
+                Map<String, Object> pair     = (Map<String, Object>) kvpObj;
+                Map<String, Object> keyMap   = (Map<String, Object>) pair.get('key');
+                Map<String, Object> valueMap = (Map<String, Object>) pair.get('value');
+                if (keyMap == null || valueMap == null) continue;
+
+                String label = (String) keyMap.get('value');
+                String text  = (String) valueMap.get('value');
+                if (label == null || text == null) continue;
+
+                String norm = label.replaceAll('[^a-zA-Z0-9]', '').toLowerCase();
+
+                if (norm.contains('4bexp')) {
+                    idRec.Expiration_Date__c = text;
+                } else if (norm.contains('8')) {
+                    idRec.Address__c = text;
+                } else if (norm.contains('15sex')) {
+                    idRec.Sex__c = text;
+                } else if (norm.contains('3dob')) {
+                    idRec.Date_of_Birth__c = text;
+                } else if (norm.contains('4ddln')) {
+                    idRec.Driving_License_Number__c = text;
+                }
+                // …and any other mappings you need…
+            }
+        }
+
+        // 7) Insert and handle DML errors
+        try {
+            insert idRec;
+        } catch (DmlException e) {
+            postToChatter(
+                'Could not save Identification record: ' 
+                + e.getMessage().substring(0, Math.min(200, e.getMessage().length()))
+            );
+        }
+    }
+
+    // Helper to post a plain‐text FeedItem on the LLC_BI_Application__c record
+    private void postToChatter(String body) {
+        // communityId=null → internal org feed
+        ConnectApi.ChatterFeeds.postFeedElement(
+            /* communityId */ null,
+            /* subjectId   */ recordId,
+            /* feedType    */ ConnectApi.FeedElementType.FeedItem,
+            /* text        */ body
+        );
+    }
+}
+
+
+
+
 public class IdentificationSaverJob implements Queueable {
     private String rawJson;
     private Id     parentId;
