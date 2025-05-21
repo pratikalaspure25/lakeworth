@@ -10,80 +10,44 @@ public class IdentificationSaverJob implements Queueable {
     }
 
     public void execute(QueueableContext ctx) {
-        // 1) No payload at all
+        // 1) Did we get any OCR payload?
         if (String.isBlank(rawJson)) {
-            postProcessingFailed();
+            postFailureWithMention();
             return;
         }
 
-        // 2) Top-level array
+        // 2) Deserialize top‐level array
         List<Object> wrapperList = (List<Object>) JSON.deserializeUntyped(rawJson);
         if (wrapperList.isEmpty()) {
-            postProcessingFailed();
+            postFailureWithMention();
             return;
         }
 
-        // 3) Drill into the first action’s outputValues
-        Map<String, Object> actionResp   = (Map<String, Object>) wrapperList[0];
-        Map<String, Object> outputValues = (Map<String, Object>) actionResp.get('outputValues');
+        // 3) Drill into outputValues → ocrDocumentScanResultDetails
+        Map<String,Object> actionResp   = (Map<String,Object>) wrapperList[0];
+        Map<String,Object> outputValues = (Map<String,Object>) actionResp.get('outputValues');
         if (outputValues == null
-         || !outputValues.containsKey('ocrDocumentScanResultDetails')) {
-            postProcessingFailed();
+            || !outputValues.containsKey('ocrDocumentScanResultDetails')) {
+            postFailureWithMention();
             return;
         }
 
-        // 4) Get the pages array
-        Map<String, Object> detailsWrap = 
-            (Map<String, Object>) outputValues.get('ocrDocumentScanResultDetails');
+        // 4) Grab the pages array
+        Map<String,Object> detailsWrap = 
+            (Map<String,Object>) outputValues.get('ocrDocumentScanResultDetails');
         List<Object> pages = 
             (List<Object>) detailsWrap.get('ocrDocumentScanResultDetails');
         if (pages == null || pages.isEmpty()) {
-            postProcessingFailed();
+            postFailureWithMention();
             return;
         }
 
-        // 5) Build a new Identification record
-        Identification__c idRec = new Identification__c();
-        idRec.Application__c   = recordId;
-
-        // 6) Your existing mapping, plus a counter
+        // 5) Build your Identification__c, track how many fields we map
+        Identification__c idRec = new Identification__c(
+            Application__c = recordId
+        );
         Integer mappedCount = 0;
-        for (Object pgObj : pages) {
-            Map<String, Object> pageMap = (Map<String, Object>) pgObj;
-            List<Object> kvps = (List<Object>) pageMap.get('keyValuePairs');
-            if (kvps == null) continue;
 
-            for (Object kvpObj : kvps) {
-                Map<String, Object> pair     = (Map<String, Object>) kvpObj;
-                Map<String, Object> keyMap   = (Map<String, Object>) pair.get('key');
-                Map<String, Object> valueMap = (Map<String, Object>) pair.get('value');
-                if (keyMap == null || valueMap == null) continue;
-
-                String label = (String) keyMap.get('value');
-                String text  = (String) valueMap.get('value');
-                if (label == null || text == null) continue;
-
-                String norm = label.replaceAll('[^a-zA-Z0-9]', '').toLowerCase();
-
-                if (norm.contains('4bexp')) {
-                    idRec.Expiration_Date__c = text;
-                    mappedCount++;
-                } else if (norm.contains('3dob')) {
-                    idRec.Date_of_Birth__c = text;
-                    mappedCount++;
-                } else if (norm.contains('15sex')) {
-                    idRec.Sex__c = text;
-                    mappedCount++;
-                } else if (norm.contains('4ddln')) {
-                    idRec.Driving_License_Number__c = text;
-                    mappedCount++;
-                }
-                // …any other fields you want to map…
-            }
-        }
-
-        // 7) Stitch street & apt lines into Address__c
-        List<String> addressLines = new List<String>();
         for (Object pgObj : pages) {
             Map<String,Object> pageMap = (Map<String,Object>) pgObj;
             List<Object> kvps = (List<Object>) pageMap.get('keyValuePairs');
@@ -93,76 +57,72 @@ public class IdentificationSaverJob implements Queueable {
                 Map<String,Object> pair     = (Map<String,Object>) kvpObj;
                 Map<String,Object> keyMap   = (Map<String,Object>) pair.get('key');
                 Map<String,Object> valueMap = (Map<String,Object>) pair.get('value');
-                if (valueMap == null) continue;
+                if (keyMap == null || valueMap == null) continue;
 
-                String val = (String) valueMap.get('value');
-                String rawKey = keyMap == null 
-                              ? '' 
-                              : ((String) keyMap.get('value')).trim().toLowerCase();
+                String label = (String) keyMap.get('value');
+                String text  = (String) valueMap.get('value');
+                if (label == null || text == null) continue;
 
-                Boolean isStreet = 
-                     (val != null && val.matches('^\\d+\\s+.*'))
-                  || (val != null && (
-                         val.toLowerCase().contains('street') ||
-                         val.toLowerCase().contains('ave')    ||
-                         val.toLowerCase().contains('road')
-                     ));
-                Boolean isApt = rawKey.contains('apt');
-                if (isStreet || isApt) {
-                    addressLines.add(val);
+                String norm = label.replaceAll('[^a-zA-Z0-9]', '').toLowerCase();
+
+                if (norm.contains('4bexp')) {
+                    idRec.Expiration_Date__c = text; mappedCount++;
+                } else if (norm.contains('3dob')) {
+                    idRec.Date_of_Birth__c  = text; mappedCount++;
+                } else if (norm.contains('15sex')) {
+                    idRec.Sex__c            = text; mappedCount++;
+                } else if (norm.contains('4ddln')) {
+                    idRec.Driving_License_Number__c = text; mappedCount++;
                 }
+                // …add any other fields you need…
             }
         }
-        if (!addressLines.isEmpty()) {
-            idRec.Address__c = String.join(addressLines, ', ');
-            mappedCount++;
-        }
 
-        // 8) Bad image if no fields mapped
+        // 6) If we got zero DL fields, fail with a mention
         if (mappedCount == 0) {
-            postProcessingFailed();
+            postFailureWithMention();
             return;
         }
 
-        // 9) Insert and on DML error also post failure
+        // 7) Insert and catch DML exceptions
         try {
             insert idRec;
         } catch (DmlException e) {
-            postProcessingFailed();
+            postFailureWithMention();
         }
     }
 
     /**
-     * Uses ConnectApi.FeedItemInput + MessageBodyInput + MentionSegmentInput
-     * to post exactly:
-     * Textract processing failed: ‘My_DL_Image.jpg’ uploaded by @UserName failed to process...
+     * Builds and posts a Chatter FeedItem that mentions the current user
+     * and references the document name.
      */
-    private void postProcessingFailed() {
-        // 1) Text before mention
-        ConnectApi.TextSegmentInput part1 = new ConnectApi.TextSegmentInput();
-        part1.text = 'Textract processing failed: \'' + docName + '\' uploaded by ';
-
-        // 2) @-mention the running user
-        ConnectApi.MentionSegmentInput mention = new ConnectApi.MentionSegmentInput();
-        mention.id = UserInfo.getUserId();
-
-        // 3) Text after mention
-        ConnectApi.TextSegmentInput part2 = new ConnectApi.TextSegmentInput();
-        part2.text = ' failed to process. Please make sure a valid Drivers License is uploaded.';
-
-        // 4) Build the message body
+    private void postFailureWithMention() {
+        // Build the segmented message
         ConnectApi.MessageBodyInput bodyInput = new ConnectApi.MessageBodyInput();
-        bodyInput.messageSegments = new List<ConnectApi.MessageSegmentInput>{ part1, mention, part2 };
+        List<ConnectApi.MessageSegmentInput> segments = new List<ConnectApi.MessageSegmentInput>();
 
-        // 5) Wrap in a FeedItemInput and post
-        ConnectApi.FeedItemInput feedInput = new ConnectApi.FeedItemInput();
-        feedInput.body = bodyInput;
+        segments.add(new ConnectApi.TextSegmentInput(
+            'Textract processing failed: \'' + docName + '\' uploaded by '
+        ));
+        segments.add(new ConnectApi.MentionSegmentInput(
+            UserInfo.getUserId()
+        ));
+        segments.add(new ConnectApi.TextSegmentInput(
+            ' failed to process. Please make sure a valid Driver’s License is uploaded.'
+        ));
 
+        bodyInput.messageSegments = segments;
+
+        // Wrap in FeedItemInput
+        ConnectApi.FeedItemInput feedItem = new ConnectApi.FeedItemInput();
+        feedItem.body = bodyInput;
+
+        // Post to the record’s Chatter feed
         ConnectApi.ChatterFeeds.postFeedElement(
             /* communityId */ null,
             /* subjectId   */ recordId,
             /* feedType    */ ConnectApi.FeedElementType.FeedItem,
-            /* input       */ feedInput
+            /* input       */ feedItem
         );
     }
 }
