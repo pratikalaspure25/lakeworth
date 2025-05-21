@@ -93,6 +93,32 @@ public class IdentificationSaverJob implements Queueable {
             }
         }
 
+         List<String> addressLines = new List<String>();
+    for (Object pgObj : pages) {
+        Map<String,Object> pageMap = (Map<String,Object>) pgObj;
+        List<Object> kvps = (List<Object>) pageMap.get('keyValuePairs');
+        if (kvps == null) continue;
+        for (Object kvpObj : kvps) {
+            Map<String,Object> pair     = (Map<String,Object>) kvpObj;
+            Map<String,Object> keyMap   = (Map<String,Object>) pair.get('key');
+            Map<String,Object> valueMap = (Map<String,Object>) pair.get('value');
+            if (keyMap == null || valueMap == null) continue;
+
+            String rawKey = ((String) keyMap.get('value')).trim().toLowerCase();
+            String val    = (String) valueMap.get('value');
+            if (rawKey.equals('8')
+             || rawKey.startsWith('8 ')
+             || rawKey.contains('apt')) {
+                addressLines.add(val);
+            }
+        }
+    }
+    if (!addressLines.isEmpty()) {
+        // overwrite or set the address to the joined lines
+        idRec.Address__c = String.join(addressLines, ', ');
+        mappedCount++;
+    }
+
         // 7) If we never pulled back any DL fields, treat as a “bad image”
         if (mappedCount == 0) {
             postToChatter(
