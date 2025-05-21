@@ -27,7 +27,7 @@ public class IdentificationSaverJob implements Queueable {
         Map<String, Object> actionResp   = (Map<String, Object>) wrapperList[0];
         Map<String, Object> outputValues = (Map<String, Object>) actionResp.get('outputValues');
         if (outputValues == null
-            || !outputValues.containsKey('ocrDocumentScanResultDetails')) {
+         || !outputValues.containsKey('ocrDocumentScanResultDetails')) {
             postProcessingFailed();
             return;
         }
@@ -78,34 +78,36 @@ public class IdentificationSaverJob implements Queueable {
                     idRec.Driving_License_Number__c = text;
                     mappedCount++;
                 }
-                // …add any other mapped fields here…
+                // …any other fields you want to map…
             }
         }
 
-        // 7) Fallback: stitch together street & apt lines into Address__c
+        // 7) Stitch street & apt lines into Address__c
         List<String> addressLines = new List<String>();
         for (Object pgObj : pages) {
             Map<String,Object> pageMap = (Map<String,Object>) pgObj;
             List<Object> kvps = (List<Object>) pageMap.get('keyValuePairs');
             if (kvps == null) continue;
+
             for (Object kvpObj : kvps) {
                 Map<String,Object> pair     = (Map<String,Object>) kvpObj;
                 Map<String,Object> keyMap   = (Map<String,Object>) pair.get('key');
                 Map<String,Object> valueMap = (Map<String,Object>) pair.get('value');
                 if (valueMap == null) continue;
 
-                String val    = (String) valueMap.get('value');
+                String val = (String) valueMap.get('value');
                 String rawKey = keyMap == null 
                               ? '' 
                               : ((String) keyMap.get('value')).trim().toLowerCase();
 
-                Boolean isStreet = (val != null && val.matches('^\\d+\\s+.*'))
-                                 || (val != null && (
-                                        val.toLowerCase().contains('street') ||
-                                        val.toLowerCase().contains('ave')    ||
-                                        val.toLowerCase().contains('road')
-                                    ));
-                Boolean isApt    = rawKey.contains('apt');
+                Boolean isStreet = 
+                     (val != null && val.matches('^\\d+\\s+.*'))
+                  || (val != null && (
+                         val.toLowerCase().contains('street') ||
+                         val.toLowerCase().contains('ave')    ||
+                         val.toLowerCase().contains('road')
+                     ));
+                Boolean isApt = rawKey.contains('apt');
                 if (isStreet || isApt) {
                     addressLines.add(val);
                 }
@@ -116,13 +118,13 @@ public class IdentificationSaverJob implements Queueable {
             mappedCount++;
         }
 
-        // 8) If we never pulled back any DL fields, treat as a “bad image”
+        // 8) Bad image if no fields mapped
         if (mappedCount == 0) {
             postProcessingFailed();
             return;
         }
 
-        // 9) Finally, insert and catch any DML problems
+        // 9) Insert and on DML error also post failure
         try {
             insert idRec;
         } catch (DmlException e) {
@@ -130,37 +132,41 @@ public class IdentificationSaverJob implements Queueable {
         }
     }
 
-    /**  
-     *  Posts a formatted Chatter message:
-     *  Textract processing failed: ‘My_DL_Image.jpg’ uploaded by @UserName failed to process…
+    /**
+     * Uses ConnectApi.FeedItemInput + MessageBodyInput + MentionSegmentInput
+     * to post exactly:
+     * Textract processing failed: ‘My_DL_Image.jpg’ uploaded by @UserName failed to process...
      */
     private void postProcessingFailed() {
-        // Part 1: static text + filename in single quotes
+        // 1) Text before mention
         ConnectApi.TextSegmentInput part1 = new ConnectApi.TextSegmentInput();
         part1.text = 'Textract processing failed: \'' + docName + '\' uploaded by ';
 
-        // Part 2: @-mention of the running user
+        // 2) @-mention the running user
         ConnectApi.MentionSegmentInput mention = new ConnectApi.MentionSegmentInput();
         mention.id = UserInfo.getUserId();
 
-        // Part 3: the rest of the message
+        // 3) Text after mention
         ConnectApi.TextSegmentInput part2 = new ConnectApi.TextSegmentInput();
         part2.text = ' failed to process. Please make sure a valid Drivers License is uploaded.';
 
-        // Combine into one message
+        // 4) Build the message body
         ConnectApi.MessageBodyInput bodyInput = new ConnectApi.MessageBodyInput();
-        bodyInput.messageSegments = new List<ConnectApi.MessageSegmentInput>{
-            part1, mention, part2
-        };
+        bodyInput.messageSegments = new List<ConnectApi.MessageSegmentInput>{ part1, mention, part2 };
+
+        // 5) Wrap in a FeedItemInput and post
+        ConnectApi.FeedItemInput feedInput = new ConnectApi.FeedItemInput();
+        feedInput.body = bodyInput;
 
         ConnectApi.ChatterFeeds.postFeedElement(
             /* communityId */ null,
             /* subjectId   */ recordId,
             /* feedType    */ ConnectApi.FeedElementType.FeedItem,
-            /* body        */ bodyInput
+            /* input       */ feedInput
         );
     }
 }
+
 
 
 public class ProfitAndLossSaverJob implements Queueable {
