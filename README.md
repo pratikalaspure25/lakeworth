@@ -9,35 +9,35 @@ public class IdentificationSaverJob implements Queueable {
     }
 
     public void execute(QueueableContext ctx) {
-        // 1) Validate incoming JSON
+        // 1) No payload at all
         if (String.isBlank(rawJson)) {
             postToChatter(
-                ' OCR failed: no data received. Please upload a clear image of your driver’s license.'
+                '⚠️ OCR failed: no data received. Please upload a clear image of your driver’s license.'
             );
             return;
         }
 
-        // 2) Deserialize top-level array
+        // 2) Top-level array
         List<Object> wrapperList = (List<Object>) JSON.deserializeUntyped(rawJson);
         if (wrapperList.isEmpty()) {
             postToChatter(
-                ' OCR failed: empty response. Please upload a valid driver’s license image.'
+                '⚠️ OCR failed: empty response. Please upload a valid driver’s license image.'
             );
             return;
         }
 
-        // 3) Navigate into the first action’s outputValues
+        // 3) Drill into the first action’s outputValues
         Map<String, Object> actionResp   = (Map<String, Object>) wrapperList[0];
         Map<String, Object> outputValues = (Map<String, Object>) actionResp.get('outputValues');
         if (outputValues == null
             || !outputValues.containsKey('ocrDocumentScanResultDetails')) {
             postToChatter(
-                ' OCR failed: no document details found. Please upload a clear image of your driver’s license.'
+                '⚠️ OCR failed: no document details found. Please upload a clear driver’s license.'
             );
             return;
         }
 
-        // 4) Drill into the nested details wrapper
+        // 4) Get the pages array
         Map<String, Object> detailsWrap = 
             (Map<String, Object>) outputValues.get('ocrDocumentScanResultDetails');
         List<Object> pages = 
@@ -45,16 +45,17 @@ public class IdentificationSaverJob implements Queueable {
 
         if (pages == null || pages.isEmpty()) {
             postToChatter(
-                ' OCR failed: unable to detect any pages. Please upload a valid driver’s license image.'
+                '⚠️ OCR failed: could not detect any pages. Please upload a valid driver’s license image.'
             );
             return;
         }
 
-        // 5) Build the Identification__c record
+        // 5) Build a new Identification record
         Identification__c idRec = new Identification__c();
-        idRec.Application__c = recordId;
+        idRec.Application__c   = recordId;
 
-        // 6) Your existing key/value‐mapping logic exactly as before
+        // 6) Your existing mapping, plus a counter
+        Integer mappedCount = 0;
         for (Object pgObj : pages) {
             Map<String, Object> pageMap = (Map<String, Object>) pgObj;
             List<Object> kvps = (List<Object>) pageMap.get('keyValuePairs');
@@ -74,33 +75,49 @@ public class IdentificationSaverJob implements Queueable {
 
                 if (norm.contains('4bexp')) {
                     idRec.Expiration_Date__c = text;
+                    mappedCount++;
                 } else if (norm.contains('8')) {
                     idRec.Address__c = text;
+                    mappedCount++;
                 } else if (norm.contains('15sex')) {
                     idRec.Sex__c = text;
+                    mappedCount++;
                 } else if (norm.contains('3dob')) {
                     idRec.Date_of_Birth__c = text;
+                    mappedCount++;
                 } else if (norm.contains('4ddln')) {
                     idRec.Driving_License_Number__c = text;
+                    mappedCount++;
                 }
-                // …and any other mappings you need…
+                // …add other fields as needed, incrementing mappedCount on each hit…
             }
         }
 
-        // 7) Insert and handle DML errors
+        // 7) If we never pulled back any DL fields, treat as a “bad image”
+        if (mappedCount == 0) {
+            postToChatter(
+                '⚠️ OCR failed: no valid driver’s license data detected. Please upload a clear driver’s license image.'
+            );
+            return;
+        }
+
+        // 8) Finally, insert and catch any DML problems
         try {
             insert idRec;
         } catch (DmlException e) {
+            String msg = e.getMessage();
+            // truncate so it fits in 10k chars and doesn’t blow up
+            if (msg.length() > 200) msg = msg.substring(0, 200) + '…';
             postToChatter(
-                'Could not save Identification record: ' 
-                + e.getMessage().substring(0, Math.min(200, e.getMessage().length()))
+                '⚠️ Could not save Identification record: ' + msg
             );
         }
     }
 
-    // Helper to post a plain‐text FeedItem on the LLC_BI_Application__c record
+    /**  
+     *  Posts a simple text FeedItem under the LLC_BI_Application__c record’s feed  
+     */
     private void postToChatter(String body) {
-        // communityId=null → internal org feed
         ConnectApi.ChatterFeeds.postFeedElement(
             /* communityId */ null,
             /* subjectId   */ recordId,
@@ -109,6 +126,7 @@ public class IdentificationSaverJob implements Queueable {
         );
     }
 }
+
 
 
 
