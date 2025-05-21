@@ -1,4 +1,8 @@
 
+String endpointUrl = '/services/data/v58.0/actions/standard/initiateIdentityDocumentAnalysis';
+String endpointUrl = '/services/data/v58.0/actions/standard/fetchIdentityDocumentAnalysisResult';
+
+
 public class IdentificationSaverJob implements Queueable {
     private String rawJson;
     private Id     recordId;
