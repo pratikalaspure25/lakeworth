@@ -1,0 +1,172 @@
+import { LightningElement } from 'lwc';
+
+export default class DLFileUpload extends LightningElement {
+    loaded = false;
+    iframe = null;
+    vfOrigin = '';
+    vfPageUrl = '';
+
+    connectedCallback() {
+        console.log('LWC connectedCallback invoked.');
+        window.addEventListener('message', this.handleVFResponse.bind(this));
+        this.loaded = true;
+        console.log('LWC initialized, loaded set to true.');
+    }
+
+    disconnectedCallback() {
+        console.log('LWC disconnectedCallback invoked.');
+        window.removeEventListener('message', this.handleVFResponse.bind(this));
+    }
+
+    renderedCallback() {
+        if (!this.iframe) {
+            this.iframe = this.template.querySelector('iframe');
+
+            // 1) Compute the exact VF origin (sandbox or prod)
+            this.vfOrigin = this.getVFOrigin();
+            console.log('🔍 Detected VF origin:', this.vfOrigin);
+
+            // 2) Build the full VF page URL and reset the iframe src
+            this.vfPageUrl = `${this.vfOrigin}/apex/TesseractVF`;
+            this.iframe.src = this.vfPageUrl;
+            console.log('🔗 Iframe src set to:', this.vfPageUrl);
+        }
+    }
+
+    handleFilesChange(event) {
+        console.log('File input changed.');
+        const file = event.target.files[0];
+        if (!file) {
+            console.log('No file selected.');
+            return;
+        }
+
+        console.log('File selected:', file);
+        const fileType = file.type;
+
+        if (fileType === 'application/pdf') {
+            console.log('PDF file detected, converting to images.');
+            this.convertPdfToImages(file);
+        } else if (fileType.startsWith('image/')) {
+            console.log('Image file detected, passing directly to OCR.');
+            this.readFileAsBlob(file);
+        } else {
+            console.log('Unsupported file type.');
+        }
+    }
+
+    convertPdfToImages(file) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            console.log('PDF file read complete.');
+            this.renderPdfAsImages(reader.result);
+        };
+        reader.onerror = err => console.error('Error reading PDF file:', err);
+        reader.readAsArrayBuffer(file);
+        console.log('Started reading PDF as ArrayBuffer...');
+    }
+
+    renderPdfAsImages(pdfData) {
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+
+        pdfjsLib.getDocument({ data: pdfData }).promise
+            .then(pdf => {
+                console.log('PDF loaded, rendering pages...');
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    pdf.getPage(pageNum).then(page => {
+                        const scale = 1.5;
+                        const viewport = page.getViewport({ scale });
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        const ctx = canvas.getContext('2d');
+
+                        page.render({ canvasContext: ctx, viewport })
+                            .promise.then(() => {
+                                console.log(`Page ${pageNum} rendered.`);
+                                this.canvasToBlob(canvas)
+                                    .then(blob => {
+                                        console.log('Canvas→Blob done, performing OCR...');
+                                        this.performOCR(blob);
+                                    })
+                                    .catch(err => console.error('Blob error:', err));
+                            })
+                            .catch(err => console.error(`Render page ${pageNum} error:`, err));
+                    });
+                }
+            })
+            .catch(err => console.error('Error loading PDF:', err));
+    }
+
+    canvasToBlob(canvas) {
+        return new Promise((resolve, reject) => {
+            canvas.toBlob(blob => {
+                blob ? resolve(blob) : reject('Failed to convert canvas to blob');
+            });
+        });
+    }
+
+    readFileAsBlob(file) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const blob = new Blob([reader.result], { type: file.type });
+            console.log('File→Blob done, performing OCR...');
+            this.performOCR(blob);
+        };
+        reader.onerror = err => console.error('Error reading file:', err);
+        reader.readAsArrayBuffer(file);
+        console.log('File reading started...');
+    }
+
+    performOCR(blob) {
+        const vfCallback = 'vfCallback' + Date.now();
+        console.log('⌛ Sending OCR request to:', this.vfOrigin);
+        this.iframe.contentWindow.postMessage(
+            { type: 'PERFORM_OCR', blob, callbackName: vfCallback },
+            this.vfOrigin
+        );
+    }
+
+    handleVFResponse(event) {
+        // 4) Only accept messages from the exact VF origin
+        if (event.origin !== this.vfOrigin) {
+            console.warn('Rejected message from unexpected origin:', event.origin);
+            return;
+        }
+        if (event.source !== this.iframe.contentWindow) {
+            return;
+        }
+
+        console.log('Message received:', event.data);
+        if (
+            event.data &&
+            event.data.type === 'OCR_RESULT' &&
+            event.data.callbackName &&
+            event.data.text
+        ) {
+            console.log('OCR Result received:', event.data.text);
+            this.handleOcrResult(event.data.text);
+        } else {
+            console.log('Unexpected message format:', event.data);
+        }
+    }
+
+    handleOcrResult(ocrText) {
+        console.log('Handling OCR result:', ocrText);
+        this.dispatchEvent(
+            new CustomEvent('ocrresult', { detail: { ocrText } })
+        );
+    }
+
+    // 1) New helper: derive your VF origin automatically
+    getVFOrigin() {
+        const { protocol, hostname } = window.location;
+        const parts = hostname.split('.');
+        const instance = parts[0];                  // e.g. "bankunited--fscppoc"
+        const isSandbox = parts.includes('sandbox');
+        const envPrefix = isSandbox ? 'sandbox.' : '';
+        const vfHost = `${instance}--c.${envPrefix}vf.force.com`;
+        return `${protocol}//${vfHost}`;
+    }
+}
