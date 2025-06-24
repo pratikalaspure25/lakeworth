@@ -1,0 +1,373 @@
+LWC - DocumentChecklistSpanishPL
+<template>
+    <lightning-card title="Spanish Profit and Loss (P&L)">
+        <div class="slds-p-around_medium">
+            <!-- File upload component -->
+            <lightning-file-upload 
+                label="Upload Files" 
+                name="fileUploader" 
+                accept={acceptedFormats} 
+                record-id={recordId} 
+                onuploadfinished={handleUploadFinished}>
+            </lightning-file-upload>
+        </div>
+    </lightning-card>
+</template>
+
+import { LightningElement, api } from 'lwc';
+import processFile from '@salesforce/apex/DocumentProcessingControllerSpanishPandL.processFile';
+
+export default class DocumentChecklistSpanishPL extends LightningElement {
+     // To set the recordId where the files will be uploaded.
+    @api recordId;
+
+    // Define accepted file formats (optional)
+    acceptedFormats = ['.pdf', '.jpg', '.png','.jpeg', '.docx', '.xlsx'];
+
+    // Event handler for when the upload is finished
+    handleUploadFinished(event) {
+        const uploadedFiles = event.detail.files;
+        const contentDocumentId = uploadedFiles[0].documentId;
+
+        // Invoke Apex to start the flow with ContentDocumentId
+        processFile({ contentDocumentId,  recordId : this.recordId })
+            .then(() => {
+                console.log('File sent for processing');
+            })
+            .catch(error => {
+                console.error('Processing error', error);
+            });
+    }
+
+}
+
+Apex1 - DocumentProcessingControllerSpanishPandL
+public class DocumentProcessingControllerSpanishPandL {
+	 @AuraEnabled
+    public static void processFile(String contentDocumentId, String recordId) {
+        try {
+            System.enqueueJob(new ProcessDocumentJobSpanishPandL(contentDocumentId, recordId));
+        } catch (Exception e) {
+            System.debug('Error enqueuing process: ' + e.getMessage());
+        }
+    }
+}
+
+Apex2 - ProcessDocumentJobSpanishPandL
+public class ProcessDocumentJobSpanishPandL implements Queueable, Database.AllowsCallouts {
+	 private String contentDocumentId;
+    private String recordId;
+
+    public ProcessDocumentJobSpanishPandL(String contentDocumentId, String recordId) {
+        this.contentDocumentId = contentDocumentId;
+        this.recordId = recordId;
+    }
+
+    public void execute(QueueableContext context) {
+     //   try {
+            // Retrieve the content of the uploaded file (PDF)
+            ContentVersion cv = [SELECT Id, Title, VersionData FROM ContentVersion WHERE ContentDocumentId = :contentDocumentId LIMIT 1];
+            if (cv == null) {
+                System.debug('No ContentVersion found for ContentDocumentId: ' + contentDocumentId);
+                return; // Exit if no record is found
+            }
+
+            // Trigger OCR processing using Intelligent Document Reader (IDR) - via HTTP callout
+            String ocrResult = triggerOcrProcessing(cv.VersionData);
+
+            if(String.isBlank(ocrResult)){
+                System.debug('OCR result was empty.');
+                return;
+            }
+
+			  // Enqueue the job to process the file asynchronously
+               Integer delayInMinutes =1; // Set delay of 5 minutes
+                          System.enqueueJob(new FetchExtractedTextWithDelaySpanishPL(ocrResult, contentDocumentId, recordId),delayInMinutes);
+
+        // } catch (Exception e) {
+        //     System.debug('Error processing document: ' + e.getMessage());
+        // }
+    }
+
+     // This method performs HTTP callout to the OCR API to trigger text extraction
+private String triggerOcrProcessing(Blob documentData) {
+   // try {
+        Http http = new Http();
+        HttpRequest request = new HttpRequest();
+
+        // Salesforce REST API endpoint to initiate text extraction
+        String endpointUrl = '/services/data/v58.0/actions/standard/initiateTextExtraction';
+
+        // Prepare the request body as a JSON string
+        String requestBody = JSON.serialize(new Map<String, Object>{
+            'inputs' => new List<Map<String, Object>>{
+                new Map<String, Object>{
+                    'contentDocumentId' => contentDocumentId,  // Your uploaded document ID
+                    'startPageIndex' => 1,  // Start from page 1
+                    'endPageIndex' => 20,  // You can change this based on how many pages you want to extract
+                    'ocrService' => 'AMAZON_TEXTRACT'  // Using the Textract OCR service
+                }
+            }
+        });
+
+        // Set up the HTTP request
+        request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);  // Combine Salesforce base URL with the endpoint
+        request.setMethod('POST');
+        request.setHeader('Content-Type', 'application/json');
+        request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());  // Use the session ID for authorization
+        request.setBody(requestBody);
+
+        // Send the HTTP request
+        HttpResponse response = http.send(request);
+
+        // Log the response body for debugging
+        System.debug('OCR API response: ' + response.getBody());
+
+        // Handle the response
+        if (response.getStatusCode() == 200) {
+            // Deserialize the response body into a List of Maps (List<Map<String, Object>>)
+            List<Object> responseList = (List<Object>) JSON.deserializeUntyped(response.getBody());
+
+            // Check if the response is not empty
+            if (responseList != null && !responseList.isEmpty()) {
+                // Get the first item in the response list
+                Map<String, Object> resultMap = (Map<String, Object>) responseList[0];
+
+                // Check if outputValues exists in the result map
+                if (resultMap.containsKey('outputValues')) {
+                    Map<String, Object> outputValues = (Map<String, Object>) resultMap.get('outputValues');
+
+                    if (outputValues.containsKey('ocrDocumentScanResultDetails')) {
+                        // Extract the OCR document scan result details
+                        Map<String, Object> ocrDocumentScanResultDetails = (Map<String, Object>) outputValues.get('ocrDocumentScanResultDetails');
+
+                        if (ocrDocumentScanResultDetails.containsKey('ocrDocumentScanResults')) {
+                            // Extract the OCR results
+                            List<Object> ocrResults = (List<Object>) ocrDocumentScanResultDetails.get('ocrDocumentScanResults');
+
+                            // Iterate over the results and extract the OCR result ID
+                            for (Object ocrResultObj : ocrResults) {
+                                // Cast the object to a map for easier access to the ocrResultId
+                                Map<String, Object> ocrResult = (Map<String, Object>) ocrResultObj;
+                                String ocrResultId = (String) ocrResult.get('ocrDocumentScanResultId');
+                                System.debug('OCR Result ID: ' + ocrResultId);
+
+                                // Fetch the extracted text now
+                            //   String extractedText = fetchExtractedText(ocrResultId, contentDocumentId);
+                             //   System.debug('Extracted Text: ' + extractedText);
+
+                               
+                            }
+                        }
+                    }
+                }
+            } else {
+                System.debug('Unexpected or empty response: ' + response.getBody());
+                return 'No OCR results found'; // Provide a meaningful string in case of an empty response
+            }
+        } else {
+            System.debug('Error calling OCR API, status: ' + response.getStatus() + ', body: ' + response.getBody());
+            return 'Error calling OCR API'; // Return a string indicating failure
+        }
+
+        return 'OCR processing completed successfully'; // Return a success message if all goes well
+    // } catch (Exception ex) {
+    //     System.debug('Exception during OCR processing: ' + ex.getMessage());
+    //     return 'Exception during OCR processing: ' + ex.getMessage(); // Return the exception message
+    // }
+}	
+}
+
+Apex3 - FetchExtractedTextWithDelaySpanishPL
+public class FetchExtractedTextWithDelaySpanishPL implements Queueable, Database.AllowsCallouts{
+	private String ocrDocumentScanResultId;
+    private String contentDocumentId;
+    private String recordId;
+
+    // Constructor to pass the parameters to the queueable job
+    public FetchExtractedTextWithDelaySpanishPL(String ocrDocumentScanResultId, String contentDocumentId, String recordId) {
+        this.ocrDocumentScanResultId = ocrDocumentScanResultId;
+        this.contentDocumentId       = contentDocumentId;
+        this.recordId                = recordId;
+    }
+
+    // Execute method
+    public void execute(QueueableContext context) {
+        String rawJson = fetchExtractedText(ocrDocumentScanResultId, contentDocumentId);
+        System.debug('Raw OCR JSON: ' + rawJson);
+
+        if (rawJson != null) {
+            // Pass the entire JSON into the next job
+            System.enqueueJob(new SpanishProfitAndLossSaverJob(rawJson, recordId));
+        } else {
+            System.debug('No OCR payload to enqueue.');
+        }
+    }
+
+    // This method fetches the extracted text using the fetchExtractedText API
+    private String fetchExtractedText(String ocrDocumentScanResultId, String contentDocumentId) {
+        Http http       = new Http();
+        HttpRequest req = new HttpRequest();
+
+        // Endpoint
+        String endpointUrl = '/services/data/v58.0/actions/standard/fetchExtractedText';
+
+        // Build request body
+        Map<String, Object> singleInput = new Map<String, Object>{
+            'ocrDocumentScanResultId' => ocrDocumentScanResultId,
+            'contentDocumentId'       => contentDocumentId,
+            'startPageIndex'          => 1,
+            'endPageIndex'            => 20
+        };
+        Map<String, Object> payload = new Map<String, Object>{
+            'inputs' => new List<Map<String, Object>>{ singleInput }
+        };
+
+        req.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);
+        req.setMethod('POST');
+        req.setHeader('Content-Type', 'application/json');
+        req.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());
+        req.setBody(JSON.serialize(payload));
+
+        // Send
+        HttpResponse resp = http.send(req);
+        System.debug('Extracted Text API response status: ' + resp.getStatus());
+        System.debug('Extracted Text API response body: '   + resp.getBody());
+
+        if (resp.getStatusCode() == 200) {
+            // Return the raw JSON string so the next job can parse it
+            return resp.getBody();
+        } else {
+            System.debug('Error calling fetchExtractedText: ' 
+                + resp.getStatus() + ' / ' + resp.getBody());
+            return null;
+        }
+    }
+}
+
+Apex4 - SpanishProfitAndLossSaverJob
+public class SpanishProfitAndLossSaverJob implements Queueable {
+	private String rawJson;
+    private Id recordId;
+
+    public SpanishProfitAndLossSaverJob(String rawJson, Id recordId) {
+        this.rawJson  = rawJson;
+        this.recordId = recordId;
+    }
+
+    public void execute(QueueableContext context) {
+        // 1) No payload at all
+        if (String.isBlank(rawJson)) {
+            postToChatter(
+                'P&L failed: no data received. Please upload a valid Profit & Loss document.'
+            );
+            return;
+        }
+
+        // 2) Top-level array
+        List<Object> wrapperList = (List<Object>) JSON.deserializeUntyped(rawJson);
+        if (wrapperList.isEmpty()) {
+            postToChatter(
+                'P&L failed: empty response. Please upload a valid Profit & Loss document.'
+            );
+            return;
+        }
+
+        // 3) Drill into the first action’s outputValues
+        Map<String, Object> actionResp   = (Map<String, Object>) wrapperList[0];
+        Map<String, Object> outputValues = (Map<String, Object>) actionResp.get('outputValues');
+        if (outputValues == null
+            || !outputValues.containsKey('ocrDocumentScanResultDetails')) {
+            postToChatter(
+                'P&L failed: no OCR details found. Please upload a clear Profit & Loss document.'
+            );
+            return;
+        }
+
+        // 4) Get the pages array
+        Map<String, Object> detailsWrap = 
+            (Map<String, Object>) outputValues.get('ocrDocumentScanResultDetails');
+        List<Object> pages = 
+            (List<Object>) detailsWrap.get('ocrDocumentScanResultDetails');
+
+        if (pages == null || pages.isEmpty()) {
+            postToChatter(
+                'P&L failed: no pages detected. Please upload a valid Profit & Loss document.'
+            );
+            return;
+        }
+
+        // 5) Build a new Profit_and_Loss__c record
+        Profit_and_Loss__c pl = new Profit_and_Loss__c();
+        pl.Application__c = recordId;
+
+        // 6) Your mapping logic, plus a counter
+        Integer mappedCount = 0;
+        for (Object pgObj : pages) {
+            Map<String, Object> pageMap = (Map<String, Object>) pgObj;
+            List<Object> kvps = (List<Object>) pageMap.get('keyValuePairs');
+            if (kvps == null) continue;
+
+            for (Object kvpObj : kvps) {
+                Map<String, Object> pair     = (Map<String, Object>) kvpObj;
+                Map<String, Object> keyMap   = (Map<String, Object>) pair.get('key');
+                Map<String, Object> valueMap = (Map<String, Object>) pair.get('value');
+                if (keyMap == null || valueMap == null) continue;
+
+                String label = (String) keyMap.get('value');
+                String text  = (String) valueMap.get('value');
+                if (label == null || text == null) continue;
+
+                String norm = label.replaceAll('[^a-zA-Z0-9]', '').toLowerCase();
+
+                if (norm.contains('borrowernames')) {
+                    pl.Borrower_Name_s__c = text;
+                    mappedCount++;
+                } else if (norm.contains('companyname')) {
+                    pl.Name = text;
+                    mappedCount++;
+                } else if (norm.contains('typeofbusiness')) {
+                    pl.Type_of_Bussiness__c = text;
+                    mappedCount++;
+                } else if (norm.contains('loannumber')) {
+                    pl.Loan_Number__c = text;
+                    mappedCount++;
+                }
+                // …any other fields you care about…
+            }
+        }
+
+        // 7) If nothing mapped, we treat it as a “bad document”
+        if (mappedCount == 0) {
+            postToChatter(
+                'P&L failed: no recognizable data detected. Please upload a valid Profit & Loss document.'
+            );
+            return;
+        }
+
+        // 8) Insert and catch any DML problems
+        try {
+            insert pl;
+        } catch (DmlException e) {
+            String msg = e.getMessage();
+            if (msg.length() > 200) {
+                msg = msg.substring(0, 200) + '…';
+            }
+            postToChatter(
+                'Could not save Profit & Loss record: ' + msg
+            );
+        }
+    }
+
+    /**  
+     * Posts a plain-text FeedItem under the LLC_BI_Application__c record’s feed  
+     */
+    private void postToChatter(String body) {
+        ConnectApi.ChatterFeeds.postFeedElement(
+            /* communityId */ null,
+            /* subjectId   */ recordId,
+            /* feedType    */ ConnectApi.FeedElementType.FeedItem,
+            /* text        */ body
+        );
+    }
+}
