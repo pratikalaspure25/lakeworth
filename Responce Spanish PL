@@ -1,0 +1,361 @@
+{
+   "actionName": "fetchExtractedText",
+   "errors": null,
+   "invocationId": null,
+   "isSuccess": true,
+   "outcome": null,
+   "outputValues": {
+      "ocrDocumentScanResultDetails": {
+         "ocrDocumentScanResultDetails": [
+            {
+               "status": "SUCCESS",
+               "pageNumber": 1,
+               "ocrService": "AMAZON_TEXTRACT",
+               "ocrDocumentScanResultId": "0ixEi0000000IBR",
+               "keyValuePairs": [
+                  {
+                     "value": {
+                        "value": "XYZ Builders",
+                        "confidence": 95.09197235107422
+                     },
+                     "key": {
+                        "value": "Nombre de la Empresa:",
+                        "confidence": 95.09197235107422
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "Bienes Raíces Comerciales",
+                        "confidence": 95.09305572509766
+                     },
+                     "key": {
+                        "value": "Tipo de Negocio:",
+                        "confidence": 95.09305572509766
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$300,000",
+                        "confidence": 95.6231460571289
+                     },
+                     "key": {
+                        "value": "Mantenimiento y Reparaciones:",
+                        "confidence": 95.6231460571289
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$1,000,000",
+                        "confidence": 95.08853912353516
+                     },
+                     "key": {
+                        "value": "Publicidad:",
+                        "confidence": 95.08853912353516
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "100%",
+                        "confidence": 94.90524291992188
+                     },
+                     "key": {
+                        "value": "Porcentaje de Propiedad:",
+                        "confidence": 94.90524291992188
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "-$1,000,000",
+                        "confidence": 81.5675048828125
+                     },
+                     "key": {
+                        "value": "Devoluciones de Ventas y Descuentos:",
+                        "confidence": 81.5675048828125
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$5,000,000",
+                        "confidence": 95.13246154785156
+                     },
+                     "key": {
+                        "value": "Costo de los Bienes Vendidos:",
+                        "confidence": 95.13246154785156
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "214 East 73rd Street, New York, NY, 11729",
+                        "confidence": 95.33411407470703
+                     },
+                     "key": {
+                        "value": "Dirección de la Empresa:",
+                        "confidence": 95.33411407470703
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$34,000,000",
+                        "confidence": 94.87278747558594
+                     },
+                     "key": {
+                        "value": "Ventas Brutas:",
+                        "confidence": 94.87278747558594
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$200,000",
+                        "confidence": 94.98088836669922
+                     },
+                     "key": {
+                        "value": "Suministros:",
+                        "confidence": 94.98088836669922
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$3,000,000",
+                        "confidence": 95.1987533569336
+                     },
+                     "key": {
+                        "value": "Gastos de Nómina (Salarios de los prestatarios):",
+                        "confidence": 95.1987533569336
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "31 Diciembre 2025",
+                        "confidence": 63.0241813659668
+                     },
+                     "key": {
+                        "value": "Para el Año Terminado",
+                        "confidence": 63.0241813659668
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$500,000",
+                        "confidence": 94.98077392578125
+                     },
+                     "key": {
+                        "value": "Seguro:",
+                        "confidence": 94.98077392578125
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "(01/01/2025 - 04/14/2025)",
+                        "confidence": 92.55835723876953
+                     },
+                     "key": {
+                        "value": "Fechas Reportadas",
+                        "confidence": 92.55835723876953
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "Timothy Ratliff, Rick Hatchett",
+                        "confidence": 95.34303283691406
+                     },
+                     "key": {
+                        "value": "Nombre(s) del Prestatario:",
+                        "confidence": 95.34303283691406
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$90,000,000",
+                        "confidence": 95.27571868896484
+                     },
+                     "key": {
+                        "value": "Otros Ingresos:",
+                        "confidence": 95.27571868896484
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "093384",
+                        "confidence": 94.72755432128906
+                     },
+                     "key": {
+                        "value": "Número de Préstamo:",
+                        "confidence": 94.72755432128906
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$30,000,000",
+                        "confidence": 94.68450164794922
+                     },
+                     "key": {
+                        "value": "Total de Ingresos Antes de Impuestos (Pérdida):",
+                        "confidence": 94.68450164794922
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$4,000,000",
+                        "confidence": 95.09163665771484
+                     },
+                     "key": {
+                        "value": "Honorarios de Contabilidad y Legales:",
+                        "confidence": 95.09163665771484
+                     }
+                  }
+               ]
+            },
+            {
+               "status": "SUCCESS",
+               "pageNumber": 2,
+               "ocrService": "AMAZON_TEXTRACT",
+               "ocrDocumentScanResultId": "0ixEi0000000IBS",
+               "keyValuePairs": [
+                  {
+                     "value": {
+                        "value": "$2,000,000",
+                        "confidence": 93.99056243896484
+                     },
+                     "key": {
+                        "value": "Gastos de Nómina (Salarios de los empleados):",
+                        "confidence": 93.99056243896484
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$8,000,000",
+                        "confidence": 93.4168930053711
+                     },
+                     "key": {
+                        "value": "Ingreso Neto Después de Impuestos (Pérdida):",
+                        "confidence": 93.4168930053711
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$200,000",
+                        "confidence": 94.03846740722656
+                     },
+                     "key": {
+                        "value": "Otros:",
+                        "confidence": 94.03846740722656
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$2,000,000",
+                        "confidence": 93.35968017578125
+                     },
+                     "key": {
+                        "value": "Impuestos (Pagados sobre el Ingreso del Negocio):",
+                        "confidence": 93.35968017578125
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$300,000",
+                        "confidence": 94.09610748291016
+                     },
+                     "key": {
+                        "value": "Servicios Públicos:",
+                        "confidence": 94.09610748291016
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$1,000,000",
+                        "confidence": 94.25394439697266
+                     },
+                     "key": {
+                        "value": "Renta:",
+                        "confidence": 94.25394439697266
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$200,000",
+                        "confidence": 94.52873992919922
+                     },
+                     "key": {
+                        "value": "Teléfono:",
+                        "confidence": 94.52873992919922
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "-$1,000,000",
+                        "confidence": 80
+                     },
+                     "key": {
+                        "value": "Menos: Inventario Final:",
+                        "confidence": 80
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$150,000",
+                        "confidence": 78.55375671386719
+                     },
+                     "key": {
+                        "value": "Viajes/Transporte:",
+                        "confidence": 78.55375671386719
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$100,000",
+                        "confidence": 94.06365966796875
+                     },
+                     "key": {
+                        "value": "Licencias:",
+                        "confidence": 94.06365966796875
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$50,000",
+                        "confidence": 93.8076400756836
+                     },
+                     "key": {
+                        "value": "Envíos:",
+                        "confidence": 93.8076400756836
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$20,000,000",
+                        "confidence": 93.99208068847656
+                     },
+                     "key": {
+                        "value": "Total de Gastos:",
+                        "confidence": 93.99208068847656
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$500,000",
+                        "confidence": 94.48210906982422
+                     },
+                     "key": {
+                        "value": "Impuestos:",
+                        "confidence": 94.48210906982422
+                     }
+                  },
+                  {
+                     "value": {
+                        "value": "$10,000,000",
+                        "confidence": 92.85686492919922
+                     },
+                     "key": {
+                        "value": "Ingreso Neto Antes de Impuestos:",
+                        "confidence": 92.85686492919922
+                     }
+                  }
+               ]
+            }
+         ]
+      }
+   },
+   "sortOrder": -1,
+   "version": 1
+}
