@@ -98,6 +98,39 @@ public with sharing class PersonAccountLookupCtrl {
     }
 }
 
+public with sharing class PersonAccountLookupCtrl {
+    @AuraEnabled(cacheable=true)
+    public static List<Account> search(String objectApiName,
+                                       String searchKey,
+                                       List<String> displayFields,
+                                       Integer limitSize) {
+
+        // safety defaults
+        Integer lim = Math.min((limitSize == null ? 20 : limitSize), 50);
+        String term = '%' + (searchKey == null ? '' : String.escapeSingleQuotes(searchKey)) + '%';
+
+        // Only Account is supported here
+        if (objectApiName != 'Account') {
+            throw new AuraHandledException('Only Account (Person Account) is supported.');
+        }
+
+        // Build the field list (always include Id & Name)
+        Set<String> base = new Set<String>{'Id','Name'};
+        if (displayFields != null) base.addAll(displayFields);
+        String fieldList = String.join(new List<String>(base), ',');
+
+        String soql =
+            'SELECT ' + fieldList +
+            ' FROM Account' +
+            ' WHERE IsPersonAccount = TRUE' +
+            ' AND (Name LIKE :term OR FirstName LIKE :term OR LastName LIKE :term)' +
+            ' ORDER BY Name' +
+            ' LIMIT :lim';
+
+        return Database.query(soql);
+    }
+}
+
 
 @api label = "Select Individual Relationship";
 
