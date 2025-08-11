@@ -1,4 +1,178 @@
 import { OmniscriptBaseMixin } from "omnistudio/omniscriptBaseMixin";
+
+
+public with sharing class PersonAccountLookupCtrl {
+    @AuraEnabled(cacheable=true)
+    public static List<Account> search(String objectApiName,
+                                       String searchKey,
+                                       List<String> displayFields,
+                                       Integer limitSize) {
+
+        // Default limit size if none is provided
+        Integer lim = Math.min((limitSize == null ? 20 : limitSize), 50);
+        
+        // Escape the search term to prevent SOQL injection and format it for LIKE clause
+        String term = '%' + (searchKey == null ? '' : String.escapeSingleQuotes(searchKey)) + '%';
+
+        // Log the search term being used
+        System.debug('Search term: ' + term);
+        
+        // Ensure only Account object is searched
+        if (objectApiName != 'Account') {
+            throw new AuraHandledException('Only Account (Person Account) is supported.');
+        }
+
+        // Build the field list (include Id and Name as mandatory fields)
+        Set<String> base = new Set<String>{'Id','Name'};
+        if (displayFields != null) base.addAll(displayFields);  // Add user-defined fields
+        String fieldList = String.join(new List<String>(base), ',');
+
+        // Construct the SOQL query string
+        String soql = 
+            'SELECT ' + fieldList +
+            ' FROM Account' +
+            ' WHERE IsPersonAccount = TRUE' +
+            ' AND (Name LIKE :term OR FirstName LIKE :term OR LastName LIKE :term)' +  // Search condition
+            ' ORDER BY Name' +
+            ' LIMIT :lim';
+
+        // Log the SOQL query being executed
+        System.debug('Executing SOQL query: ' + soql);
+
+        // Execute the query and return the results
+        List<Account> result = Database.query(soql);
+
+        // Log the results returned
+        System.debug('Query Results: ' + result);
+        
+        return result;
+    }
+}
+
+
+
+import { LightningElement, api, track } from "lwc";
+import { OmniscriptBaseMixin } from "omnistudio/omniscriptBaseMixin";
+import searchRecords from "@salesforce/apex/PersonAccountLookupCtrl.search";
+
+export default class LookupObject extends OmniscriptBaseMixin(LightningElement) {
+  @api objectApiName = "Account"; // Person Account live on Account
+  @api label = "Select Person Account";
+
+  @track searchResults = [];
+  @track selectedRecord;
+  @track isLoading = false;
+
+  searchKey = "";
+
+  // Debug: Log when the search key changes
+  handleSearchKeyChange(event) {
+    this.searchKey = event.target.value;
+    console.log("Search key changed to:", this.searchKey); // Debugging
+
+    // Only trigger search if there is something typed
+    if (this.searchKey.length > 2) {
+      this.searchRecords();
+    } else {
+      this.searchResults = [];
+    }
+  }
+
+  // Call Apex to search records
+  searchRecords() {
+    this.isLoading = true;
+    console.log('Calling Apex with searchKey:', this.searchKey); // Debugging
+
+    searchRecords({
+      objectApiName: this.objectApiName,
+      searchKey: this.searchKey,
+      displayFields: [
+        "Name",
+        "Salutation",
+        "FirstName",
+        "PersonMiddleName",
+        "LastName",
+        "PersonEmail",
+        "PersonMobilePhone",
+        "PersonBirthdate"
+      ],
+      limitSize: 5
+    })
+      .then((result) => {
+        console.log('Apex returned:', result); // Debugging: Log Apex results
+        this.searchResults = result;
+      })
+      .catch((error) => {
+        console.error('Error in Apex call:', error); // Debugging: Log any errors
+      })
+      .finally(() => {
+        this.isLoading = false;
+      });
+  }
+
+  // Handle selection of record
+  handleSelect(event) {
+    const recordId = event.currentTarget.dataset.id;
+    this.selectedRecord = this.searchResults.find(r => r.Id === recordId);
+    console.log("Selected record:", this.selectedRecord); // Debugging: Log selected record
+
+    this.searchResults = [];
+    this.searchKey = this.selectedRecord.Name;
+
+    // Prepare data to return to OmniScript
+    const data = {
+      PersonalInformation: {
+        Salutation: this.selectedRecord.Salutation,
+        FirstName: this.selectedRecord.FirstName,
+        MiddleName: this.selectedRecord.PersonMiddleName,
+        LastName: this.selectedRecord.LastName,
+        Email: this.selectedRecord.PersonEmail,
+        PhoneNumber: this.selectedRecord.PersonMobilePhone,
+        DateOfBirth: this.selectedRecord.PersonBirthdate
+      },
+      personAccountId: this.selectedRecord.Id
+    };
+    this.omniApplyCallResp(data); // Return data to OmniScript
+  }
+}
+<template>
+    <div class="slds-form-element">
+        <!-- This is the label you see -->
+        <label class="slds-form-element__label">{label}</label>
+
+        <div class="slds-form-element__control">
+            <input
+                type="text"
+                class="slds-input"
+                placeholder="Select party profile..."
+                value={searchKey}
+                oninput={handleSearchKeyChange}
+            />
+        </div>
+
+        <!-- Debugging: Show if no results found -->
+        <template if:true={searchResults}>
+            <ul class="slds-listbox slds-listbox_vertical slds-scrollable">
+                <template for:each={searchResults} for:item="record">
+                    <li key={record.Id}
+                        class="slds-listbox__item"
+                        onclick={handleSelect}
+                        data-id={record.Id}>
+                        <div class="slds-listbox__option slds-listbox__option_plain">
+                            {record.Name}
+                        </div>
+                    </li>
+                </template>
+            </ul>
+        </template>
+
+        <template if:true={searchResults.length == 0}>
+            <div>No records found</div> <!-- Debugging: Display this if no records -->
+        </template>
+    </div>
+</template>
+
+
 <template>
     <div class="slds-form-element">
         <!-- This is the label you see -->
