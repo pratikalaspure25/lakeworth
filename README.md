@@ -1,3 +1,107 @@
+// lookupObject.js
+import { LightningElement, api, track } from "lwc";
+import { OmniscriptBaseMixin } from "omnistudio/omniscriptBaseMixin";
+import searchRecords from "@salesforce/apex/PersonAccountLookupCtrl.search";
+
+export default class LookupObject extends OmniscriptBaseMixin(LightningElement) {
+  @api objectApiName = "Account";           // << Person Accounts live on Account
+  @api label = "Select Person Account";
+
+  @track searchResults = [];
+  @track selectedRecord;
+  @track isLoading = false;
+
+  searchKey = "";
+
+  handleSearchKeyChange(event) {
+    this.searchKey = event.target.value;
+    this.searchRecords();
+  }
+
+  searchRecords() {
+    this.isLoading = true;
+    searchRecords({
+      objectApiName: this.objectApiName,
+      searchKey: this.searchKey,
+      // Person Account-friendly fields
+      displayFields: [
+        "Name",
+        "Salutation",
+        "FirstName",
+        "PersonMiddleName",     // middle name on Person Account
+        "LastName",
+        "PersonEmail",
+        "PersonMobilePhone",
+        "PersonBirthdate"
+      ],
+      limitSize: 5
+    })
+      .then((result) => { this.searchResults = result; })
+      .catch((e) => { console.error(e); })
+      .finally(() => { this.isLoading = false; });
+  }
+
+  handleSelect(event) {
+    const recordId = event.currentTarget.dataset.id;
+    this.selectedRecord = this.searchResults.find(r => r.Id === recordId);
+    this.searchResults = [];
+    this.searchKey = this.selectedRecord.Name;
+
+    // Map Person Account fields into your OmniScript JSON
+    const data = {
+      PersonalInformation: {
+        Salutation: this.selectedRecord.Salutation,
+        FirstName: this.selectedRecord.FirstName,
+        MiddleName: this.selectedRecord.PersonMiddleName,
+        LastName: this.selectedRecord.LastName,
+        Email: this.selectedRecord.PersonEmail,
+        PhoneNumber: this.selectedRecord.PersonMobilePhone,
+        DateOfBirth: this.selectedRecord.PersonBirthdate
+      },
+      personAccountId: this.selectedRecord.Id
+    };
+    this.omniApplyCallResp(data);
+  }
+}
+
+
+public with sharing class PersonAccountLookupCtrl {
+    @AuraEnabled(cacheable=true)
+    public static List<Account> search(String objectApiName,
+                                       String searchKey,
+                                       List<String> displayFields,
+                                       Integer limitSize) {
+
+        // safety defaults
+        Integer lim = Math.min((limitSize == null ? 20 : limitSize), 50);
+        String term = '%' + (searchKey == null ? '' : String.escapeSingleQuotes(searchKey)) + '%';
+
+        // Only Account is supported here
+        if (objectApiName != 'Account') {
+            throw new AuraHandledException('Only Account (Person Account) is supported.');
+        }
+
+        // Build the field list (always include Id & Name)
+        Set<String> base = new Set<String>{'Id','Name'};
+        if (displayFields != null) base.addAll(displayFields);
+        String fieldList = String.join(new List<String>(base), ',');
+
+        String soql =
+            'SELECT ' + fieldList +
+            ' FROM Account' +
+            ' WHERE IsPersonAccount = TRUE' +
+            ' AND (Name LIKE :term OR FirstName LIKE :term OR LastName LIKE :term)' +
+            ' ORDER BY Name' +
+            ' LIMIT :lim';
+
+        return Database.query(soql);
+    }
+}
+
+
+@api label = "Select Individual Relationship";
+
+
 
 String endpointUrl = '/services/data/v58.0/actions/standard/initiateIdentityDocumentAnalysis';
 String endpointUrl = '/services/data/v58.0/actions/standard/fetchIdentityDocumentAnalysisResult';
