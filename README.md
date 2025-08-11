@@ -1,4 +1,4 @@
-
+import { OmniscriptBaseMixin } from "omnistudio/omniscriptBaseMixin";
 <template>
     <div class="slds-form-element">
         <!-- This is the label you see -->
