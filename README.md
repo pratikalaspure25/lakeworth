@@ -11,35 +11,35 @@ public with sharing class PersonAccountLookupCtrl {
         // Escape special characters to avoid SOQL injection errors
         String term = '%' + (searchKey == null ? '' : String.escapeSingleQuotes(searchKey)) + '%';
 
-        // Debug log the term being used
+        // Log the search term being used
         System.debug('Search term: ' + term);
         
-        // Only Account is supported here
+        // Ensure only Account object is searched
         if (objectApiName != 'Account') {
             throw new AuraHandledException('Only Account (Person Account) is supported.');
         }
 
-        // Build the field list (always include Id & Name)
+        // Build the field list (include Id and Name as mandatory fields)
         Set<String> base = new Set<String>{'Id','Name'};
         if (displayFields != null) base.addAll(displayFields);  // Add user-defined fields
         String fieldList = String.join(new List<String>(base), ',');
 
-        // Construct the SOQL query string
+        // Construct the SOQL query string and use limitSize directly
         String soql = 
             'SELECT ' + fieldList +
             ' FROM Account' +
             ' WHERE IsPersonAccount = TRUE' +
             ' AND (Name LIKE :term OR FirstName LIKE :term OR LastName LIKE :term)' +  // Search condition
             ' ORDER BY Name' +
-            ' LIMIT :lim';
+            ' LIMIT :limitSize';  // Use the bind variable limitSize directly
 
-        // Debug log the SOQL query being executed
+        // Log the SOQL query being executed
         System.debug('Executing SOQL query: ' + soql);
 
         // Execute the query and return the results
         List<Account> result = Database.query(soql);
 
-        // Debug log the results returned
+        // Log the results returned
         System.debug('Query Results: ' + result);
         
         return result;
