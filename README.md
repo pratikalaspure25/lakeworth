@@ -8,21 +8,18 @@ public with sharing class PersonAccountLookupCtrl {
                                        List<String> displayFields,
                                        Integer limitSize) {
 
-        // Default limit size if none is provided
-        Integer lim = Math.min((limitSize == null ? 20 : limitSize), 50);
-        
-        // Escape the search term to prevent SOQL injection and format it for LIKE clause
+        // Escape special characters to avoid SOQL injection errors
         String term = '%' + (searchKey == null ? '' : String.escapeSingleQuotes(searchKey)) + '%';
 
-        // Log the search term being used
+        // Debug log the term being used
         System.debug('Search term: ' + term);
         
-        // Ensure only Account object is searched
+        // Only Account is supported here
         if (objectApiName != 'Account') {
             throw new AuraHandledException('Only Account (Person Account) is supported.');
         }
 
-        // Build the field list (include Id and Name as mandatory fields)
+        // Build the field list (always include Id & Name)
         Set<String> base = new Set<String>{'Id','Name'};
         if (displayFields != null) base.addAll(displayFields);  // Add user-defined fields
         String fieldList = String.join(new List<String>(base), ',');
@@ -36,18 +33,19 @@ public with sharing class PersonAccountLookupCtrl {
             ' ORDER BY Name' +
             ' LIMIT :lim';
 
-        // Log the SOQL query being executed
+        // Debug log the SOQL query being executed
         System.debug('Executing SOQL query: ' + soql);
 
         // Execute the query and return the results
         List<Account> result = Database.query(soql);
 
-        // Log the results returned
+        // Debug log the results returned
         System.debug('Query Results: ' + result);
         
         return result;
     }
 }
+
 
 
 
