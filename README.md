@@ -1,3 +1,36 @@
+
+<template>
+    <div class="slds-form-element">
+        <!-- This is the label you see -->
+        <label class="slds-form-element__label">{label}</label>
+
+        <div class="slds-form-element__control">
+            <input
+                type="text"
+                class="slds-input"
+                placeholder="Select party profile..."
+                value={searchKey}
+                oninput={handleSearchKeyChange}
+            />
+        </div>
+
+        <template if:true={searchResults}>
+            <ul class="slds-listbox slds-listbox_vertical slds-scrollable">
+                <template for:each={searchResults} for:item="record">
+                    <li key={record.Id}
+                        class="slds-listbox__item"
+                        onclick={handleSelect}
+                        data-id={record.Id}>
+                        <div class="slds-listbox__option slds-listbox__option_plain">
+                            {record.Name}
+                        </div>
+                    </li>
+                </template>
+            </ul>
+        </template>
+    </div>
+</template>
+
 // lookupObject.js
 import { LightningElement, api, track } from "lwc";
 import { OmniscriptBaseMixin } from "omnistudio/omniscriptBaseMixin";
