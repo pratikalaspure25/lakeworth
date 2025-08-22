@@ -250,5 +250,91 @@ public class FetchExtractedTextWithDelayIncomeJob implements Queueable, Database
 Step 5 - Job IncomeSaverJob 
 
 
+private String triggerOcrProcessing(Blob documentData) {
+    try {
+        Http http = new Http();
+        HttpRequest request = new HttpRequest();
+
+        // Salesforce REST API endpoint to initiate text extraction
+        String endpointUrl = '/services/data/v58.0/actions/standard/initiateTextExtraction';
+
+        // Prepare the request body as a JSON string
+        String requestBody = JSON.serialize(new Map<String, Object> {
+            'inputs' => new List<Map<String, Object>> {
+                new Map<String, Object> {
+                    'contentDocumentId' => contentDocumentId,  // Your uploaded document ID
+                    'startPageIndex' => 1,  // Start from page 1
+                    'endPageIndex' => 20,  // You can change this based on how many pages you want to extract
+                    'ocrService' => 'AMAZON_TEXTRACT'  // Using the Textract OCR service
+                    // If you have a documentTypeId, include it here
+                    // 'documentTypeId' => 'yourDocumentTypeId'
+                }
+            }
+        });
+
+        // Set up the HTTP request
+        request.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + endpointUrl);  // Combine Salesforce base URL with the endpoint
+        request.setMethod('POST');
+        request.setHeader('Content-Type', 'application/json');
+        request.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());  // Use the session ID for authorization
+        request.setBody(requestBody);
+
+        // Send the HTTP request
+        HttpResponse response = http.send(request);
+
+        // Log the response body for debugging
+        System.debug('OCR API response: ' + response.getBody());
+
+        // Handle the response
+        if (response.getStatusCode() == 200) {
+            // Deserialize the response body into a List of Maps (List<Map<String, Object>>)
+            List<Object> responseList = (List<Object>) JSON.deserializeUntyped(response.getBody());
+
+            // Check if the response is not empty
+            if (responseList != null && !responseList.isEmpty()) {
+                // Get the first item in the response list
+                Map<String, Object> resultMap = (Map<String, Object>) responseList[0];
+
+                // Check if outputValues exists in the result map
+                if (resultMap.containsKey('outputValues')) {
+                    Map<String, Object> outputValues = (Map<String, Object>) resultMap.get('outputValues');
+
+                    if (outputValues.containsKey('ocrDocumentScanResultDetails')) {
+                        // Extract the OCR document scan result details
+                        Map<String, Object> ocrDocumentScanResultDetails = (Map<String, Object>) outputValues.get('ocrDocumentScanResultDetails');
+
+                        if (ocrDocumentScanResultDetails.containsKey('ocrDocumentScanResults')) {
+                            // Extract the OCR results
+                            List<Object> ocrResults = (List<Object>) ocrDocumentScanResultDetails.get('ocrDocumentScanResults');
+
+                            // Iterate over the results and extract the OCR result ID
+                            for (Object ocrResultObj : ocrResults) {
+                                Map<String, Object> ocrResult = (Map<String, Object>) ocrResultObj;
+                                String ocrResultId = (String) ocrResult.get('ocrDocumentScanResultId');
+                                System.debug('OCR Result ID: ' + ocrResultId);
+
+                                // Continue processing with the OCR result ID
+                            }
+                        }
+                    }
+                }
+            } else {
+                System.debug('Unexpected or empty response: ' + response.getBody());
+                return 'No OCR results found'; // Provide a meaningful string in case of an empty response
+            }
+        } else {
+            System.debug('Error calling OCR API, status: ' + response.getStatus() + ', body: ' + response.getBody());
+            return 'Error calling OCR API'; // Return a string indicating failure
+        }
+
+        return 'OCR processing completed successfully'; // Return a success message if all goes well
+    } catch (Exception ex) {
+        System.debug('Exception during OCR processing: ' + ex.getMessage());
+        return 'Exception during OCR processing: ' + ex.getMessage(); // Return the exception message
+    }
+}
+
+
+
 
 
