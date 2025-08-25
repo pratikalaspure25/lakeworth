@@ -1,6 +1,8 @@
 14:21:21:360 USER_DEBUG [110]|DEBUG|Error calling OCR API, status: Bad Request, body: [{"actionName":"initiateTextExtraction","errors":[{"statusCode":"UNPROCESSABLE_ENTITY","message":"We couldn’t process the request. Try again. If the problem continues, ask your Salesforce admin to contact support.","fields":[]}],"invocationId":null,"isSuccess":false,"outcome":null,"outputValues":null,"sortOrder":-1,&qu
 Step 1- LWC - DocumentChecklistIncome – Upload File 
 
+Hi VK, quick question – currently, the Application Form has a lookup to the Relationship object, which only allows storing one record. But now we need to handle two records (“Comparison Holding Company” and “Comparison LLC Company”). In this case, should we still use the Relationship object, or do we need to create a new child object under Application Form to store multiple records?
+
   <template>
     <lightning-card title="Income">
         <div class="slds-p-around_medium">
