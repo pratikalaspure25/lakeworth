@@ -7,6 +7,69 @@ try {
     return;
 }
 
+// 6) Your mapping logic, plus a counter
+Integer mappedCount = 0;
+for (Object pgObj : pages) {
+    Map<String, Object> pageMap = (Map<String, Object>) pgObj;
+    List<Object> kvps = (List<Object>) pageMap.get('keyValuePairs');
+    if (kvps == null) continue;
+
+    for (Object kvpObj : kvps) {
+        Map<String, Object> pair = (Map<String, Object>) kvpObj;
+        Map<String, Object> keyMap = (Map<String, Object>) pair.get('key');
+        Map<String, Object> valueMap = (Map<String, Object>) pair.get('value');
+        if (keyMap == null || valueMap == null) continue;
+
+        String label = (String) keyMap.get('value');
+        String text = (String) valueMap.get('value');
+        if (label == null || text == null) continue;
+
+        String norm = label.replaceAll('[^a-zA-Z0-9]', '').toLowerCase();
+
+        // Map IncomeAmount dynamically from OCR
+        if (norm.contains('11totalincomeaddline')) {
+            try {
+                pl.IncomeAmount = Decimal.valueOf(text); // Convert to Decimal
+                mappedCount++;
+            } catch (Exception e) {
+                postToChatter('IncomeAmount conversion failed: ' + e.getMessage());
+                return;
+            }
+        }
+    }
+}
+
+// 7) Set static values for other fields
+pl.IncomeType = 'Salary';  // Static value for IncomeType
+pl.IncomeFrequency = 'Monthly';  // Static value for IncomeFrequency
+pl.IncomeStatus = 'Active';  // Static value for IncomeStatus
+
+// Setting static values for StartDate and EndDate
+try {
+    pl.StartDate = Date.valueOf('2025-01-01');  // Static value for StartDate
+    pl.EndDate = Date.valueOf('2025-12-31');    // Static value for EndDate
+    mappedCount += 2; // Consider StartDate and EndDate as mapped
+} catch (Exception e) {
+    postToChatter('Date conversion failed: ' + e.getMessage());
+    return;
+}
+
+// Setting a static value for Loan_Request__c
+pl.Loan_Request__c = 'LR12345';  // Static value for Loan_Request__c
+
+// 8) Insert the record and catch any DML issues
+try {
+    insert pl;
+} catch (DmlException e) {
+    String msg = e.getMessage();
+    if (msg.length() > 200) {
+        msg = msg.substring(0, 200) + '…';
+    }
+    postToChatter(
+        'Could not save Income record: ' + msg
+    );
+}
+
 
 public class IncomeSaverJob implements Queueable {
 	private String rawJson;
