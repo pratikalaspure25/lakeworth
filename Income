@@ -1,7 +1,134 @@
 14:21:21:360 USER_DEBUG [110]|DEBUG|Error calling OCR API, status: Bad Request, body: [{"actionName":"initiateTextExtraction","errors":[{"statusCode":"UNPROCESSABLE_ENTITY","message":"We couldn’t process the request. Try again. If the problem continues, ask your Salesforce admin to contact support.","fields":[]}],"invocationId":null,"isSuccess":false,"outcome":null,"outputValues":null,"sortOrder":-1,&qu
+
+public class IncomeSaverJob implements Queueable {
+	private String rawJson;
+    private Id recordId;
+
+    public IncomeSaverJob(String rawJson, Id recordId) {
+        this.rawJson  = rawJson;
+        this.recordId = recordId;
+    }
+
+    public void execute(QueueableContext context) {
+        // 1) No payload at all
+        if (String.isBlank(rawJson)) {
+            postToChatter(
+                'Income failed: no data received. Please upload a valid Income document.'
+            );
+            return;
+        }
+
+        // 2) Top-level array
+        List<Object> wrapperList = (List<Object>) JSON.deserializeUntyped(rawJson);
+        if (wrapperList.isEmpty()) {
+            postToChatter(
+                'Income failed: empty response. Please upload a valid Income document.'
+            );
+            return;
+        }
+
+        // 3) Drill into the first action’s outputValues
+        Map<String, Object> actionResp   = (Map<String, Object>) wrapperList[0];
+        Map<String, Object> outputValues = (Map<String, Object>) actionResp.get('outputValues');
+        if (outputValues == null
+            || !outputValues.containsKey('ocrDocumentScanResultDetails')) {
+            postToChatter(
+                'Income failed: no OCR details found. Please upload a clear Income document.'
+            );
+            return;
+        }
+
+        // 4) Get the pages array
+        Map<String, Object> detailsWrap = 
+            (Map<String, Object>) outputValues.get('ocrDocumentScanResultDetails');
+        List<Object> pages = 
+            (List<Object>) detailsWrap.get('ocrDocumentScanResultDetails');
+
+        if (pages == null || pages.isEmpty()) {
+            postToChatter(
+                'Income failed: no pages detected. Please upload a valid Income document.'
+            );
+            return;
+        }
+
+        // 5) Build a new PartyIncome record
+        PartyIncome pl = new PartyIncome();
+        pl.Application__c = recordId;
+
+        // 6) Your mapping logic, plus a counter
+        Integer mappedCount = 0;
+        for (Object pgObj : pages) {
+            Map<String, Object> pageMap = (Map<String, Object>) pgObj;
+            List<Object> kvps = (List<Object>) pageMap.get('keyValuePairs');
+            if (kvps == null) continue;
+
+            for (Object kvpObj : kvps) {
+                Map<String, Object> pair     = (Map<String, Object>) kvpObj;
+                Map<String, Object> keyMap   = (Map<String, Object>) pair.get('key');
+                Map<String, Object> valueMap = (Map<String, Object>) pair.get('value');
+                if (keyMap == null || valueMap == null) continue;
+
+                String label = (String) keyMap.get('value');
+                String text  = (String) valueMap.get('value');
+                if (label == null || text == null) continue;
+
+                String norm = label.replaceAll('[^a-zA-Z0-9]', '').toLowerCase();
+
+                if (norm.contains('11totalincomeaddline')) {
+                    pl.IncomeAmount = text;
+                    mappedCount++;
+                } else if (norm.contains('companyname')) {
+                    pl.IncomeType = text;
+                    mappedCount++;
+                } else if (norm.contains('typeofbusiness')) {
+                    pl.IncomeFrequency = text;
+                    mappedCount++;
+                } 
+                //else if (norm.contains('loannumber')) {
+                  //  pl.Loan_Number__c = text;
+                    //mappedCount++;
+                //}
+                // …any other fields you care about…
+            }
+        }
+
+        // 7) If nothing mapped, we treat it as a “bad document”
+        if (mappedCount == 0) {
+            postToChatter(
+                'P&L failed: no recognizable data detected. Please upload a valid Profit & Loss document.'
+            );
+            return;
+        }
+
+        // 8) Insert and catch any DML problems
+        try {
+            insert pl;
+        } catch (DmlException e) {
+            String msg = e.getMessage();
+            if (msg.length() > 200) {
+                msg = msg.substring(0, 200) + '…';
+            }
+            postToChatter(
+                'Could not save Income record: ' + msg
+            );
+        }
+    }
+
+    /**  
+     * Posts a plain-text FeedItem under the LLC_BI_Application__c record’s feed  
+     */
+    private void postToChatter(String body) {
+        ConnectApi.ChatterFeeds.postFeedElement(
+            /* communityId */ null,
+            /* subjectId   */ recordId,
+            /* feedType    */ ConnectApi.FeedElementType.FeedItem,
+            /* text        */ body
+        );
+    }
+}
+
 Step 1- LWC - DocumentChecklistIncome – Upload File 
-Yes, that would work. But I’ll need some time since I also need to update the IP, Data Mapper, and Omniscript, and then do more testing.
-Hi VK, quick question – currently, the Application Form has a lookup to the Relationship object, which only allows storing one record. But now we need to handle two records (“Comparison Holding Company” and “Comparison LLC Company”). In this case, should we still use the Relationship object, or do we need to create a new child object under Application Form to store multiple records?
+
 
   <template>
     <lightning-card title="Income">
