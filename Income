@@ -1,5 +1,13 @@
 14:21:21:360 USER_DEBUG [110]|DEBUG|Error calling OCR API, status: Bad Request, body: [{"actionName":"initiateTextExtraction","errors":[{"statusCode":"UNPROCESSABLE_ENTITY","message":"We couldn’t process the request. Try again. If the problem continues, ask your Salesforce admin to contact support.","fields":[]}],"invocationId":null,"isSuccess":false,"outcome":null,"outputValues":null,"sortOrder":-1,&qu
 
+try {
+    pl.IncomeAmount = Decimal.valueOf(text);
+} catch (Exception e) {
+    postToChatter('IncomeAmount conversion failed: ' + e.getMessage());
+    return;
+}
+
+
 public class IncomeSaverJob implements Queueable {
 	private String rawJson;
     private Id recordId;
