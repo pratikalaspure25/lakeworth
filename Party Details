@@ -1,62 +1,115 @@
 
 <template>
-    <!-- Account Search -->
-    <lightning-input 
-        label="Search Account"
-        value={searchKey}
-        onchange={handleSearchKeyChange}>
-    </lightning-input>
+    <lightning-card title="Borrowers / Guarantors">
 
-    <!-- Dropdown results -->
-    <template if:true={searchResults}>
-        <ul class="slds-listbox slds-listbox_vertical">
-            <template for:each={searchResults} for:item="acc">
-                <li key={acc.Id} data-id={acc.Id} onclick={handleAccountSelect}>
-                    {acc.Name}
-                </li>
+        <!-- Account Search Input -->
+        <div class="slds-m-around_medium">
+            <lightning-input 
+                label="Select Existing Business Relationship Record"
+                type="text"
+                value={searchKey}
+                onchange={handleSearchKeyChange}
+                placeholder="Type account name..."
+                class="slds-size_1-of-1">
+            </lightning-input>
+
+            <!-- Search Results Dropdown -->
+            <template if:true={searchResults.length}>
+                <div class="slds-box slds-m-top_x-small">
+                    <template for:each={searchResults} for:item="acc">
+                        <div key={acc.Id} class="slds-p-around_x-small slds-border_bottom" 
+                             onclick={handleAccountSelect} data-id={acc.Id}>
+                            {acc.Name}
+                        </div>
+                    </template>
+                </div>
             </template>
-        </ul>
-    </template>
+        </div>
 
-    <!-- Editable form -->
-    <template if:true={formData.companyName}>
-        <lightning-input label="Company Name" value={formData.companyName}
-                         onchange={handleInputChange} data-field="companyName">
-        </lightning-input>
+        <!-- Form Fields -->
+        <div class="slds-grid slds-wrap slds-m-around_medium">
 
-        <lightning-input label="DBA" value={formData.dba}
-                         onchange={handleInputChange} data-field="dba">
-        </lightning-input>
+            <lightning-input class="slds-size_1-of-2"
+                label="Company Name"
+                value={formData.companyName}
+                data-field="companyName"
+                onchange={handleInputChange}>
+            </lightning-input>
 
-        <lightning-input label="Industry" value={formData.industry}
-                         onchange={handleInputChange} data-field="industry">
-        </lightning-input>
+            <lightning-input class="slds-size_1-of-2"
+                label="DBA"
+                value={formData.dba}
+                data-field="dba"
+                onchange={handleInputChange}>
+            </lightning-input>
 
-        <lightning-input label="Employees" type="number" value={formData.employees}
-                         onchange={handleInputChange} data-field="employees">
-        </lightning-input>
+            <lightning-input class="slds-size_1-of-2"
+                label="Industry"
+                value={formData.industry}
+                data-field="industry"
+                onchange={handleInputChange}>
+            </lightning-input>
 
-        <lightning-input label="Annual Revenue" value={formData.annualRevenue}
-                         onchange={handleInputChange} data-field="annualRevenue">
-        </lightning-input>
+            <lightning-input class="slds-size_1-of-2"
+                label="Employees"
+                value={formData.employees}
+                type="number"
+                data-field="employees"
+                onchange={handleInputChange}>
+            </lightning-input>
 
-        <lightning-input label="Net Profit" value={formData.netProfit}
-                         onchange={handleInputChange} data-field="netProfit">
-        </lightning-input>
+            <lightning-input class="slds-size_1-of-2"
+                label="Annual Revenue"
+                value={formData.annualRevenue}
+                data-field="annualRevenue"
+                onchange={handleInputChange}>
+            </lightning-input>
 
-        <lightning-input label="Legal Entity" value={formData.legalEntity}
-                         onchange={handleInputChange} data-field="legalEntity">
-        </lightning-input>
+            <lightning-input class="slds-size_1-of-2"
+                label="Net Profit"
+                value={formData.netProfit}
+                data-field="netProfit"
+                onchange={handleInputChange}>
+            </lightning-input>
 
-        <lightning-input label="Comment" value={formData.comment}
-                         onchange={handleInputChange} data-field="comment">
-        </lightning-input>
+            <lightning-input class="slds-size_1-of-2"
+                label="Legal Entity"
+                value={formData.legalEntity}
+                data-field="legalEntity"
+                onchange={handleInputChange}>
+            </lightning-input>
 
-        <lightning-button variant="brand" label="Update Account"
-                          onclick={handleUpdate}>
-        </lightning-button>
-    </template>
+            <lightning-input class="slds-size_1-of-2"
+                type="date"
+                label="Company Start Date"
+                value={formData.startDate}
+                data-field="startDate"
+                onchange={handleInputChange}>
+            </lightning-input>
+
+            <lightning-input class="slds-size_1-of-1"
+                label="Company Address"
+                value={formData.address}
+                data-field="address"
+                onchange={handleInputChange}>
+            </lightning-input>
+
+            <lightning-textarea class="slds-size_1-of-1"
+                label="Comment"
+                value={formData.comment}
+                data-field="comment"
+                onchange={handleInputChange}>
+            </lightning-textarea>
+        </div>
+
+        <!-- Save Button -->
+        <div class="slds-m-around_medium">
+            <lightning-button label="Update Account" variant="brand" onclick={handleUpdate}></lightning-button>
+        </div>
+
+    </lightning-card>
 </template>
+
 
 import { LightningElement, track } from 'lwc';
 import searchAccounts from '@salesforce/apex/PartyDetailsController.searchAccounts';
