@@ -1,3 +1,63 @@
+
+<template>
+    <!-- Account Search -->
+    <lightning-input 
+        label="Search Account"
+        value={searchKey}
+        onchange={handleSearchKeyChange}>
+    </lightning-input>
+
+    <!-- Dropdown results -->
+    <template if:true={searchResults}>
+        <ul class="slds-listbox slds-listbox_vertical">
+            <template for:each={searchResults} for:item="acc">
+                <li key={acc.Id} data-id={acc.Id} onclick={handleAccountSelect}>
+                    {acc.Name}
+                </li>
+            </template>
+        </ul>
+    </template>
+
+    <!-- Editable form -->
+    <template if:true={formData.companyName}>
+        <lightning-input label="Company Name" value={formData.companyName}
+                         onchange={handleInputChange} data-field="companyName">
+        </lightning-input>
+
+        <lightning-input label="DBA" value={formData.dba}
+                         onchange={handleInputChange} data-field="dba">
+        </lightning-input>
+
+        <lightning-input label="Industry" value={formData.industry}
+                         onchange={handleInputChange} data-field="industry">
+        </lightning-input>
+
+        <lightning-input label="Employees" type="number" value={formData.employees}
+                         onchange={handleInputChange} data-field="employees">
+        </lightning-input>
+
+        <lightning-input label="Annual Revenue" value={formData.annualRevenue}
+                         onchange={handleInputChange} data-field="annualRevenue">
+        </lightning-input>
+
+        <lightning-input label="Net Profit" value={formData.netProfit}
+                         onchange={handleInputChange} data-field="netProfit">
+        </lightning-input>
+
+        <lightning-input label="Legal Entity" value={formData.legalEntity}
+                         onchange={handleInputChange} data-field="legalEntity">
+        </lightning-input>
+
+        <lightning-input label="Comment" value={formData.comment}
+                         onchange={handleInputChange} data-field="comment">
+        </lightning-input>
+
+        <lightning-button variant="brand" label="Update Account"
+                          onclick={handleUpdate}>
+        </lightning-button>
+    </template>
+</template>
+
 public with sharing class PartyDetailsController {
 
     @AuraEnabled(cacheable=true)
