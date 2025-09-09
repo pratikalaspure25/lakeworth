@@ -1,0 +1,97 @@
+import { LightningElement, api, track } from "lwc";
+import { OmniscriptBaseMixin } from "omnistudio/omniscriptBaseMixin";
+import searchRecords from "@salesforce/apex/PersonAccountLookupCtrl.search";
+
+export default class LookupObject extends OmniscriptBaseMixin(LightningElement) {
+   @api objectApiName = "Account"; // Person Account live on Account
+  @api label = "Select Exsiting Individual Relationship Record";
+
+  @track searchResults = [];
+  @track selectedRecord;
+  @track isLoading = false;
+
+  searchKey = "";
+
+  // Debug: Log when the search key changes
+  handleSearchKeyChange(event) {
+    this.searchKey = event.target.value;
+    console.log("Search key changed to:", this.searchKey); // Debugging
+
+    // Only trigger search if there is something typed
+    if (this.searchKey.length > 2) {
+      this.searchRecords();
+    } else {
+      this.searchResults = [];
+    }
+  }
+
+  // Call Apex to search records
+  searchRecords() {
+    this.isLoading = true;
+    console.log('Calling Apex with searchKey:', this.searchKey); // Debugging
+
+    searchRecords({
+      objectApiName: this.objectApiName,
+      searchKey: this.searchKey,
+      displayFields: [
+        "Name",
+        "Salutation",
+        "FirstName",
+        "MiddleName",
+        "LastName",
+        "PersonEmail",
+        "PersonMobilePhone",
+        "PersonBirthdate"
+      ],
+      limitSize: 5
+    })
+      .then((result) => {
+        console.log('Apex returned:', result); // Debugging: Log Apex results
+        this.searchResults = result;
+      })
+      .catch((error) => {
+        console.error('Error in Apex call:', error); // Debugging: Log any errors
+      })
+      .finally(() => {
+        this.isLoading = false;
+      });
+  }
+
+  // Handle selection of record
+  handleSelect(event) {
+    const recordId = event.currentTarget.dataset.id;
+    this.selectedRecord = this.searchResults.find(r => r.Id === recordId);
+    console.log("Selected record:", this.selectedRecord); // Debugging: Log selected record
+
+    this.searchResults = [];
+    this.searchKey = this.selectedRecord.Name;
+
+    // Prepare data to return to OmniScript
+//     const data = {
+// PersonalInformation: {
+//         Salutation: this.selectedRecord.Salutation,
+//         FirstName: this.selectedRecord.FirstName,
+//         MiddleName: this.selectedRecord.MiddleName,
+//         LastName: this.selectedRecord.LastName,
+//         Email: this.selectedRecord.PersonEmail,
+//         PhoneNumber: this.selectedRecord.PersonMobilePhone,
+//         DateOfBirth: this.selectedRecord.PersonBirthdate
+//       },
+//       personAccountId: this.selectedRecord.Id
+//     };
+   let data = {
+  "Applicant Information": {
+    "Salutation": this.selectedRecord.Salutation,
+    "First Name": this.selectedRecord.FirstName ,
+    "Middle Name": this.selectedRecord.MiddleName,
+    "Last Name": this.selectedRecord.LastName,
+    "Email": this.selectedRecord.PersonEmail,
+    "Date of Birth": this.selectedRecord.PersonBirthdate ,
+    "PhoneNumber": this.selectedRecord.PersonMobilePhone
+  },
+   personAccountId: this.selectedRecord.Id
+} ;
+
+    this.omniApplyCallResp(data); // Return data to OmniScript
+  }
+}
