@@ -1,3 +1,144 @@
+import { LightningElement, wire, track, api  } from 'lwc';
+import searchAccounts from '@salesforce/apex/PartyDetailsController.searchAccounts';
+import getAccountDetails from '@salesforce/apex/PartyDetailsController.getAccountDetails';
+import updateAccount from '@salesforce/apex/PartyDetailsController.updateAccount';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import { OmniscriptBaseMixin } from 'omnistudio/omniscriptBaseMixin';
+
+export default class PartyDetails extends OmniscriptBaseMixin(LightningElement) {
+      @track applicants = [];
+    @api additionalApplicants = [];
+    @track searchKey = '';
+    @track searchResults = [];
+    @track formData = {};
+    @track selectedAccountId;
+
+     // Helper to create an empty applicant object
+    createEmptyApplicant() {
+        return {
+            key: Date.now(), // unique ID
+            Id: '',
+            selectedPartyProfile: '',
+            firstName: '',
+            middleName: '',
+            lastName: '',
+            email: '',
+            phoneNumber: '',
+            ssn: '',
+            dob: '',
+            Suffix: '',
+            citizenship: ''
+        };
+    }
+
+
+    connectedCallback() {
+        let applicants = this.additionalApplicants;
+
+        // this.getDataFromAdditionalApplicants();
+        if (!applicants) {
+            this.addApplicant();
+        } else {
+            this.processAdditionalApplicant(applicants);
+        }
+    }
+    processAdditionalApplicant(applicants) {
+        if (!Array.isArray(applicants)) {
+            applicants = [applicants];
+        }
+        this.applicants = applicants.map((applicant) => {
+            return {
+                key: Date.now(),
+                ...applicant
+            };
+        });
+    }
+
+    handleSearchKeyChange(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey.length > 1) {
+            this.findAccounts();
+        } else {
+            this.searchResults = [];
+        }
+    }
+
+    async findAccounts() {
+        try {
+            let results = await searchAccounts({ searchKey: this.searchKey });
+            this.searchResults = results;
+        } catch (error) {
+            console.error('Error searching accounts:', error);
+        }
+    }
+
+    async handleAccountSelect(event) {
+        this.selectedAccountId = event.currentTarget.dataset.id;
+        this.searchResults = []; // close dropdown
+        try {
+            let details = await getAccountDetails({ accountId: this.selectedAccountId });
+            this.formData = { ...details };
+        } catch (error) {
+            console.error('Error fetching account details:', error);
+        }
+    }
+
+    handleInputChange(event) {
+        const field = event.target.dataset.field;
+        this.formData[field] = event.target.value;
+    }
+
+    async handleUpdate() {
+    try {
+        await updateAccount({ accountId: this.formData.id, accDetails: this.formData });
+        this.dispatchEvent(new ShowToastEvent({
+            title: 'Success',
+            message: 'Account updated successfully',
+            variant: 'success'
+        }));
+    } catch (error) {
+        console.error('Error updating account:', error);
+        this.dispatchEvent(new ShowToastEvent({
+            title: 'Error Updating Account',
+            message: error.body ? error.body.message : 'Unknown error',
+            variant: 'error'
+        }));
+    }
+}
+
+// Handle input changes for a specific applicant
+    handleInputChange(event) {
+        const index = event.target.dataset.index;
+        const field = event.target.dataset.id;
+        this.applicants[index][field] = event.target.value;
+        this.updateToOmniScript();
+    }
+
+    // Add a new applicant (clone an empty applicant object)
+    addApplicant() {
+        this.applicants = [...this.applicants, this.createEmptyApplicant()];
+        this.updateToOmniScript();
+    }
+
+    // Remove an applicant from the list
+    removeApplicant(event) {
+        const index = event.target.dataset.index;
+        if (this.applicants.length > 1) {
+            this.applicants.splice(index, 1);
+            this.applicants = [...this.applicants]; // Re-trigger reactivity
+        }
+        this.updateToOmniScript();
+    }
+
+    // Method to handle the update in OmniScript
+    // This method can be used to send data back to OmniScript if needed
+    updateToOmniScript() {
+        let data = { AdditionalApplicants: this.applicants };
+        console.log('OUTPUT : ', JSON.stringify(data));
+        this.omniApplyCallResp(data);
+    }
+}
+
 public class PartyDetailsController {
 	  @AuraEnabled(cacheable=true)
     public static List<Account> searchAccounts(String searchKey) {
