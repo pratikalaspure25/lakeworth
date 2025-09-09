@@ -1,0 +1,185 @@
+public with sharing class AccountController {
+    
+    @AuraEnabled(cacheable=true)
+    public static List<Account> getAccounts() {
+        return [
+            SELECT Id, Name 
+            FROM Account 
+            LIMIT 100
+        ];
+    }
+
+    @AuraEnabled(cacheable=true)
+    public static AccountDetails getAccountDetails(Id accountId) {
+        AccountDetails details = new AccountDetails();
+
+        Account acc = [
+            SELECT Id, Name, DBA__c, Industry, NumberOfEmployees, AnnualRevenue, 
+                   Net_Profit__c, Legal_Entity__c, Start_Date__c, BillingAddress, Comment__c
+            FROM Account 
+            WHERE Id = :accountId 
+            LIMIT 1
+        ];
+
+        details.companyName = acc.Name;
+        details.dba = acc.DBA__c;
+        details.industry = acc.Industry;
+        details.employees = acc.NumberOfEmployees;
+        details.annualRevenue = String.valueOf(acc.AnnualRevenue);
+        details.netProfit = String.valueOf(acc.Net_Profit__c);
+        details.legalEntity = acc.Legal_Entity__c;
+        details.startDate = acc.Start_Date__c;
+        details.address = acc.BillingAddress != null ? acc.BillingAddress.street : '';
+        details.comment = acc.Comment__c;
+
+        return details;
+    }
+
+    public class AccountDetails {
+        @AuraEnabled public String companyName;
+        @AuraEnabled public String dba;
+        @AuraEnabled public String industry;
+        @AuraEnabled public String employees;
+        @AuraEnabled public String annualRevenue;
+        @AuraEnabled public String netProfit;
+        @AuraEnabled public String legalEntity;
+        @AuraEnabled public Date startDate;
+        @AuraEnabled public String address;
+        @AuraEnabled public String comment;
+    }
+
+    @AuraEnabled
+    public static Id createApplicantFromAccount(AccountDetails accDetails) {
+        Applicant__c app = new Applicant__c();
+        app.Company_Name__c = accDetails.companyName;
+        app.DBA__c = accDetails.dba;
+        app.Industry__c = accDetails.industry;
+        app.Employees__c = accDetails.employees != null ? Integer.valueOf(accDetails.employees) : null;
+        app.Annual_Revenue__c = accDetails.annualRevenue != null ? Decimal.valueOf(accDetails.annualRevenue) : null;
+        app.Net_Profit__c = accDetails.netProfit != null ? Decimal.valueOf(accDetails.netProfit) : null;
+        app.Legal_Entity__c = accDetails.legalEntity;
+        app.Start_Date__c = accDetails.startDate;
+        app.Comment__c = accDetails.comment;
+        
+        insert app;
+        return app.Id;
+    }
+}
+
+<!-- Account Lookup -->
+<div class="slds-grid slds-grid_align-start slds-p-around_xx-small">
+    <lightning-combobox
+        label="Select Account"
+        value={applicant.selectedAccount}
+        options={accountOptions}
+        onchange={handleAccountChange}
+        data-index={index}
+        placeholder="Select account..."
+        required
+        class="slds-size_1-of-1"
+    >
+    </lightning-combobox>
+</div>
+
+<!-- Company Name & DBA -->
+<div class="slds-grid slds-grid_align-start slds-p-around_xx-small">
+    <lightning-input
+        label="Company Name"
+        value={applicant.companyName}
+        onchange={handleInputChange}
+        data-id="companyName"
+        data-index={index}
+        class="slds-size_1-of-2"
+    ></lightning-input>
+
+    <lightning-input
+        label="DBA"
+        value={applicant.dba}
+        onchange={handleInputChange}
+        data-id="dba"
+        data-index={index}
+        class="slds-size_1-of-2"
+    ></lightning-input>
+</div>
+
+<!-- Industry & Employees -->
+<div class="slds-grid slds-grid_align-start slds-p-around_xx-small">
+    <lightning-input
+        label="Industry"
+        value={applicant.industry}
+        onchange={handleInputChange}
+        data-id="industry"
+        data-index={index}
+        class="slds-size_1-of-2"
+    ></lightning-input>
+
+    <lightning-input
+        label="Employees"
+        type="number"
+        value={applicant.employees}
+        onchange={handleInputChange}
+        data-id="employees"
+        data-index={index}
+        class="slds-size_1-of-2"
+    ></lightning-input>
+</div>
+
+<!-- Annual Revenue & Net Profit -->
+<div class="slds-grid slds-grid_align-start slds-p-around_xx-small">
+    <lightning-input
+        label="Annual Revenue"
+        value={applicant.annualRevenue}
+        onchange={handleInputChange}
+        data-id="annualRevenue"
+        data-index={index}
+        class="slds-size_1-of-2"
+    ></lightning-input>
+
+    <lightning-input
+        label="Net Profit"
+        value={applicant.netProfit}
+        onchange={handleInputChange}
+        data-id="netProfit"
+        data-index={index}
+        class="slds-size_1-of-2"
+    ></lightning-input>
+</div>
+
+
+import getAccounts from '@salesforce/apex/AccountController.getAccounts';
+import getAccountDetails from '@salesforce/apex/AccountController.getAccountDetails';
+
+accountOptions = [];
+
+@wire(getAccounts)
+wiredAccounts({ data, error }) {
+    if (data) {
+        this.accountOptions = data.map(acc => ({
+            label: acc.Name,
+            value: acc.Id
+        }));
+    } else if (error) {
+        console.error('Error fetching accounts: ', error);
+    }
+}
+
+handleAccountChange(event) {
+    const index = event.target.dataset.index;
+    const value = event.detail.value;
+    this.applicants[index].selectedAccount = value;
+    this.populateAccountFields(value, index);
+}
+
+async populateAccountFields(accountId, index) {
+    try {
+        let result = await getAccountDetails({ accountId });
+        Object.assign(this.applicants[index], result);
+        this.updateToOmniScript();
+    } catch (error) {
+        console.error('Error fetching account details: ', error);
+    }
+}
+
+
+
+
