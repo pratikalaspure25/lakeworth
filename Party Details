@@ -1,3 +1,109 @@
+public with sharing class PartyDetailsController {
+
+    @AuraEnabled(cacheable=true)
+    public static List<Account> searchAccounts(String searchKey) {
+        String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
+        return [
+            SELECT Id, Name
+            FROM Account
+            WHERE Name LIKE :key
+            LIMIT 10
+        ];
+    }
+
+    // Note: this method does NOT query Billing or Start Date fields
+    @AuraEnabled(cacheable=true)
+    public static AccountDetails getAccountDetails(Id accountId) {
+        if (accountId == null) {
+            return new AccountDetails();
+        }
+
+        Account acc;
+        try {
+            acc = [
+                SELECT Id, Name, nSBA__DBA__c, Industry, Legal_Entity__c, Role__c,
+                       NumberOfEmployees, AnnualRevenue, Net_Profit__c, Comments__c
+                FROM Account
+                WHERE Id = :accountId
+                LIMIT 1
+            ];
+        } catch (Exception e) {
+            // Return a clear error message to LWC
+            throw new AuraHandledException('Apex error in getAccountDetails: ' + e.getMessage());
+        }
+
+        AccountDetails details = new AccountDetails();
+        details.companyName   = acc.Name;
+        details.dba           = acc.get('nSBA__DBA__c') != null ? String.valueOf(acc.get('nSBA__DBA__c')) : null;
+        details.industry      = acc.Industry;
+        details.employees     = acc.NumberOfEmployees;
+        details.annualRevenue = acc.AnnualRevenue != null ? String.valueOf(acc.AnnualRevenue) : null;
+        details.netProfit     = acc.Net_Profit__c != null ? String.valueOf(acc.Net_Profit__c) : null;
+        details.legalEntity   = acc.Legal_Entity__c;
+        details.comment       = acc.Comments__c;
+        return details;
+    }
+
+    public class AccountDetails {
+        @AuraEnabled public String companyName;
+        @AuraEnabled public String dba;
+        @AuraEnabled public String industry;
+        @AuraEnabled public Integer employees;
+        @AuraEnabled public String annualRevenue;
+        @AuraEnabled public String netProfit;
+        @AuraEnabled public String legalEntity;
+        @AuraEnabled public String comment;
+    }
+}
+
+
+
+import { LightningElement, track } from 'lwc';
+import searchAccounts from '@salesforce/apex/PartyDetailsController.searchAccounts';
+import getAccountDetails from '@salesforce/apex/PartyDetailsController.getAccountDetails';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import { OmniscriptBaseMixin } from 'omnistudio/omniscriptBaseMixin';
+
+export default class PartyDetails extends OmniscriptBaseMixin(LightningElement) {
+    @track searchKey = '';
+    @track searchResults = [];
+    @track formData = {};
+
+    handleSearchKeyChange(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey && this.searchKey.length > 1) {
+            this.findAccounts();
+        } else {
+            this.searchResults = [];
+        }
+    }
+
+    async findAccounts() {
+        try {
+            let results = await searchAccounts({ searchKey: this.searchKey });
+            this.searchResults = results;
+        } catch (error) {
+            const msg = (error && error.body && error.body.message) ? error.body.message : JSON.stringify(error);
+            console.error('Error searching accounts:', msg);
+            this.dispatchEvent(new ShowToastEvent({ title: 'Search error', message: msg, variant: 'error' }));
+        }
+    }
+
+    async handleAccountSelect(event) {
+        const accountId = event.currentTarget.dataset.id;
+        this.searchResults = []; // close dropdown
+        try {
+            const details = await getAccountDetails({ accountId });
+            this.formData = details || {};
+        } catch (error) {
+            const msg = (error && error.body && error.body.message) ? error.body.message : JSON.stringify(error);
+            console.error('Error fetching account details:', msg);
+            this.dispatchEvent(new ShowToastEvent({ title: 'Fetch error', message: msg, variant: 'error' }));
+        }
+    }
+}
+
+
 import { LightningElement, wire, track, api } from 'lwc';
 import searchAccounts from '@salesforce/apex/PartyDetailsController.searchAccounts';
 import getAccountDetails from '@salesforce/apex/PartyDetailsController.getAccountDetails';
