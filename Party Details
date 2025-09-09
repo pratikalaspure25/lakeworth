@@ -1,4 +1,32 @@
 
+@AuraEnabled
+public static void updateAccount(Id accountId, AccountDetails accDetails) {
+    try {
+        Account acc = new Account(Id = accountId);
+
+        acc.Name            = accDetails.companyName;
+        acc.nSBA__DBA__c    = accDetails.dba;
+        acc.Industry        = accDetails.industry;
+        acc.NumberOfEmployees = accDetails.employees;
+
+        if (!String.isBlank(accDetails.annualRevenue)) {
+            acc.AnnualRevenue = Decimal.valueOf(accDetails.annualRevenue);
+        }
+        if (!String.isBlank(accDetails.netProfit)) {
+            acc.Net_Profit__c = Decimal.valueOf(accDetails.netProfit);
+        }
+
+        acc.Legal_Entity__c = accDetails.legalEntity;
+        acc.Comments__c     = accDetails.comment;
+
+        // If you don't want to update address/startDate, skip them
+        update acc;
+    } catch (Exception e) {
+        throw new AuraHandledException('Update failed: ' + e.getMessage());
+    }
+}
+
+
 <template>
     <lightning-card title="Borrowers / Guarantors">
 
