@@ -1,3 +1,49 @@
+@AuraEnabled(cacheable=true)
+public static AccountDetails getAccountDetailsFromAppForm(Id appFormId) {
+    if(appFormId == null) return new AccountDetails();
+
+    ApplicationForm__c app = [
+        SELECT Id, Account__c 
+        FROM ApplicationForm__c 
+        WHERE Id = :appFormId
+        LIMIT 1
+    ];
+
+    if(app.Account__c == null){
+        return new AccountDetails(); // no related account
+    }
+
+    return getAccountDetails(app.Account__c);
+}
+
+
+@api recordId; // Salesforce passes current ApplicationForm__c Id
+
+connectedCallback() {
+    if (this.recordId) {
+        this.prefillAccountFromAppForm(this.recordId);
+    }
+
+    if (!this.additionalApplicants || this.additionalApplicants.length === 0) {
+        this.addApplicant();
+    } else {
+        this.processAdditionalApplicant(this.additionalApplicants);
+    }
+}
+
+async prefillAccountFromAppForm(appFormId) {
+    try {
+        const accountDetails = await getAccountDetailsFromAppForm({ appFormId });
+        this.formData = { ...accountDetails };
+        this.selectedAccountId = accountDetails.id; // optional
+    } catch (error) {
+        console.error('Error fetching related account:', error);
+    }
+}
+
+
+
+
 import { LightningElement, wire, track, api  } from 'lwc';
 import searchAccounts from '@salesforce/apex/PartyDetailsController.searchAccounts';
 import getAccountDetails from '@salesforce/apex/PartyDetailsController.getAccountDetails';
