@@ -67,116 +67,127 @@ public with sharing class AccountController {
 }
 
 <!-- Account Lookup -->
-<div class="slds-grid slds-grid_align-start slds-p-around_xx-small">
-    <lightning-combobox
-        label="Select Account"
-        value={applicant.selectedAccount}
-        options={accountOptions}
-        onchange={handleAccountChange}
-        data-index={index}
-        placeholder="Select account..."
-        required
-        class="slds-size_1-of-1"
-    >
-    </lightning-combobox>
-</div>
+<template>
+    <lightning-card title="Borrowers / Guarantors">
 
-<!-- Company Name & DBA -->
-<div class="slds-grid slds-grid_align-start slds-p-around_xx-small">
-    <lightning-input
-        label="Company Name"
-        value={applicant.companyName}
-        onchange={handleInputChange}
-        data-id="companyName"
-        data-index={index}
-        class="slds-size_1-of-2"
-    ></lightning-input>
+        <!-- Account Lookup -->
+        <div class="slds-m-around_medium">
+            <lightning-combobox
+                name="accountLookup"
+                label="Select Existing Business Relationship Record"
+                value={selectedAccount}
+                options={accountOptions}
+                onchange={handleAccountChange}
+                placeholder="Search Accounts..."
+                class="slds-size_1-of-1">
+            </lightning-combobox>
+        </div>
 
-    <lightning-input
-        label="DBA"
-        value={applicant.dba}
-        onchange={handleInputChange}
-        data-id="dba"
-        data-index={index}
-        class="slds-size_1-of-2"
-    ></lightning-input>
-</div>
+        <!-- Form Fields -->
+        <div class="slds-grid slds-wrap slds-m-around_medium">
 
-<!-- Industry & Employees -->
-<div class="slds-grid slds-grid_align-start slds-p-around_xx-small">
-    <lightning-input
-        label="Industry"
-        value={applicant.industry}
-        onchange={handleInputChange}
-        data-id="industry"
-        data-index={index}
-        class="slds-size_1-of-2"
-    ></lightning-input>
+            <lightning-input class="slds-size_1-of-2"
+                label="Company Name"
+                value={formData.companyName}
+                disabled>
+            </lightning-input>
 
-    <lightning-input
-        label="Employees"
-        type="number"
-        value={applicant.employees}
-        onchange={handleInputChange}
-        data-id="employees"
-        data-index={index}
-        class="slds-size_1-of-2"
-    ></lightning-input>
-</div>
+            <lightning-input class="slds-size_1-of-2"
+                label="DBA"
+                value={formData.dba}
+                disabled>
+            </lightning-input>
 
-<!-- Annual Revenue & Net Profit -->
-<div class="slds-grid slds-grid_align-start slds-p-around_xx-small">
-    <lightning-input
-        label="Annual Revenue"
-        value={applicant.annualRevenue}
-        onchange={handleInputChange}
-        data-id="annualRevenue"
-        data-index={index}
-        class="slds-size_1-of-2"
-    ></lightning-input>
+            <lightning-input class="slds-size_1-of-2"
+                label="Industry"
+                value={formData.industry}
+                disabled>
+            </lightning-input>
 
-    <lightning-input
-        label="Net Profit"
-        value={applicant.netProfit}
-        onchange={handleInputChange}
-        data-id="netProfit"
-        data-index={index}
-        class="slds-size_1-of-2"
-    ></lightning-input>
-</div>
+            <lightning-input class="slds-size_1-of-2"
+                label="Employees"
+                value={formData.employees}
+                disabled>
+            </lightning-input>
+
+            <lightning-input class="slds-size_1-of-2"
+                label="Annual Revenue"
+                value={formData.annualRevenue}
+                disabled>
+            </lightning-input>
+
+            <lightning-input class="slds-size_1-of-2"
+                label="Net Profit"
+                value={formData.netProfit}
+                disabled>
+            </lightning-input>
+
+            <lightning-input class="slds-size_1-of-2"
+                label="Legal Entity"
+                value={formData.legalEntity}
+                disabled>
+            </lightning-input>
+
+            <lightning-input class="slds-size_1-of-2"
+                type="date"
+                label="Company Start Date"
+                value={formData.startDate}
+                disabled>
+            </lightning-input>
+
+            <lightning-input class="slds-size_1-of-1"
+                label="Company Address"
+                value={formData.address}
+                disabled>
+            </lightning-input>
+
+            <lightning-textarea class="slds-size_1-of-1"
+                label="Comment"
+                value={formData.comment}
+                disabled>
+            </lightning-textarea>
+        </div>
+
+    </lightning-card>
+</template>
 
 
+import { LightningElement, track, wire } from 'lwc';
 import getAccounts from '@salesforce/apex/AccountController.getAccounts';
 import getAccountDetails from '@salesforce/apex/AccountController.getAccountDetails';
 
-accountOptions = [];
+export default class AccountApplicantForm extends LightningElement {
+    @track accountOptions = [];
+    @track formData = {};
+    selectedAccount;
 
-@wire(getAccounts)
-wiredAccounts({ data, error }) {
-    if (data) {
-        this.accountOptions = data.map(acc => ({
-            label: acc.Name,
-            value: acc.Id
-        }));
-    } else if (error) {
-        console.error('Error fetching accounts: ', error);
+    // Load Accounts for lookup
+    @wire(getAccounts)
+    wiredAccounts({ data, error }) {
+        if (data) {
+            this.accountOptions = data.map(acc => ({
+                label: acc.Name,
+                value: acc.Id
+            }));
+        } else if (error) {
+            console.error('Error fetching accounts: ', error);
+        }
     }
-}
 
-handleAccountChange(event) {
-    const index = event.target.dataset.index;
-    const value = event.detail.value;
-    this.applicants[index].selectedAccount = value;
-    this.populateAccountFields(value, index);
-}
+    // Handle account selection
+    handleAccountChange(event) {
+        this.selectedAccount = event.detail.value;
+        this.fetchAccountDetails(this.selectedAccount);
+    }
 
-async populateAccountFields(accountId, index) {
-    try {
-        let result = await getAccountDetails({ accountId });
-        Object.assign(this.applicants[index], result);
-        this.updateToOmniScript();
-    } catch (error) {
-        console.error('Error fetching account details: ', error);
+    // Fetch details for selected account
+    async fetchAccountDetails(accountId) {
+        try {
+            let result = await getAccountDetails({ accountId });
+            this.formData = result;
+        } catch (error) {
+            console.error('Error fetching account details: ', error);
+        }
     }
 }
 
