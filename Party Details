@@ -58,6 +58,90 @@
     </template>
 </template>
 
+import { LightningElement, track } from 'lwc';
+import searchAccounts from '@salesforce/apex/PartyDetailsController.searchAccounts';
+import getAccountDetails from '@salesforce/apex/PartyDetailsController.getAccountDetails';
+import updateAccount from '@salesforce/apex/PartyDetailsController.updateAccount';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import { OmniscriptBaseMixin } from 'omnistudio/omniscriptBaseMixin';
+
+export default class PartyDetails extends OmniscriptBaseMixin(LightningElement) {
+    @track searchKey = '';
+    @track searchResults = [];
+    @track formData = {};
+    @track selectedAccountId;
+
+    handleSearchKeyChange(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey.length > 1) {
+            this.findAccounts();
+        } else {
+            this.searchResults = [];
+        }
+    }
+
+    async findAccounts() {
+        try {
+            let results = await searchAccounts({ searchKey: this.searchKey });
+            this.searchResults = results;
+        } catch (error) {
+            console.error('Error searching accounts:', error);
+        }
+    }
+
+    async handleAccountSelect(event) {
+        this.selectedAccountId = event.currentTarget.dataset.id;
+        this.searchResults = []; // close dropdown
+        try {
+            let details = await getAccountDetails({ accountId: this.selectedAccountId });
+            this.formData = { ...details };
+        } catch (error) {
+            console.error('Error fetching account details:', error);
+        }
+    }
+
+    handleInputChange(event) {
+        const field = event.target.dataset.field;
+        this.formData[field] = event.target.value;
+    }
+
+    async handleUpdate() {
+        try {
+            await updateAccount({ accountId: this.selectedAccountId, accDetails: this.formData });
+            this.dispatchEvent(new ShowToastEvent({
+                title: 'Success',
+                message: 'Account updated successfully',
+                variant: 'success'
+            }));
+        } catch (error) {
+            console.error('Error updating account:', error);
+            this.dispatchEvent(new ShowToastEvent({
+                title: 'Error',
+                message: 'Failed to update account',
+                variant: 'error'
+            }));
+        }
+    }
+}
+
+
+@AuraEnabled
+public static void updateAccount(Id accountId, AccountDetails accDetails) {
+    Account acc = new Account(
+        Id = accountId,
+        Name = accDetails.companyName,
+        nSBA__DBA__c = accDetails.dba,
+        Industry = accDetails.industry,
+        NumberOfEmployees = accDetails.employees,
+        AnnualRevenue = Decimal.valueOf(accDetails.annualRevenue),
+        Net_Profit__c = Decimal.valueOf(accDetails.netProfit),
+        Legal_Entity__c = accDetails.legalEntity,
+        Comments__c = accDetails.comment
+    );
+    update acc;
+}
+
+
 public with sharing class PartyDetailsController {
 
     @AuraEnabled(cacheable=true)
