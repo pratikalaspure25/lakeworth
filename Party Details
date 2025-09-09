@@ -1,3 +1,306 @@
+public class PartyDetailsController {
+
+    // Search accounts by name
+    @AuraEnabled(cacheable=true)
+    public static List<Account> searchAccounts(String searchKey) {
+        String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
+        return [
+            SELECT Id, Name
+            FROM Account
+            WHERE Name LIKE :key
+            LIMIT 10
+        ];
+    }
+
+    // Get account details by Id
+    @AuraEnabled(cacheable=true)
+    public static AccountDetails getAccountDetails(Id accountId) {
+        if (accountId == null) {
+            return new AccountDetails();
+        }
+
+        Account acc;
+        try {
+            acc = [
+                SELECT Id, Name, nSBA__DBA__c, Industry, Legal_Entity__c, Role__c,
+                       NumberOfEmployees, AnnualRevenue, Net_Profit__c, Comments__c
+                FROM Account
+                WHERE Id = :accountId
+                LIMIT 1
+            ];
+        } catch (Exception e) {
+            throw new AuraHandledException('Apex error in getAccountDetails: ' + e.getMessage());
+        }
+
+        AccountDetails details = new AccountDetails();
+        details.id             = acc.Id;
+        details.companyName    = acc.Name;
+        details.dba            = acc.nSBA__DBA__c;
+        details.industry       = acc.Industry;
+        details.employees      = acc.NumberOfEmployees;
+        details.annualRevenue  = acc.AnnualRevenue != null ? String.valueOf(acc.AnnualRevenue) : null;
+        details.netProfit      = acc.Net_Profit__c != null ? String.valueOf(acc.Net_Profit__c) : null;
+        details.legalEntity    = acc.Legal_Entity__c;
+        details.comment        = acc.Comments__c;
+        return details;
+    }
+
+   @AuraEnabled(cacheable=true)
+public static AccountDetails getAccountDetailsFromAppForm(Id appFormId) {
+    if(appFormId == null) return new AccountDetails();
+
+    ApplicationForm app = [
+        SELECT Id, AccountId 
+        FROM ApplicationForm
+        WHERE Id = :appFormId
+        LIMIT 1
+    ];
+
+    if(app.AccountId == null){
+        return new AccountDetails(); // no related account
+    }
+
+    return getAccountDetails(app.AccountId);
+}
+
+
+    // Update Account fields
+    @AuraEnabled
+    public static void updateAccount(Id accountId, AccountDetails accDetails) {
+        try {
+            Account acc = new Account(Id = accountId);
+
+            acc.Name             = accDetails.companyName;
+            acc.nSBA__DBA__c     = accDetails.dba;
+            acc.Industry         = accDetails.industry;
+            acc.NumberOfEmployees= accDetails.employees;
+
+            if (!String.isBlank(accDetails.annualRevenue)) {
+                acc.AnnualRevenue = Decimal.valueOf(accDetails.annualRevenue);
+            }
+            if (!String.isBlank(accDetails.netProfit)) {
+                acc.Net_Profit__c = Decimal.valueOf(accDetails.netProfit);
+            }
+
+            acc.Legal_Entity__c = accDetails.legalEntity;
+            acc.Comments__c     = accDetails.comment;
+
+            update acc;
+        } catch (Exception e) {
+            throw new AuraHandledException('Update failed: ' + e.getMessage());
+        }
+    }
+
+    // Apex wrapper for account data
+    public class AccountDetails {
+        @AuraEnabled public Id id;
+        @AuraEnabled public String companyName;
+        @AuraEnabled public String dba;
+        @AuraEnabled public String industry;
+        @AuraEnabled public Integer employees;
+        @AuraEnabled public String annualRevenue;
+        @AuraEnabled public String netProfit;
+        @AuraEnabled public String legalEntity;
+        @AuraEnabled public String comment;
+    }
+
+
+import { LightningElement, track, api } from 'lwc';
+import searchAccounts from '@salesforce/apex/PartyDetailsController.searchAccounts';
+import getAccountDetails from '@salesforce/apex/PartyDetailsController.getAccountDetails';
+import getAccountDetailsFromAppForm from '@salesforce/apex/PartyDetailsController.getAccountDetailsFromAppForm';
+import updateAccount from '@salesforce/apex/PartyDetailsController.updateAccount';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import { OmniscriptBaseMixin } from 'omnistudio/omniscriptBaseMixin';
+
+export default class PartyDetails extends OmniscriptBaseMixin(LightningElement) {
+    @api recordId; 
+    @track applicants = [];
+    @api additionalApplicants = [];
+    @track searchKey = '';
+    @track searchResults = [];
+    @track formData = {};
+    @track selectedAccountId;
+
+    // Create empty applicant template
+    createEmptyApplicant() {
+        return {
+            key: Date.now(),
+            Id: '',
+            selectedPartyProfile: '',
+            firstName: '',
+            middleName: '',
+            lastName: '',
+            email: '',
+            phoneNumber: '',
+            ssn: '',
+            dob: '',
+            Suffix: '',
+            citizenship: ''
+        };
+    }
+
+    connectedCallback() {
+        if (this.recordId) {
+            this.prefillAccountFromAppForm(this.recordId);
+        }
+
+        if (!this.additionalApplicants || this.additionalApplicants.length === 0) {
+            this.addApplicant();
+        } else {
+            this.processAdditionalApplicant(this.additionalApplicants);
+        }
+    }
+
+    async prefillAccountFromAppForm(appFormId) {
+        try {
+            const accountDetails = await getAccountDetailsFromAppForm({ appFormId });
+            this.formData = { ...accountDetails };
+            this.selectedAccountId = accountDetails.id;
+        } catch (error) {
+            console.error('Error fetching related account:', error);
+        }
+    }
+
+    processAdditionalApplicant(applicants) {
+        if (!Array.isArray(applicants)) {
+            applicants = [applicants];
+        }
+        this.applicants = applicants.map(applicant => ({ key: Date.now(), ...applicant }));
+    }
+
+    handleSearchKeyChange(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey.length > 1) {
+            this.findAccounts();
+        } else {
+            this.searchResults = [];
+        }
+    }
+
+    async findAccounts() {
+        try {
+            this.searchResults = await searchAccounts({ searchKey: this.searchKey });
+        } catch (error) {
+            console.error('Error searching accounts:', error);
+        }
+    }
+
+    async handleAccountSelect(event) {
+        this.selectedAccountId = event.currentTarget.dataset.id;
+        this.searchResults = [];
+        try {
+            const details = await getAccountDetails({ accountId: this.selectedAccountId });
+            this.formData = { ...details };
+        } catch (error) {
+            console.error('Error fetching account details:', error);
+        }
+    }
+
+    handleInputChange(event) {
+        const index = event.target.dataset.index;
+        const field = event.target.dataset.field;
+        if(index !== undefined) {
+            this.applicants[index][field] = event.target.value;
+            this.updateToOmniScript();
+        } else {
+            this.formData[field] = event.target.value;
+        }
+    }
+
+    async handleUpdate() {
+        try {
+            await updateAccount({ accountId: this.formData.id, accDetails: this.formData });
+            this.dispatchEvent(new ShowToastEvent({
+                title: 'Success',
+                message: 'Account updated successfully',
+                variant: 'success'
+            }));
+        } catch (error) {
+            console.error('Error updating account:', error);
+            this.dispatchEvent(new ShowToastEvent({
+                title: 'Error Updating Account',
+                message: error.body ? error.body.message : 'Unknown error',
+                variant: 'error'
+            }));
+        }
+    }
+
+    addApplicant() {
+        this.applicants = [...this.applicants, this.createEmptyApplicant()];
+        this.updateToOmniScript();
+    }
+
+    removeApplicant(event) {
+        const index = event.target.dataset.index;
+        if (this.applicants.length > 1) {
+            this.applicants.splice(index, 1);
+            this.applicants = [...this.applicants];
+        }
+        this.updateToOmniScript();
+    }
+
+    updateToOmniScript() {
+        let data = { AdditionalApplicants: this.applicants };
+        this.omniApplyCallResp(data);
+    }
+}
+
+<template>
+    <template for:each={applicants} for:item="applicant" for:index="index">
+        <div key={applicant.key} class="slds-box slds-m-around_medium">
+            <lightning-card title="Borrowers / Guarantors">
+
+                <!-- Account Search Input -->
+                <template if:false={selectedAccountId}>
+                    <div class="slds-m-around_medium">
+                        <lightning-input 
+                            label="Select Existing Business Relationship Record"
+                            type="text"
+                            value={searchKey}
+                            onchange={handleSearchKeyChange}
+                            placeholder="Type account name..."
+                            class="slds-size_1-of-1">
+                        </lightning-input>
+
+                        <template if:true={searchResults.length}>
+                            <div class="slds-box slds-m-top_x-small">
+                                <template for:each={searchResults} for:item="acc">
+                                    <div key={acc.Id} class="slds-p-around_x-small slds-border_bottom" 
+                                        onclick={handleAccountSelect} data-id={acc.Id}>
+                                        {acc.Name}
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Account Form Fields -->
+                <div class="slds-grid slds-wrap slds-m-around_medium">
+                    <lightning-input class="slds-size_1-of-2" label="Company Name" value={formData.companyName} data-field="companyName" onchange={handleInputChange}></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="DBA" value={formData.dba} data-field="dba" onchange={handleInputChange}></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Industry" value={formData.industry} data-field="industry" onchange={handleInputChange}></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Employees" type="number" value={formData.employees} data-field="employees" onchange={handleInputChange}></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={formData.annualRevenue} data-field="annualRevenue" onchange={handleInputChange}></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Net Profit" value={formData.netProfit} data-field="netProfit" onchange={handleInputChange}></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={formData.legalEntity} data-field="legalEntity" onchange={handleInputChange}></lightning-input>
+                    <lightning-textarea class="slds-size_1-of-1" label="Comment" value={formData.comment} data-field="comment" onchange={handleInputChange}></lightning-textarea>
+                </div>
+
+            </lightning-card>
+
+            <!-- Remove Applicant Button -->
+            <lightning-button variant="destructive" label="Remove Applicant" data-index={index} onclick={removeApplicant} class="slds-m-top_small"></lightning-button>
+        </div>
+    </template>
+
+    <!-- Add Applicant Button -->
+    <lightning-button label="Add Applicant" onclick={addApplicant} class="slds-m-top_medium"></lightning-button>
+</template>
+
+
+
 <!--
   @description       : 
   @author            : 
