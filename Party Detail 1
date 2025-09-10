@@ -1,3 +1,67 @@
+ // Fetch picklist values dynamically from Account object
+    @wire(getPicklistValuesByRecordType, { objectApiName: ACCOUNT_OBJECT, recordTypeId: '$objectInfo.data.defaultRecordTypeId' })
+    wiredPicklistValues({ data, error }) {
+        if (data) {
+            this.industryOptions = data.picklistFieldValues.Industry.values;
+            this.legalEntityOptions = data.picklistFieldValues.Legal_Entity__c.values;
+            this.roleOptions = data.picklistFieldValues.Role__c.values;
+        }
+        if (error) {
+            console.error(error);
+        }
+    }
+}
+
+handleNewApplicantAccountSelect(event) {
+    const selectedId = event.currentTarget.dataset.id;
+    const selectedAccount = this.newApplicant.searchResults.find(acc => acc.Id === selectedId);
+
+    if (selectedAccount) {
+        this.newApplicant = {
+            ...this.newApplicant,
+            AccountId: selectedAccount.Id,
+            Company_Name__c: selectedAccount.Name,
+            DBA__c: selectedAccount.DBA__c || '',
+            Industry__c: selectedAccount.Industry || '',
+            Employees__c: selectedAccount.NumberOfEmployees || '',
+            Annual_Revenue__c: selectedAccount.AnnualRevenue || '',
+            Net_Profit__c: selectedAccount.Net_Profit__c || '',
+            Legal_Entity__c: selectedAccount.Legal_Entity__c || '',
+            Role__c: selectedAccount.Role__c || '',
+            Comments__c: '',
+            searchResults: [],
+            searchKey: selectedAccount.Name
+        };
+    }
+}
+
+
+
+<lightning-combobox label="Industry" 
+                    value={newApplicant.Industry__c} 
+                    options={industryOptions} 
+                    placeholder="Select Industry" 
+                    onchange={handleNewApplicantFieldChange} 
+                    data-field="Industry__c">
+</lightning-combobox>
+
+<lightning-combobox label="Legal Entity" 
+                    value={newApplicant.Legal_Entity__c} 
+                    options={legalEntityOptions} 
+                    placeholder="Select Legal Entity" 
+                    onchange={handleNewApplicantFieldChange} 
+                    data-field="Legal_Entity__c">
+</lightning-combobox>
+
+<lightning-combobox label="Role" 
+                    value={newApplicant.Role__c} 
+                    options={roleOptions} 
+                    placeholder="Select Role" 
+                    onchange={handleNewApplicantFieldChange} 
+                    data-field="Role__c">
+</lightning-combobox>
+
+
 <lightning-combobox class="slds-size_1-of-2" label="Role" 
                                     value={newApplicant.Role__c} 
                                     placeholder="Select Role" 
