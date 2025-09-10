@@ -1,3 +1,46 @@
+<lightning-card title="Borrowers / Guarantors">
+
+    <!-- Account Search Input for adding new applicant -->
+    <div class="slds-m-around_medium">
+        <lightning-input 
+            label="Add Applicant from Account"
+            type="text"
+            value={searchKey}
+            onchange={handleSearchKeyChange}
+            placeholder="Type account name..."
+            class="slds-size_1-of-1">
+        </lightning-input>
+
+        <template if:true={searchResults.length}>
+            <div class="slds-box slds-m-top_x-small">
+                <template for:each={searchResults} for:item="acc">
+                    <div key={acc.Id} class="slds-p-around_x-small slds-border_bottom" 
+                        onclick={handleAccountSelect} data-id={acc.Id}>
+                        {acc.Name}
+                    </div>
+                </template>
+            </div>
+        </template>
+    </div>
+
+    <!-- Existing Applicants -->
+    <template if:true={applicants.length}>
+        <div class="slds-box slds-m-around_medium">
+            <template for:each={applicants} for:item="app">
+                <lightning-card key={app.Id} title={app.Company_Name__c}>
+                    <p class="slds-p-around_small">DBA: {app.DBA__c}</p>
+                    <p class="slds-p-around_small">Industry: {app.Industry__c}</p>
+                    <p class="slds-p-around_small">Employees: {app.Employees__c}</p>
+                    <p class="slds-p-around_small">Revenue: {app.Annual_Revenue__c}</p>
+                    <p class="slds-p-around_small">Net Profit: {app.Net_Profit__c}</p>
+                    <p class="slds-p-around_small">Legal Entity: {app.Legal_Entity__c}</p>
+                </lightning-card>
+            </template>
+        </div>
+    </template>
+
+</lightning-card>
+
 <template if:true={applicants.length}>
     <template for:each={applicants} for:item="applicant" for:index="index">
         <div key={applicant.Id} class="slds-box slds-m-around_medium">
