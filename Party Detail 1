@@ -1,3 +1,44 @@
+<!-- Applicant Details -->
+<div class="slds-grid slds-wrap slds-m-around_medium">
+    <lightning-input class="slds-size_1-of-2" label="Company Name" value={newApplicant.Company_Name__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+    <lightning-input class="slds-size_1-of-2" label="DBA" value={newApplicant.DBA__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+    <lightning-input class="slds-size_1-of-2" label="Industry" value={newApplicant.Industry__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+    <lightning-input class="slds-size_1-of-2" label="Employees" value={newApplicant.Employees__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+    <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={newApplicant.Annual_Revenue__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+    <lightning-input class="slds-size_1-of-2" label="Net Profit" value={newApplicant.Net_Profit__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+    <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={newApplicant.Legal_Entity__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+    <lightning-textarea class="slds-size_1-of-1" label="Comments" value={newApplicant.Comments__c} onchange={handleNewApplicantFieldChange}></lightning-textarea>
+</div>
+
+handleNewApplicantFieldChange(event) {
+    const field = event.target.label.replace(/ /g, '_'); // replace spaces with underscores
+    this.newApplicant = { ...this.newApplicant, [field]: event.target.value };
+}
+
+handleNewApplicantAccountSelect(event) {
+    const selectedId = event.currentTarget.dataset.id;
+    const selectedAccount = this.newApplicant.searchResults.find(acc => acc.Id === selectedId);
+    if (selectedAccount) {
+        this.newApplicant = {
+            ...this.newApplicant,
+            AccountId: selectedAccount.Id,
+            Company_Name__c: selectedAccount.Name,
+            DBA__c: selectedAccount.DBA__c || '',
+            Industry__c: selectedAccount.Industry || '',
+            Employees__c: selectedAccount.NumberOfEmployees || '',
+            Annual_Revenue__c: selectedAccount.AnnualRevenue || '',
+            Net_Profit__c: selectedAccount.Net_Profit__c || '',
+            Legal_Entity__c: selectedAccount.Legal_Entity__c || '',
+            Comments__c: ''
+        };
+
+        // Clear search results after selection
+        this.newApplicant.searchResults = [];
+        this.newApplicant.searchKey = selectedAccount.Name;
+    }
+}
+
+
  <!-- Add Applicant Button -->
     <lightning-button label="Add Applicant" onclick={addApplicant} class="slds-m-top_small"></lightning-button>
 
