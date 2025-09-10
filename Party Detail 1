@@ -1,3 +1,97 @@
+ async loadApplicants() {
+        try {
+            let data = await getApplicantsByApplicationForm({ applicationFormId: this.applicationFormId });
+            this.applicants = data.map(app => ({
+                key: app.Id,
+                id: app.Id,
+                companyName: app.CompanyName__c,
+                industry: app.Industry__c,
+                employees: app.Employees__c,
+                annualRevenue: app.AnnualRevenue__c,
+                phoneNumber: app.Phone__c,
+                website: app.Website__c,
+                address: app.Address__c,
+                searchKey: '',
+                searchResults: []
+            }));
+        } catch (error) {
+            console.error('Error loading applicants: ', error);
+        }
+    }
+
+    handleAccountSearch(event) {
+        const index = event.target.dataset.index;
+        const value = event.target.value;
+
+        this.applicants[index].searchKey = value;
+
+        if (value.length > 2) {
+            searchAccounts({ searchKey: value })
+                .then(result => {
+                    this.applicants[index].searchResults = result;
+                    this.applicants = [...this.applicants];
+                })
+                .catch(err => console.error(err));
+        }
+    }
+
+    async handleAccountSelect(event) {
+        const index = event.target.dataset.index;
+        const accountId = event.target.dataset.id;
+
+        try {
+            let account = await getAccountDetails({ accountId });
+            this.applicants[index] = {
+                ...this.applicants[index],
+                accountId: account.Id,
+                companyName: account.Name,
+                industry: account.Industry,
+                employees: account.NumberOfEmployees,
+                annualRevenue: account.AnnualRevenue,
+                phoneNumber: account.Phone,
+                website: account.Website,
+                address: account.BillingStreet,
+                searchResults: []
+            };
+            this.applicants = [...this.applicants];
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    handleInputChange(event) {
+        const index = event.target.dataset.index;
+        const field = event.target.dataset.id;
+        this.applicants[index][field] = event.target.value;
+        this.applicants = [...this.applicants];
+    }
+
+    addApplicant() {
+        this.applicants = [
+            ...this.applicants,
+            {
+                key: Date.now(),
+                id: null,
+                companyName: '',
+                industry: '',
+                employees: '',
+                annualRevenue: '',
+                phoneNumber: '',
+                website: '',
+                address: '',
+                searchKey: '',
+                searchResults: []
+            }
+        ];
+    }
+
+    removeApplicant(event) {
+        const index = event.target.dataset.index;
+        this.applicants.splice(index, 1);
+        this.applicants = [...this.applicants];
+    }
+
+
 public with sharing class ApplicantController {
     
     // Fetch existing Applicants for given ApplicationForm
