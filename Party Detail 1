@@ -1,3 +1,233 @@
+<!-- partyDetails.html -->
+<template>
+    <lightning-card title="Borrowers / Guarantors">
+
+        <!-- Account Search -->
+        <template if:false={selectedAccountId}>
+            <div class="slds-m-around_medium">
+                <lightning-input 
+                    label="Search Account"
+                    type="text"
+                    value={searchKey}
+                    onchange={handleSearchKeyChange}
+                    placeholder="Type account name...">
+                </lightning-input>
+
+                <template if:true={searchResults.length}>
+                    <div class="slds-box slds-m-top_x-small">
+                        <template for:each={searchResults} for:item="acc">
+                            <div key={acc.Id} 
+                                class="slds-p-around_x-small slds-border_bottom" 
+                                onclick={handleAccountSelect} 
+                                data-id={acc.Id}>
+                                {acc.Name}
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <!-- Account Fields (prefill from AppForm / lookup) -->
+        <div class="slds-grid slds-wrap slds-m-around_medium">
+            <lightning-input class="slds-size_1-of-2" label="Company Name" value={formData.companyName} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="DBA" value={formData.dba} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Industry" value={formData.industry} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Employees" value={formData.employees} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={formData.annualRevenue} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Net Profit" value={formData.netProfit} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={formData.legalEntity} readonly></lightning-input>
+            <lightning-textarea class="slds-size_1-of-1" label="Comment" value={formData.comment} readonly></lightning-textarea>
+        </div>
+
+    </lightning-card>
+
+    <!-- Existing Applicants -->
+    <template if:true={applicants.length}>
+        <lightning-card title="Existing Applicants">
+            <template for:each={applicants} for:item="app">
+                <p key={app.Id} class="slds-p-around_small">{app.Name}</p>
+            </template>
+        </lightning-card>
+    </template>
+</template>
+
+
+// partyDetails.js
+import { LightningElement, track, api } from 'lwc';
+import searchAccounts from '@salesforce/apex/PartyDetailsController.searchAccounts';
+import getAccountDetails from '@salesforce/apex/PartyDetailsController.getAccountDetails';
+import getAccountDetailsFromAppForm from '@salesforce/apex/PartyDetailsController.getAccountDetailsFromAppForm';
+import getApplicantsFromAppForm from '@salesforce/apex/PartyDetailsController.getApplicantsFromAppForm';
+import createApplicant from '@salesforce/apex/PartyDetailsController.createApplicant';
+import { OmniscriptBaseMixin } from 'omnistudio/omniscriptBaseMixin';
+
+export default class PartyDetails extends OmniscriptBaseMixin(LightningElement) {
+    @api recordId; // ApplicationForm Id
+    @track searchKey = '';
+    @track searchResults = [];
+    @track formData = {};
+    @track selectedAccountId;
+    @track applicants = [];
+
+    connectedCallback() {
+        if (this.recordId) {
+            this.prefillFromAppForm();
+            this.loadApplicants();
+        }
+    }
+
+    async prefillFromAppForm() {
+        try {
+            const accountDetails = await getAccountDetailsFromAppForm({ appFormId: this.recordId });
+            this.formData = { ...accountDetails };
+            this.selectedAccountId = accountDetails.id;
+        } catch (error) {
+            console.error('Error prefill:', error);
+        }
+    }
+
+    async loadApplicants() {
+        try {
+            this.applicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
+        } catch (error) {
+            console.error('Error fetching applicants:', error);
+        }
+    }
+
+    handleSearchKeyChange(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey.length > 1) {
+            this.findAccounts();
+        } else {
+            this.searchResults = [];
+        }
+    }
+
+    async findAccounts() {
+        try {
+            this.searchResults = await searchAccounts({ searchKey: this.searchKey });
+        } catch (error) {
+            console.error('Error searching accounts:', error);
+        }
+    }
+
+    async handleAccountSelect(event) {
+        this.selectedAccountId = event.currentTarget.dataset.id;
+        this.searchResults = [];
+        try {
+            const details = await getAccountDetails({ accountId: this.selectedAccountId });
+            this.formData = { ...details };
+            // Save as Applicant
+            await createApplicant({ appFormId: this.recordId, accDetails: this.formData });
+            this.loadApplicants(); // refresh
+        } catch (error) {
+            console.error('Error fetching account details:', error);
+        }
+    }
+}
+
+
+public class PartyDetailsController {
+
+    // Account search
+    @AuraEnabled(cacheable=true)
+    public static List<Account> searchAccounts(String searchKey) {
+        String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
+        return [
+            SELECT Id, Name 
+            FROM Account 
+            WHERE Name LIKE :key 
+            LIMIT 10
+        ];
+    }
+
+    // Account details wrapper
+    public class AccountDetails {
+        @AuraEnabled public Id id;
+        @AuraEnabled public String companyName;
+        @AuraEnabled public String dba;
+        @AuraEnabled public String industry;
+        @AuraEnabled public Integer employees;
+        @AuraEnabled public String annualRevenue;
+        @AuraEnabled public String netProfit;
+        @AuraEnabled public String legalEntity;
+        @AuraEnabled public String comment;
+    }
+
+    // Get account details
+    @AuraEnabled(cacheable=true)
+    public static AccountDetails getAccountDetails(Id accountId) {
+        if (accountId == null) return new AccountDetails();
+        Account acc = [
+            SELECT Id, Name, nSBA__DBA__c, Industry, Legal_Entity__c,
+                   NumberOfEmployees, AnnualRevenue, Net_Profit__c, Comments__c
+            FROM Account
+            WHERE Id = :accountId
+            LIMIT 1
+        ];
+        return mapToWrapper(acc);
+    }
+
+    // Prefill from ApplicationForm
+    @AuraEnabled(cacheable=true)
+    public static AccountDetails getAccountDetailsFromAppForm(Id appFormId) {
+        if(appFormId == null) return new AccountDetails();
+        ApplicationForm__c app = [
+            SELECT Id, AccountId 
+            FROM ApplicationForm__c 
+            WHERE Id = :appFormId
+            LIMIT 1
+        ];
+        if(app.AccountId == null) return new AccountDetails();
+        return getAccountDetails(app.AccountId);
+    }
+
+    // Get existing Applicants
+    @AuraEnabled(cacheable=true)
+    public static List<Applicant__c> getApplicantsFromAppForm(Id appFormId) {
+        return [
+            SELECT Id, Name 
+            FROM Applicant__c 
+            WHERE ApplicationForm__c = :appFormId
+        ];
+    }
+
+    // Create new Applicant
+    @AuraEnabled
+    public static Id createApplicant(Id appFormId, AccountDetails accDetails) {
+        Applicant__c app = new Applicant__c();
+        app.ApplicationForm__c = appFormId;
+        app.Company_Name__c = accDetails.companyName;
+        app.DBA__c = accDetails.dba;
+        app.Industry__c = accDetails.industry;
+        app.Employees__c = accDetails.employees;
+        app.Annual_Revenue__c = accDetails.annualRevenue != null ? Decimal.valueOf(accDetails.annualRevenue) : null;
+        app.Net_Profit__c = accDetails.netProfit != null ? Decimal.valueOf(accDetails.netProfit) : null;
+        app.Legal_Entity__c = accDetails.legalEntity;
+        app.Comments__c = accDetails.comment;
+        insert app;
+        return app.Id;
+    }
+
+    // Utility
+    private static AccountDetails mapToWrapper(Account acc) {
+        AccountDetails d = new AccountDetails();
+        d.id            = acc.Id;
+        d.companyName   = acc.Name;
+        d.dba           = acc.nSBA__DBA__c;
+        d.industry      = acc.Industry;
+        d.employees     = acc.NumberOfEmployees;
+        d.annualRevenue = acc.AnnualRevenue != null ? String.valueOf(acc.AnnualRevenue) : null;
+        d.netProfit     = acc.Net_Profit__c != null ? String.valueOf(acc.Net_Profit__c) : null;
+        d.legalEntity   = acc.Legal_Entity__c;
+        d.comment       = acc.Comments__c;
+        return d;
+    }
+}
+
+
+
 <!--
   @description       : 
   @author            : 
