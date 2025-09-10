@@ -1,3 +1,35 @@
+async handleSave() {
+    try {
+        // Always set parent ApplicationFormId
+        this.editData.ApplicationFormId = this.recordId;
+
+        console.log('📤 Saving applicant:', JSON.stringify(this.editData));
+
+        const result = await saveApplicant({ applicant: this.editData });
+
+        this.formData = { ...result };
+        this.editData = { ...result };
+        this.isReadOnly = true;
+
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Success',
+                message: 'Applicant saved successfully',
+                variant: 'success'
+            })
+        );
+    } catch (error) {
+        console.error('❌ Save error:', error);
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Error saving applicant',
+                message: error?.body?.message || error.message,
+                variant: 'error'
+            })
+        );
+    }
+}
+
 public class PartyDetailsController {
 
     // Account search
