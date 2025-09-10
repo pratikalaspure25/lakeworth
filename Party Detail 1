@@ -1,3 +1,62 @@
+ @api recordId;          // ApplicationForm Id (passed from parent/record page)
+    @api formData = {};     // Read-only data
+    @track editData = {};   // Editable form data
+    @track isReadOnly = true;
+
+    handleEdit() {
+        this.editData = { ...this.formData };
+        this.isReadOnly = false;
+    }
+
+    handleCancel() {
+        this.isReadOnly = true;
+    }
+
+    handleInputChange(event) {
+        const field = event.target.dataset.field;
+        this.editData = { ...this.editData, [field]: event.target.value };
+    }
+
+    async handleSave() {
+        try {
+            // attach ApplicationForm Id before sending to Apex
+            this.editData.ApplicationForm__c = this.recordId;
+
+            console.log('Saving applicant:', JSON.stringify(this.editData));
+
+            await saveApplicant({ applicant: this.editData });
+
+            this.formData = { ...this.editData };
+            this.isReadOnly = true;
+
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Success',
+                    message: 'Applicant saved successfully',
+                    variant: 'success'
+                })
+            );
+        } catch (error) {
+            console.error('Save Error:', error);
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Error saving applicant',
+                    message: error?.body?.message || JSON.stringify(error),
+                    variant: 'error'
+                })
+            );
+        }
+    }
+
+   @AuraEnabled
+    public static void saveApplicant(Applicant__c applicant) {
+        // Make sure ApplicationForm__c is required
+        if (applicant.ApplicationForm__c == null) {
+            throw new AuraHandledException('ApplicationForm Id is required.');
+        }
+        upsert applicant;
+    }
+
 async handleSave() {
     try {
         console.log('Sending data to Apex:', JSON.stringify(this.editData));
