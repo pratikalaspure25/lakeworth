@@ -1,3 +1,59 @@
+import saveApplicant from '@salesforce/apex/ApplicantController.saveApplicant';
+
+  @api formData = {};     // Read-only data (comes from parent)
+    @track editData = {};   // Editable data
+    @track isReadOnly = true;
+
+    // Switch to edit mode
+    handleEdit() {
+        this.editData = { ...this.formData }; // clone current data
+        this.isReadOnly = false;
+    }
+
+    // Cancel edit
+    handleCancel() {
+        this.isReadOnly = true;
+    }
+
+    // Update editData as user types
+    handleInputChange(event) {
+        const field = event.target.dataset.field;
+        this.editData = { ...this.editData, [field]: event.target.value };
+    }
+
+    // Save to Apex
+    async handleSave() {
+        try {
+            // send to Apex (make sure editData contains the Applicant Id)
+            await saveApplicant({ applicant: this.editData });
+
+            // update read-only form with new values
+            this.formData = { ...this.editData };
+            this.isReadOnly = true;
+
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Success',
+                    message: 'Applicant updated successfully',
+                    variant: 'success'
+                })
+            );
+        } catch (error) {
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Error saving applicant',
+                    message: error.body?.message || error.message,
+                    variant: 'error'
+                })
+            );
+        }
+    }
+
+ @AuraEnabled
+    public static void saveApplicant(Applicant__c applicant) {
+        upsert applicant;
+    }
+
  <lightning-card title="Borrowers / Guarantors">
 
     <!-- Read Only Form -->
