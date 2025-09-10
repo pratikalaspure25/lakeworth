@@ -1,5 +1,7 @@
 async handleSave() {
     try {
+        console.log('Sending data to Apex:', JSON.stringify(this.editData));
+
         await saveApplicant({ applicant: this.editData });
 
         this.formData = { ...this.editData };
@@ -13,16 +15,18 @@ async handleSave() {
             })
         );
     } catch (error) {
-        console.error('Save Error:', error); // 👈 log error
+        console.error('Save Error:', error);   // 👈 This will show the exact Apex error
+
         this.dispatchEvent(
             new ShowToastEvent({
                 title: 'Error saving applicant',
-                message: error.body?.message || JSON.stringify(error),
+                message: error?.body?.message || JSON.stringify(error),
                 variant: 'error'
             })
         );
     }
 }
+
 
 
 import saveApplicant from '@salesforce/apex/ApplicantController.saveApplicant';
