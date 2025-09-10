@@ -92,6 +92,64 @@
     }
 
 
+<template>
+    <template for:each={applicants} for:item="applicant" for:index="index">
+        <div key={applicant.key} class="slds-box slds-m-around_medium">
+
+            <!-- Account Lookup -->
+            <div class="slds-m-bottom_small">
+                <lightning-input 
+                    label="Search Account"
+                    value={applicant.searchKey}
+                    onchange={handleAccountSearch}
+                    data-index={index}
+                    placeholder="Type account name...">
+                </lightning-input>
+
+                <template if:true={applicant.searchResults}>
+                    <div class="slds-box slds-m-top_x-small">
+                        <template for:each={applicant.searchResults} for:item="acc">
+                            <div key={acc.Id}
+                                class="slds-p-around_x-small slds-border_bottom slds-text-link"
+                                onclick={handleAccountSelect}
+                                data-index={index}
+                                data-id={acc.Id}>
+                                {acc.Name}
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Applicant Fields -->
+            <lightning-input label="Company Name" value={applicant.companyName}
+                data-id="companyName" data-index={index} onchange={handleInputChange}></lightning-input>
+            <lightning-input label="Industry" value={applicant.industry}
+                data-id="industry" data-index={index} onchange={handleInputChange}></lightning-input>
+            <lightning-input label="Employees" value={applicant.employees}
+                data-id="employees" data-index={index} onchange={handleInputChange}></lightning-input>
+            <lightning-input label="Annual Revenue" value={applicant.annualRevenue}
+                data-id="annualRevenue" data-index={index} onchange={handleInputChange}></lightning-input>
+            <lightning-input label="Phone" value={applicant.phoneNumber}
+                data-id="phoneNumber" data-index={index} onchange={handleInputChange}></lightning-input>
+            <lightning-input label="Website" value={applicant.website}
+                data-id="website" data-index={index} onchange={handleInputChange}></lightning-input>
+            <lightning-input label="Address" value={applicant.address}
+                data-id="address" data-index={index} onchange={handleInputChange}></lightning-input>
+
+            <!-- Remove -->
+            <lightning-button variant="destructive" label="Remove Applicant"
+                data-index={index} onclick={removeApplicant}>
+            </lightning-button>
+        </div>
+    </template>
+
+    <!-- Add -->
+    <lightning-button label="Add Applicant" onclick={addApplicant}></lightning-button>
+</template>
+
+
+
 public with sharing class ApplicantController {
     
     // Fetch existing Applicants for given ApplicationForm
