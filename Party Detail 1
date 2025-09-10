@@ -1,3 +1,65 @@
+<lightning-combobox class="slds-size_1-of-2" label="Role" 
+                                    value={newApplicant.Role__c} 
+                                    placeholder="Select Role" 
+                                    options={roleOptions} 
+                                    onchange={handleNewApplicantFieldChange} 
+                                    data-field="Role__c">
+                </lightning-combobox>
+
+  <lightning-combobox class="slds-size_1-of-2" label="Industry" 
+                                    value={newApplicant.Industry__c} 
+                                    placeholder="Select Industry" 
+                                    options={industryOptions} 
+                                    onchange={handleNewApplicantFieldChange} 
+                                    data-field="Industry__c">
+                </lightning-combobox>
+
+  <lightning-combobox class="slds-size_1-of-2" label="Legal Entity" 
+                                    value={newApplicant.Legal_Entity__c} 
+                                    placeholder="Select Legal Entity" 
+                                    options={legalEntityOptions} 
+                                    onchange={handleNewApplicantFieldChange} 
+                                    data-field="Legal_Entity__c">
+                </lightning-combobox>
+
+@wire(getPicklistValues, { recordTypeId: '$objectInfo.data.defaultRecordTypeId', fieldApiName: INDUSTRY_FIELD })
+wiredIndustry({ data }) { if (data) this.industryOptions = data.values; }
+
+@wire(getPicklistValues, { recordTypeId: '$objectInfo.data.defaultRecordTypeId', fieldApiName: LEGAL_ENTITY_FIELD })
+wiredLegalEntity({ data }) { if (data) this.legalEntityOptions = data.values; }
+
+@wire(getPicklistValues, { recordTypeId: '$objectInfo.data.defaultRecordTypeId', fieldApiName: ROLE_FIELD })
+wiredRole({ data }) { if (data) this.roleOptions = data.values; }
+
+handleNewApplicantAccountSelect(event) {
+    const selectedId = event.currentTarget.dataset.id;
+    const selectedAccount = this.newApplicant.searchResults.find(acc => acc.Id === selectedId);
+
+    if (selectedAccount) {
+        // Assign picklist only if value exists in options
+        const industryValue = this.industryOptions.find(opt => opt.value === selectedAccount.Industry)?.value || '';
+        const legalEntityValue = this.legalEntityOptions.find(opt => opt.value === selectedAccount.Legal_Entity__c)?.value || '';
+        const roleValue = this.roleOptions.find(opt => opt.value === selectedAccount.Role__c)?.value || '';
+
+        this.newApplicant = {
+            ...this.newApplicant,
+            AccountId: selectedAccount.Id,
+            Company_Name__c: selectedAccount.Name,
+            DBA__c: selectedAccount.DBA__c || '',
+            Industry__c: industryValue,
+            Employees__c: selectedAccount.NumberOfEmployees || '',
+            Annual_Revenue__c: selectedAccount.AnnualRevenue || '',
+            Net_Profit__c: selectedAccount.Net_Profit__c || '',
+            Legal_Entity__c: legalEntityValue,
+            Role__c: roleValue,
+            Comments__c: ''
+        };
+
+        this.newApplicant.searchResults = [];
+        this.newApplicant.searchKey = selectedAccount.Name;
+    }
+}
+
 <!-- Add Applicant Button -->
     <lightning-button label="Add Applicant" onclick={addApplicant} class="slds-m-top_small"></lightning-button>
 
