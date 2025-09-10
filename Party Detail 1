@@ -1,3 +1,5 @@
+Compilation Failure partyDetails.js:32,2 : LWC1535: Unexpected plugin compilation error: Plugin - lwc, Hook - transform, Cause - SyntaxError: /home/sfdc/tools/sfdc-lwc-compiler/13.33554432.12582912/partyDetails.js: LWC1102: Invalid 'wire' decorator usage. Supported decorators (api, wire, track) should be imported from "lwc" 30 | 31 | // Fetch Account object info > 32 | @wire(getObjectInfo, { | ^ 33 | objectApiName: ACCOUNT_OBJECT 34 | }) 35 | objectInfo;: Source
+
 import { LightningElement, track, wire } from 'lwc';
 import { getObjectInfo, getPicklistValuesByRecordType } from 'lightning/uiObjectInfoApi';
 import ACCOUNT_OBJECT from '@salesforce/schema/Account';
