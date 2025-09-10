@@ -1,3 +1,45 @@
+ <lightning-card title="Borrowers / Guarantors">
+
+        <!-- Account Search -->
+            <!-- <div class="slds-m-around_medium">
+                <lightning-input 
+                    label="Search Account"
+                    type="text"
+                    value={searchKey}
+                    onchange={handleSearchKeyChange}
+                    placeholder="Type account name...">
+                </lightning-input>
+
+                <template if:true={searchResults.length}>
+                    <div class="slds-box slds-m-top_x-small">
+                        <template for:each={searchResults} for:item="acc">
+                            <div key={acc.Id} 
+                                class="slds-p-around_x-small slds-border_bottom" 
+                                onclick={handleAccountSelect} 
+                                data-id={acc.Id}>
+                                {acc.Name}
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div> -->
+
+        <!-- Account Fields (prefill from AppForm / lookup) -->
+        <div class="slds-grid slds-wrap slds-m-around_medium">
+            <lightning-input class="slds-size_1-of-2" label="Company Name" value={formData.companyName} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Role" value={formData.role} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="DBA" value={formData.dba} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Industry" value={formData.industry} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Employees" value={formData.employees} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={formData.annualRevenue} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Net Profit" value={formData.netProfit} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={formData.legalEntity} readonly></lightning-input>
+            <lightning-textarea class="slds-size_1-of-1" label="Comment" value={formData.comment} readonly></lightning-textarea>
+        </div>
+
+    </lightning-card>
+
+
 Compilation Failure partyDetails.js:32,2 : LWC1535: Unexpected plugin compilation error: Plugin - lwc, Hook - transform, Cause - SyntaxError: /home/sfdc/tools/sfdc-lwc-compiler/13.33554432.12582912/partyDetails.js: LWC1102: Invalid 'wire' decorator usage. Supported decorators (api, wire, track) should be imported from "lwc" 30 | 31 | // Fetch Account object info > 32 | @wire(getObjectInfo, { | ^ 33 | objectApiName: ACCOUNT_OBJECT 34 | }) 35 | objectInfo;: Source
 
 import { LightningElement, track, wire } from 'lwc';
