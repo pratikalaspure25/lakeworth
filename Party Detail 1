@@ -1,4 +1,12 @@
- // Fetch picklist values dynamically from Account object
+  @track industryOptions = [];
+    @track legalEntityOptions = [];
+    @track roleOptions = [];
+
+    // Fetch Account object info
+    @wire(getObjectInfo, { objectApiName: ACCOUNT_OBJECT })
+    objectInfo;
+
+    // Fetch picklist values dynamically from Account object
     @wire(getPicklistValuesByRecordType, { objectApiName: ACCOUNT_OBJECT, recordTypeId: '$objectInfo.data.defaultRecordTypeId' })
     wiredPicklistValues({ data, error }) {
         if (data) {
@@ -11,7 +19,6 @@
         }
     }
 }
-
 handleNewApplicantAccountSelect(event) {
     const selectedId = event.currentTarget.dataset.id;
     const selectedAccount = this.newApplicant.searchResults.find(acc => acc.Id === selectedId);
