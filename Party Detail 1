@@ -1,3 +1,84 @@
+<template if:true={applicants.length}>
+    <template for:each={applicants} for:item="applicant" for:index="index">
+        <div key={applicant.Id} class="slds-box slds-m-around_medium">
+            <lightning-card title="Borrower / Guarantor">
+                <div class="slds-grid slds-wrap slds-m-around_medium">
+                    <lightning-input class="slds-size_1-of-2" label="Company Name"
+                                     value={applicant.Company_Name__c} 
+                                     onchange={handleExistingApplicantChange} data-id={applicant.Id} data-field="Company_Name__c">
+                    </lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="DBA" 
+                                     value={applicant.DBA__c} 
+                                     onchange={handleExistingApplicantChange} data-id={applicant.Id} data-field="DBA__c">
+                    </lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Industry" 
+                                     value={applicant.Industry__c} 
+                                     onchange={handleExistingApplicantChange} data-id={applicant.Id} data-field="Industry__c">
+                    </lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Employees" 
+                                     value={applicant.Employees__c} 
+                                     onchange={handleExistingApplicantChange} data-id={applicant.Id} data-field="Employees__c">
+                    </lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Annual Revenue" 
+                                     value={applicant.Annual_Revenue__c} 
+                                     onchange={handleExistingApplicantChange} data-id={applicant.Id} data-field="Annual_Revenue__c">
+                    </lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Net Profit" 
+                                     value={applicant.Net_Profit__c} 
+                                     onchange={handleExistingApplicantChange} data-id={applicant.Id} data-field="Net_Profit__c">
+                    </lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Legal Entity" 
+                                     value={applicant.Legal_Entity__c} 
+                                     onchange={handleExistingApplicantChange} data-id={applicant.Id} data-field="Legal_Entity__c">
+                    </lightning-input>
+                    <lightning-textarea class="slds-size_1-of-1" label="Comments" 
+                                        value={applicant.Comments__c} 
+                                        onchange={handleExistingApplicantChange} data-id={applicant.Id} data-field="Comments__c">
+                    </lightning-textarea>
+                </div>
+            </lightning-card>
+        </div>
+    </template>
+</template>
+
+import searchAccounts from '@salesforce/apex/ApplicantController.searchAccounts';
+
+handleNewApplicantSearchKeyChange(event) {
+    this.newApplicant.searchKey = event.target.value;
+
+    if(this.newApplicant.searchKey.length > 2){
+        searchAccounts({ searchKey: this.newApplicant.searchKey })
+        .then(result => {
+            this.newApplicant.searchResults = result;
+        })
+        .catch(error => {
+            this.newApplicant.searchResults = [];
+            console.error(error);
+        });
+    } else {
+        this.newApplicant.searchResults = [];
+    }
+}
+
+handleNewApplicantAccountSelect(event) {
+    const selectedId = event.currentTarget.dataset.id;
+    const selectedAccount = this.newApplicant.searchResults.find(acc => acc.Id === selectedId);
+    if(selectedAccount) {
+        this.newApplicant.Company_Name__c = selectedAccount.Name;
+        this.newApplicant.Industry__c = selectedAccount.Industry;
+        this.newApplicant.Employees__c = selectedAccount.NumberOfEmployees;
+        this.newApplicant.Annual_Revenue__c = selectedAccount.AnnualRevenue;
+        this.newApplicant.Net_Profit__c = selectedAccount.Net_Profit__c;
+        this.newApplicant.Legal_Entity__c = selectedAccount.Legal_Entity__c;
+        this.newApplicant.AccountId = selectedAccount.Id;
+
+        // Clear search results
+        this.newApplicant.searchResults = [];
+        this.newApplicant.searchKey = selectedAccount.Name;
+    }
+}
+
+
  <!-- Existing Applicants -->
     <template if:true={applicants.length}>
         <template for:each={applicants} for:item="applicant">
