@@ -1,3 +1,96 @@
+<lightning-card title="Borrowers / Guarantors">
+
+    <!-- Read Only Form -->
+    <template if:true={isReadOnly}>
+        <div class="slds-grid slds-wrap slds-m-around_medium">
+            <lightning-input class="slds-size_1-of-2" label="Company Name" value={formData.companyName} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Role" value={formData.role} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="DBA" value={formData.dba} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Industry" value={formData.industry} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Employees" value={formData.employees} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={formData.annualRevenue} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Net Profit" value={formData.netProfit} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={formData.legalEntity} readonly></lightning-input>
+            <lightning-textarea class="slds-size_1-of-1" label="Comment" value={formData.comment} readonly></lightning-textarea>
+        </div>
+
+        <div class="slds-m-around_medium">
+            <lightning-button variant="brand" label="Edit" onclick={handleEdit}></lightning-button>
+        </div>
+    </template>
+
+    <!-- Editable Form -->
+    <template if:false={isReadOnly}>
+        <div class="slds-grid slds-wrap slds-m-around_medium">
+            <lightning-input class="slds-size_1-of-2" label="Company Name" value={editData.companyName} onchange={handleInputChange} data-field="companyName"></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Role" value={editData.role} onchange={handleInputChange} data-field="role"></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="DBA" value={editData.dba} onchange={handleInputChange} data-field="dba"></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Industry" value={editData.industry} onchange={handleInputChange} data-field="industry"></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Employees" value={editData.employees} onchange={handleInputChange} data-field="employees"></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={editData.annualRevenue} onchange={handleInputChange} data-field="annualRevenue"></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Net Profit" value={editData.netProfit} onchange={handleInputChange} data-field="netProfit"></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={editData.legalEntity} onchange={handleInputChange} data-field="legalEntity"></lightning-input>
+            <lightning-textarea class="slds-size_1-of-1" label="Comment" value={editData.comment} onchange={handleInputChange} data-field="comment"></lightning-textarea>
+        </div>
+
+        <div class="slds-m-around_medium">
+            <lightning-button variant="neutral" label="Cancel" onclick={handleCancel}></lightning-button>
+            <lightning-button class="slds-m-left_small" variant="brand" label="Save" onclick={handleSave}></lightning-button>
+        </div>
+    </template>
+
+</lightning-card>
+
+
+ @api formData; // comes from parent (read-only)
+    @track editData = {}; // for editable form
+    @track isReadOnly = true;
+
+    handleEdit() {
+        // copy formData into editData for editing
+        this.editData = { ...this.formData };
+        this.isReadOnly = false;
+    }
+
+    handleCancel() {
+        this.isReadOnly = true;
+    }
+
+    handleInputChange(event) {
+        const field = event.target.dataset.field;
+        this.editData[field] = event.target.value;
+    }
+
+    async handleSave() {
+        try {
+            // Call Apex to save/update Applicant
+            await saveApplicant({ applicant: this.editData });
+
+            // refresh UI
+            this.formData = { ...this.editData };
+            this.isReadOnly = true;
+
+            // Show toast
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Success',
+                    message: 'Applicant updated successfully',
+                    variant: 'success'
+                })
+            );
+        } catch (error) {
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Error updating record',
+                    message: error.body.message,
+                    variant: 'error'
+                })
+            );
+        }
+    }
+
+
+
   <lightning-card title="Borrowers / Guarantors">
 
         <!-- Read-only view -->
