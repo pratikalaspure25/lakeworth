@@ -1,3 +1,101 @@
+public class PartyDetailsController {
+
+    // Account search
+    @AuraEnabled(cacheable=true)
+    public static List<Account> searchAccounts(String searchKey) {
+        String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
+        return [
+            SELECT Id, Name 
+            FROM Account 
+            WHERE Name LIKE :key 
+            LIMIT 10
+        ];
+    }
+
+    // Account details wrapper
+    public class AccountDetails {
+        @AuraEnabled public Id id;
+        @AuraEnabled public String companyName;
+        @AuraEnabled public String dba;
+        @AuraEnabled public String industry;
+        @AuraEnabled public Integer employees;
+        @AuraEnabled public String annualRevenue;
+        @AuraEnabled public String netProfit;
+        @AuraEnabled public String legalEntity;
+        @AuraEnabled public String comment;
+    }
+
+    // Get account details
+    @AuraEnabled(cacheable=true)
+    public static AccountDetails getAccountDetails(Id accountId) {
+        if (accountId == null) return new AccountDetails();
+        Account acc = [
+            SELECT Id, Name, nSBA__DBA__c, Industry, Legal_Entity__c,
+                   NumberOfEmployees, AnnualRevenue, Net_Profit__c, Comments__c
+            FROM Account
+            WHERE Id = :accountId
+            LIMIT 1
+        ];
+        return mapToWrapper(acc);
+    }
+
+    // Prefill from ApplicationForm
+    @AuraEnabled(cacheable=true)
+    public static AccountDetails getAccountDetailsFromAppForm(Id appFormId) {
+        if(appFormId == null) return new AccountDetails();
+        ApplicationForm app = [
+            SELECT Id, AccountId 
+            FROM ApplicationForm
+            WHERE Id = :appFormId
+            LIMIT 1
+        ];
+        if(app.AccountId == null) return new AccountDetails();
+        return getAccountDetails(app.AccountId);
+    }
+
+    // Get existing Applicants
+    @AuraEnabled(cacheable=true)
+    public static List<Applicant> getApplicantsFromAppForm(Id appFormId) {
+        return [
+            SELECT Id, Name 
+            FROM Applicant 
+            WHERE ApplicationForm = :appFormId
+        ];
+    }
+
+    // Create new Applicant
+    @AuraEnabled
+    public static Id createApplicant(Id appFormId, AccountDetails accDetails) {
+        Applicant app = new Applicant();
+       // app.ApplicationForm__c = appFormId;
+        app.Company_Name__c = accDetails.companyName;
+        app.DBA__c = accDetails.dba;
+        app.Industry__c = accDetails.industry;
+        app.Employees__c = accDetails.employees;
+        app.Annual_Revenue__c = accDetails.annualRevenue != null ? Decimal.valueOf(accDetails.annualRevenue) : null;
+        app.Net_Profit__c = accDetails.netProfit != null ? Decimal.valueOf(accDetails.netProfit) : null;
+        app.Legal_Entity__c = accDetails.legalEntity;
+        app.Comments__c = accDetails.comment;
+        insert app;
+        return app.Id;
+    }
+
+    // Utility
+    private static AccountDetails mapToWrapper(Account acc) {
+        AccountDetails d = new AccountDetails();
+        d.id            = acc.Id;
+        d.companyName   = acc.Name;
+        d.dba           = acc.nSBA__DBA__c;
+        d.industry      = acc.Industry;
+        d.employees     = acc.NumberOfEmployees;
+        d.annualRevenue = acc.AnnualRevenue != null ? String.valueOf(acc.AnnualRevenue) : null;
+        d.netProfit     = acc.Net_Profit__c != null ? String.valueOf(acc.Net_Profit__c) : null;
+        d.legalEntity   = acc.Legal_Entity__c;
+        d.comment       = acc.Comments__c;
+        return d;
+    }
+}
+
 <!-- partyDetails.html -->
 <template>
     <lightning-card title="Borrowers / Guarantors">
