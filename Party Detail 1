@@ -1,3 +1,240 @@
+public with sharing class ApplicantController {
+    
+    // Fetch existing Applicants for given ApplicationForm
+    @AuraEnabled(cacheable=true)
+    public static List<Applicant__c> getApplicants(Id applicationFormId) {
+        return [
+            SELECT Id, Name, Account__c, Account__r.Name, Account__r.Industry,
+                   Account__r.AnnualRevenue, Account__r.NumberOfEmployees,
+                   Account__r.Phone, Account__r.Website, Account__r.BillingStreet
+            FROM Applicant__c
+            WHERE ApplicationForm__c = :applicationFormId
+        ];
+    }
+
+    // Search accounts
+    @AuraEnabled(cacheable=true)
+    public static List<Account> searchAccounts(String searchKey) {
+        return [
+            SELECT Id, Name, Industry, AnnualRevenue, NumberOfEmployees,
+                   Phone, Website, BillingStreet
+            FROM Account
+            WHERE Name LIKE :('%' + searchKey + '%')
+            LIMIT 10
+        ];
+    }
+
+    // Create or update Applicant
+    @AuraEnabled
+    public static void upsertApplicants(List<Applicant__c> applicants) {
+        upsert applicants;
+    }
+}
+
+
+
+import { LightningElement, api, track } from 'lwc';
+import getApplicants from '@salesforce/apex/ApplicantController.getApplicants';
+import searchAccounts from '@salesforce/apex/ApplicantController.searchAccounts';
+import upsertApplicants from '@salesforce/apex/ApplicantController.upsertApplicants';
+
+export default class ApplicantManager extends LightningElement {
+    @api recordId; // ApplicationFormId
+    @track applicants = [];
+
+    connectedCallback() {
+        this.loadApplicants();
+    }
+
+    // Load applicants from backend
+    loadApplicants() {
+        getApplicants({ applicationFormId: this.recordId })
+            .then(result => {
+                this.applicants = result.map(app => ({
+                    id: app.Id,
+                    accountId: app.Account__c,
+                    companyName: app.Account__r?.Name,
+                    industry: app.Account__r?.Industry,
+                    employees: app.Account__r?.NumberOfEmployees,
+                    annualRevenue: app.Account__r?.AnnualRevenue,
+                    phoneNumber: app.Account__r?.Phone,
+                    website: app.Account__r?.Website,
+                    address: app.Account__r?.BillingStreet,
+                    searchKey: '',
+                    searchResults: []
+                }));
+            })
+            .catch(error => console.error(error));
+    }
+
+    // Add empty applicant row
+    addApplicant() {
+        this.applicants = [
+            ...this.applicants,
+            {
+                id: null,
+                accountId: null,
+                companyName: '',
+                industry: '',
+                employees: '',
+                annualRevenue: '',
+                phoneNumber: '',
+                website: '',
+                address: '',
+                searchKey: '',
+                searchResults: []
+            }
+        ];
+    }
+
+    // Remove row
+    removeApplicant(event) {
+        const index = event.target.dataset.index;
+        this.applicants.splice(index, 1);
+        this.applicants = [...this.applicants];
+    }
+
+    // Input change
+    handleInputChange(event) {
+        const index = event.target.dataset.index;
+        const field = event.target.dataset.id;
+        this.applicants[index][field] = event.target.value;
+    }
+
+    // Account search
+    handleAccountSearch(event) {
+        const index = event.target.dataset.index;
+        const searchKey = event.target.value;
+        this.applicants[index].searchKey = searchKey;
+
+        if (searchKey.length > 2) {
+            searchAccounts({ searchKey })
+                .then(result => {
+                    this.applicants[index].searchResults = result;
+                    this.applicants = [...this.applicants];
+                })
+                .catch(error => console.error(error));
+        } else {
+            this.applicants[index].searchResults = [];
+            this.applicants = [...this.applicants];
+        }
+    }
+
+    // When Account selected
+    handleAccountSelect(event) {
+        const index = event.target.dataset.index;
+        const accId = event.target.dataset.id;
+        const acc = this.applicants[index].searchResults.find(a => a.Id === accId);
+
+        this.applicants[index] = {
+            ...this.applicants[index],
+            accountId: acc.Id,
+            companyName: acc.Name,
+            industry: acc.Industry,
+            employees: acc.NumberOfEmployees,
+            annualRevenue: acc.AnnualRevenue,
+            phoneNumber: acc.Phone,
+            website: acc.Website,
+            address: acc.BillingStreet,
+            searchResults: []
+        };
+    }
+
+    // Save all applicants
+    saveApplicants() {
+        const records = this.applicants.map(app => ({
+            Id: app.id,
+            ApplicationForm__c: this.recordId,
+            Account__c: app.accountId
+        }));
+
+        upsertApplicants({ applicants: records })
+            .then(() => {
+                this.loadApplicants();
+            })
+            .catch(error => console.error(error));
+    }
+}
+
+
+
+   <template for:each={applicants} for:item="applicant" for:index="index">
+        <div key={index} class="slds-box slds-m-around_medium">
+
+            <!-- Account Lookup -->
+            <lightning-input 
+                label="Search Account"
+                value={applicant.searchKey}
+                onchange={handleAccountSearch}
+                data-index={index}
+                placeholder="Type account name...">
+            </lightning-input>
+
+            <template if:true={applicant.searchResults}>
+                <div class="slds-box slds-m-top_x-small">
+                    <template for:each={applicant.searchResults} for:item="acc">
+                        <div key={acc.Id}
+                            class="slds-p-around_x-small slds-border_bottom slds-text-link"
+                            onclick={handleAccountSelect}
+                            data-index={index}
+                            data-id={acc.Id}>
+                            {acc.Name}
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+            <!-- Editable Fields -->
+            <div class="slds-grid slds-grid_align-start slds-p-around_xx-small">
+                <lightning-input label="Company Name" value={applicant.companyName}
+                    data-id="companyName" data-index={index} onchange={handleInputChange}
+                    class="slds-size_1-of-2"></lightning-input>
+
+                <lightning-input label="Industry" value={applicant.industry}
+                    data-id="industry" data-index={index} onchange={handleInputChange}
+                    class="slds-size_1-of-2"></lightning-input>
+            </div>
+
+            <div class="slds-grid slds-grid_align-start slds-p-around_xx-small">
+                <lightning-input label="Employees" value={applicant.employees}
+                    data-id="employees" data-index={index} onchange={handleInputChange}
+                    class="slds-size_1-of-2"></lightning-input>
+
+                <lightning-input label="Annual Revenue" value={applicant.annualRevenue}
+                    data-id="annualRevenue" data-index={index} onchange={handleInputChange}
+                    class="slds-size_1-of-2"></lightning-input>
+            </div>
+
+            <div class="slds-grid slds-grid_align-start slds-p-around_xx-small">
+                <lightning-input label="Phone" value={applicant.phoneNumber}
+                    data-id="phoneNumber" data-index={index} onchange={handleInputChange}
+                    class="slds-size_1-of-2"></lightning-input>
+
+                <lightning-input label="Website" value={applicant.website}
+                    data-id="website" data-index={index} onchange={handleInputChange}
+                    class="slds-size_1-of-2"></lightning-input>
+            </div>
+
+            <div class="slds-grid slds-grid_align-start slds-p-around_xx-small">
+                <lightning-input label="Address" value={applicant.address}
+                    data-id="address" data-index={index} onchange={handleInputChange}
+                    class="slds-size_1-of-1"></lightning-input>
+            </div>
+
+            <!-- Remove Applicant Button -->
+            <lightning-button variant="destructive" label="Remove Applicant"
+                data-index={index} onclick={removeApplicant} class="slds-m-top_small">
+            </lightning-button>
+        </div>
+    </template>
+
+    <!-- Add Applicant Button -->
+    <lightning-button label="Add Applicant" onclick={addApplicant} class="slds-m-top_medium"></lightning-button>
+    <lightning-button variant="brand" label="Save All" onclick={saveApplicants} class="slds-m-top_medium"></lightning-button>
+</template>
+
+
+
 <template>
     <!-- Account Search -->
     <lightning-input 
