@@ -1,3 +1,179 @@
+<template if:true={applicants.length}>
+    <template for:each={applicants} for:item="applicant" for:index="index">
+        <div key={applicant.Id} class="slds-box slds-m-around_medium">
+            <lightning-card title="Borrowers / Guarantors">
+
+                <!-- Account Search Input -->
+                <template if:false={applicant.AccountId}>
+                    <div class="slds-m-around_medium">
+                        <lightning-input 
+                            label="Select Existing Business Relationship Record"
+                            type="text"
+                            value={applicant.searchKey}
+                            data-id={applicant.Id}
+                            onchange={handleApplicantSearchKeyChange}
+                            placeholder="Type account name..."
+                            class="slds-size_1-of-1">
+                        </lightning-input>
+
+                        <template if:true={applicant.searchResults && applicant.searchResults.length}>
+                            <div class="slds-box slds-m-top_x-small">
+                                <template for:each={applicant.searchResults} for:item="acc">
+                                    <div key={acc.Id} class="slds-p-around_x-small slds-border_bottom" 
+                                         onclick={handleApplicantAccountSelect} 
+                                         data-applicant-id={applicant.Id} 
+                                         data-id={acc.Id}>
+                                        {acc.Name}
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Applicant Details -->
+                <div class="slds-grid slds-wrap slds-m-around_medium">
+                    <lightning-input class="slds-size_1-of-2" 
+                                     label="Company Name" 
+                                     value={applicant.Company_Name__c} 
+                                     data-id={applicant.Id} 
+                                     data-field="Company_Name__c"
+                                     onchange={handleApplicantChange}>
+                    </lightning-input>
+
+                    <lightning-input class="slds-size_1-of-2" 
+                                     label="DBA" 
+                                     value={applicant.DBA__c} 
+                                     data-id={applicant.Id} 
+                                     data-field="DBA__c"
+                                     onchange={handleApplicantChange}>
+                    </lightning-input>
+
+                    <lightning-input class="slds-size_1-of-2" 
+                                     label="Industry" 
+                                     value={applicant.Industry__c} 
+                                     data-id={applicant.Id} 
+                                     data-field="Industry__c"
+                                     onchange={handleApplicantChange}>
+                    </lightning-input>
+
+                    <lightning-input class="slds-size_1-of-2" 
+                                     type="number"
+                                     label="Employees" 
+                                     value={applicant.Employees__c} 
+                                     data-id={applicant.Id} 
+                                     data-field="Employees__c"
+                                     onchange={handleApplicantChange}>
+                    </lightning-input>
+
+                    <lightning-input class="slds-size_1-of-2" 
+                                     label="Annual Revenue" 
+                                     value={applicant.Annual_Revenue__c} 
+                                     data-id={applicant.Id} 
+                                     data-field="Annual_Revenue__c"
+                                     onchange={handleApplicantChange}>
+                    </lightning-input>
+
+                    <lightning-input class="slds-size_1-of-2" 
+                                     label="Net Profit" 
+                                     value={applicant.Net_Profit__c} 
+                                     data-id={applicant.Id} 
+                                     data-field="Net_Profit__c"
+                                     onchange={handleApplicantChange}>
+                    </lightning-input>
+
+                    <lightning-input class="slds-size_1-of-2" 
+                                     label="Legal Entity" 
+                                     value={applicant.Legal_Entity__c} 
+                                     data-id={applicant.Id} 
+                                     data-field="Legal_Entity__c"
+                                     onchange={handleApplicantChange}>
+                    </lightning-input>
+
+                    <lightning-textarea class="slds-size_1-of-1" 
+                                        label="Comment" 
+                                        value={applicant.Comments__c} 
+                                        data-id={applicant.Id} 
+                                        data-field="Comments__c"
+                                        onchange={handleApplicantChange}>
+                    </lightning-textarea>
+                </div>
+
+            </lightning-card>
+
+            <!-- Remove Applicant -->
+            <lightning-button variant="destructive" 
+                              label="Remove Applicant" 
+                              data-id={applicant.Id} 
+                              onclick={removeApplicant}
+                              class="slds-m-top_small">
+            </lightning-button>
+        </div>
+    </template>
+</template>
+
+handleApplicantSearchKeyChange(event) {
+    const applicantId = event.target.dataset.id;
+    const value = event.target.value;
+
+    this.applicants = this.applicants.map(app => {
+        if (app.Id === applicantId) {
+            return { ...app, searchKey: value };
+        }
+        return app;
+    });
+
+    if (value.length > 1) {
+        this.findAccountsForApplicant(applicantId, value);
+    }
+}
+
+async findAccountsForApplicant(applicantId, searchKey) {
+    try {
+        const results = await searchAccounts({ searchKey });
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                return { ...app, searchResults: results };
+            }
+            return app;
+        });
+    } catch (error) {
+        console.error('Error searching accounts for applicant:', error);
+    }
+}
+
+async handleApplicantAccountSelect(event) {
+    const applicantId = event.currentTarget.dataset.applicantId;
+    const accountId = event.currentTarget.dataset.id;
+
+    try {
+        const details = await getAccountDetails({ accountId });
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                return { 
+                    ...app, 
+                    AccountId: accountId,
+                    Company_Name__c: details.companyName,
+                    DBA__c: details.dba,
+                    Industry__c: details.industry,
+                    Employees__c: details.employees,
+                    Annual_Revenue__c: details.annualRevenue,
+                    Net_Profit__c: details.netProfit,
+                    Legal_Entity__c: details.legalEntity,
+                    Comments__c: details.comment,
+                    searchResults: []
+                };
+            }
+            return app;
+        });
+    } catch (error) {
+        console.error('Error fetching account details for applicant:', error);
+    }
+}
+
+
+
+
  <template for:each={applicants} for:item="applicant" for:index="index">
         <div key={applicant.key} class="slds-box slds-m-around_medium">
             <lightning-card title="Borrowers / Guarantors">
