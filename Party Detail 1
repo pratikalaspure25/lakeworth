@@ -1,3 +1,30 @@
+async handleSave() {
+    try {
+        await saveApplicant({ applicant: this.editData });
+
+        this.formData = { ...this.editData };
+        this.isReadOnly = true;
+
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Success',
+                message: 'Applicant updated successfully',
+                variant: 'success'
+            })
+        );
+    } catch (error) {
+        console.error('Save Error:', error); // 👈 log error
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Error saving applicant',
+                message: error.body?.message || JSON.stringify(error),
+                variant: 'error'
+            })
+        );
+    }
+}
+
+
 import saveApplicant from '@salesforce/apex/ApplicantController.saveApplicant';
 
   @api formData = {};     // Read-only data (comes from parent)
