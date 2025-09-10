@@ -1,3 +1,143 @@
+ <!-- Existing Applicants -->
+    <template if:true={applicants.length}>
+        <template for:each={applicants} for:item="applicant">
+            <div key={applicant.Id} class="slds-box slds-m-around_medium">
+                <lightning-card title="Borrower / Guarantor">
+                    <!-- Account info prefilled -->
+                    <div class="slds-grid slds-wrap slds-m-around_medium">
+                        <lightning-input class="slds-size_1-of-2" label="Company Name" value={applicant.Company_Name__c} disabled>
+                        </lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="DBA" value={applicant.DBA__c} disabled>
+                        </lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Industry" value={applicant.Industry__c} disabled>
+                        </lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Employees" value={applicant.Employees__c} disabled>
+                        </lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={applicant.Annual_Revenue__c} disabled>
+                        </lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Net Profit" value={applicant.Net_Profit__c} disabled>
+                        </lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={applicant.Legal_Entity__c} disabled>
+                        </lightning-input>
+                        <lightning-textarea class="slds-size_1-of-1" label="Comments" value={applicant.Comments__c} disabled>
+                        </lightning-textarea>
+                    </div>
+                </lightning-card>
+            </div>
+        </template>
+    </template>
+
+    <!-- Add Applicant Button -->
+    <lightning-button label="Add Applicant" onclick={addApplicant} class="slds-m-top_small"></lightning-button>
+
+    <!-- New Applicant Section -->
+    <template if:true={newApplicant}>
+        <div class="slds-box slds-m-around_medium">
+            <lightning-card title="New Applicant">
+                <!-- Account Lookup -->
+                <lightning-input label="Search Account" type="text" value={newApplicant.searchKey} onchange={handleNewApplicantSearchKeyChange} placeholder="Type account name...">
+                </lightning-input>
+                <template if:true={newApplicant.searchResults}>
+                    <div class="slds-box slds-m-top_x-small">
+                        <template for:each={newApplicant.searchResults} for:item="acc">
+                            <div key={acc.Id} class="slds-p-around_x-small slds-border_bottom" onclick={handleNewApplicantAccountSelect} data-id={acc.Id}>
+                                {acc.Name}
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Applicant Details -->
+                <div class="slds-grid slds-wrap slds-m-around_medium">
+                    <lightning-input class="slds-size_1-of-2" label="Company Name" value={newApplicant.Company_Name__c} disabled></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="DBA" value={newApplicant.DBA__c} disabled></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Industry" value={newApplicant.Industry__c} disabled></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Employees" value={newApplicant.Employees__c} disabled></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={newApplicant.Annual_Revenue__c} disabled></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Net Profit" value={newApplicant.Net_Profit__c} disabled></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={newApplicant.Legal_Entity__c} disabled></lightning-input>
+                    <lightning-textarea class="slds-size_1-of-1" label="Comments" value={newApplicant.Comments__c} disabled></lightning-textarea>
+                </div>
+            </lightning-card>
+        </div>
+    </template>
+
+import { LightningElement, track, api } from 'lwc';
+import getApplicantsFromAppForm from '@salesforce/apex/PartyDetailsController.getApplicantsFromAppForm';
+import searchAccounts from '@salesforce/apex/PartyDetailsController.searchAccounts';
+import getAccountDetails from '@salesforce/apex/PartyDetailsController.getAccountDetails';
+import createApplicant from '@salesforce/apex/PartyDetailsController.createApplicant';
+
+export default class PartyDetails extends LightningElement {
+    @api recordId;
+    @track applicants = [];
+    @track newApplicant;
+
+    connectedCallback() {
+        this.loadApplicants();
+    }
+
+    async loadApplicants() {
+        try {
+            this.applicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
+        } catch (error) {
+            console.error('Error fetching applicants', error);
+        }
+    }
+
+    addApplicant() {
+        this.newApplicant = {
+            searchKey: '',
+            searchResults: [],
+            Company_Name__c: '',
+            DBA__c: '',
+            Industry__c: '',
+            Employees__c: null,
+            Annual_Revenue__c: '',
+            Net_Profit__c: '',
+            Legal_Entity__c: '',
+            Comments__c: ''
+        };
+    }
+
+    handleNewApplicantSearchKeyChange(event) {
+        const searchKey = event.target.value;
+        this.newApplicant.searchKey = searchKey;
+        if (searchKey.length > 1) {
+            this.findAccounts(searchKey);
+        } else {
+            this.newApplicant.searchResults = [];
+        }
+    }
+
+    async findAccounts(searchKey) {
+        try {
+            const results = await searchAccounts({ searchKey });
+            this.newApplicant.searchResults = results;
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    async handleNewApplicantAccountSelect(event) {
+        const accountId = event.currentTarget.dataset.id;
+        this.newApplicant.searchResults = [];
+        try {
+            const details = await getAccountDetails({ accountId });
+            this.newApplicant = { ...this.newApplicant, ...details, AccountId: accountId };
+            // Optionally, save immediately
+            await createApplicant({ appFormId: this.recordId, accDetails: details });
+            this.loadApplicants(); // refresh list
+            this.newApplicant = null; // hide new applicant form
+        } catch (error) {
+            console.error(error);
+        }
+    }
+}
+
+
+
+
 <template if:true={applicants.length}>
     <template for:each={applicants} for:item="applicant" for:index="index">
         <div key={applicant.Id} class="slds-box slds-m-around_medium">
