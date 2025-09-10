@@ -1,3 +1,63 @@
+public with sharing class PartyDetailsController {
+
+    // Applicant wrapper
+    public class ApplicantDetails {
+        @AuraEnabled public Id id;
+        @AuraEnabled public String firstName;
+        @AuraEnabled public String lastName;
+        @AuraEnabled public String email;
+        @AuraEnabled public String phone;
+        @AuraEnabled public String role; // Borrower/Guarantor
+    }
+
+    @AuraEnabled(cacheable=true)
+    public static List<ApplicantDetails> getApplicantsFromAppForm(Id appFormId) {
+        List<ApplicantDetails> result = new List<ApplicantDetails>();
+
+        if(appFormId == null) return result;
+
+        for(Applicant app : [
+            SELECT Id, FirstName, LastName, Email, Phone, Role__c
+            FROM Applicant
+            WHERE ApplicationFormId = :appFormId
+        ]) {
+            ApplicantDetails d = new ApplicantDetails();
+            d.id        = app.Id;
+            d.firstName = app.FirstName;
+            d.lastName  = app.LastName;
+            d.email     = app.Email;
+            d.phone     = app.Phone;
+            d.role      = app.Role__c;
+            result.add(d);
+        }
+        return result;
+    }
+}
+
+ @api recordId; // ApplicationForm Id (Loan Request Id)
+    @track applicants = [];
+
+    @wire(getApplicantsFromAppForm, { appFormId: '$recordId' })
+    wiredApplicants({ error, data }) {
+        if (data) {
+            this.applicants = data;
+        } else if (error) {
+            console.error('Error fetching applicants:', error);
+        }
+    }
+
+    removeApplicant(event) {
+        const index = event.target.dataset.index;
+        this.applicants.splice(index, 1);
+        this.applicants = [...this.applicants];
+    }
+
+    addApplicant() {
+        this.applicants = [...this.applicants, {
+            id: null, firstName: '', lastName: '', email: '', phone: '', role: ''
+        }];
+    }
+
 public class PartyDetailsController {
 
     // Account search
