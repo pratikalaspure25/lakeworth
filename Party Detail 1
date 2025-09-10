@@ -1,3 +1,32 @@
+import { LightningElement, track, wire } from 'lwc';
+import { getObjectInfo, getPicklistValuesByRecordType } from 'lightning/uiObjectInfoApi';
+import ACCOUNT_OBJECT from '@salesforce/schema/Account';
+
+export default class AddApplicantForm extends LightningElement {
+    @track newApplicant = {};
+    @track industryOptions = [];
+    @track legalEntityOptions = [];
+    @track roleOptions = [];
+
+    // Fetch Account object info
+    @wire(getObjectInfo, { objectApiName: ACCOUNT_OBJECT })
+    objectInfo;
+
+    // Fetch picklist values dynamically from Account object
+    @wire(getPicklistValuesByRecordType, { objectApiName: ACCOUNT_OBJECT, recordTypeId: '$objectInfo.data.defaultRecordTypeId' })
+    wiredPicklistValues({ data, error }) {
+        if (data) {
+            this.industryOptions = data.picklistFieldValues.Industry.values;
+            this.legalEntityOptions = data.picklistFieldValues.Legal_Entity__c.values;
+            this.roleOptions = data.picklistFieldValues.Role__c.values;
+        }
+        if (error) {
+            console.error(error);
+        }
+    }
+}
+
+
   @track industryOptions = [];
     @track legalEntityOptions = [];
     @track roleOptions = [];
