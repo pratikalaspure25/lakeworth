@@ -1,3 +1,63 @@
+<template>
+    <!-- Account Search -->
+    <lightning-input 
+        label="Select Existing Business Relationship Record"
+        value={searchKey}
+        onchange={handleSearchKeyChange}
+        placeholder="Type account name..."
+    ></lightning-input>
+
+    <template if:true={searchResults.length}>
+        <div class="slds-box slds-m-top_x-small">
+            <template for:each={searchResults} for:item="acc">
+                <div key={acc.Id} 
+                     class="slds-p-around_x-small slds-border_bottom slds-text-link"
+                     data-id={acc.Id}
+                     onclick={handleAccountSelect}>
+                    {acc.Name}
+                </div>
+            </template>
+        </div>
+    </template>
+
+    <!-- Editable Applicant Details -->
+    <template for:each={applicants} for:item="app" for:index="index">
+        <lightning-card key={app.Id} title="Applicant Details">
+            <div class="slds-p-around_medium">
+                <lightning-input label="Company Name" name="Company_Name__c"
+                    value={app.Company_Name__c} data-index={index}
+                    onchange={handleInputChange}></lightning-input>
+                <lightning-input label="DBA" name="DBA__c"
+                    value={app.DBA__c} data-index={index}
+                    onchange={handleInputChange}></lightning-input>
+                <lightning-input label="Industry" name="Industry__c"
+                    value={app.Industry__c} data-index={index}
+                    onchange={handleInputChange}></lightning-input>
+                <lightning-input label="Employees" type="number" name="Employees__c"
+                    value={app.Employees__c} data-index={index}
+                    onchange={handleInputChange}></lightning-input>
+                <lightning-input label="Annual Revenue" type="number" name="Annual_Revenue__c"
+                    value={app.Annual_Revenue__c} data-index={index}
+                    onchange={handleInputChange}></lightning-input>
+                <lightning-input label="Net Profit" type="number" name="Net_Profit__c"
+                    value={app.Net_Profit__c} data-index={index}
+                    onchange={handleInputChange}></lightning-input>
+                <lightning-input label="Company Address" name="Company_Address__c"
+                    value={app.Company_Address__c} data-index={index}
+                    onchange={handleInputChange}></lightning-input>
+                <lightning-textarea label="Comment" name="Comment__c"
+                    value={app.Comment__c} data-index={index}
+                    onchange={handleInputChange}></lightning-textarea>
+            </div>
+        </lightning-card>
+    </template>
+
+    <!-- Save button -->
+    <lightning-button variant="brand" label="Save Applicants" 
+        onclick={saveChanges} class="slds-m-top_medium"></lightning-button>
+</template>
+
+
 <lightning-card title="Borrowers / Guarantors">
 
     <!-- Account Search Input for adding new applicant -->
