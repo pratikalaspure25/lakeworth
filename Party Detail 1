@@ -1,3 +1,23 @@
+ <template if:true={applicant.isReadOnly}>
+                    <div slot="actions">
+                        <template if:true={applicant.isReadOnly}>
+                        <lightning-button variant="base" label="Edit" onclick={handleEditApplicant} data-id={applicant.Id}></lightning-button>
+                        </template>
+                        </div>
+                    <div class="slds-grid slds-wrap slds-m-around_medium">
+                        <lightning-input class="slds-size_1-of-2" label="Company Name" value={applicant.Company_Name__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Role" value={applicant.Role} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="DBA" value={applicant.DBA__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Industry" value={applicant.Industry__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Employees" value={applicant.Employees__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={applicant.Annual_Revenue__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Net Profit" value={applicant.Net_Profit__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={applicant.Legal_Entity__c} readonly></lightning-input>
+                        <lightning-textarea class="slds-size_1-of-1" label="Comments" value={applicant.Comments__c} readonly></lightning-textarea>
+                    </div>
+                   
+                </template>
+
 label: (a.Company_Name__c || '') + (a.Company_Name__c && a.Role__c ? ' - ' : '') + (a.Role__c || '')
   label={applicant.label}
 
