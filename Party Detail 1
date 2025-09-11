@@ -1,3 +1,50 @@
+async prefillFromAppForm() {
+    try {
+        const applicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
+
+        if (applicants && applicants.length > 0) {
+            // Use existing applicant
+            const app = applicants[0];
+            this.formData = {
+                Id: app.Id,  // ✅ preserve Id for update
+                companyName: app.Company_Name__c,
+                role: app.Role__c,
+                dba: app.DBA__c,
+                industry: app.Industry__c,
+                employees: app.Employees__c,
+                annualRevenue: app.Annual_Revenue__c,
+                netProfit: app.Net_Profit__c,
+                legalEntity: app.Legal_Entity__c,
+                comment: app.Comments__c,
+                ApplicationFormId: this.recordId
+            };
+        } else {
+            // No applicant yet → fallback to Account
+            const accountDetails = await getAccountDetailsFromAppForm({ appFormId: this.recordId });
+            this.formData = {
+                Id: null,
+                companyName: accountDetails.Name,
+                role: accountDetails.Role__c,
+                dba: accountDetails.nSBA__DBA__c,
+                industry: accountDetails.Industry,
+                employees: accountDetails.NumberOfEmployees,
+                annualRevenue: accountDetails.AnnualRevenue,
+                netProfit: accountDetails.Net_Profit__c,
+                legalEntity: accountDetails.Legal_Entity__c,
+                comment: accountDetails.Comments__c,
+                ApplicationFormId: this.recordId
+            };
+        }
+
+        this.editData = { ...this.formData };
+        this.selectedAccountId = this.formData.Id;
+
+    } catch (error) {
+        console.error('Error prefill:', error);
+    }
+}
+
+
 @AuraEnabled
 public static Applicant__c saveApplicant(Applicant__c applicant) {
     if (applicant.ApplicationFormId == null) {
