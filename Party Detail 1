@@ -1,3 +1,32 @@
+async prefillFromAppForm() {
+    try {
+        const accountDetails = await getAccountDetailsFromAppForm({ appFormId: this.recordId });
+
+        this.formData = {
+            Id: null, // New Applicant initially
+            companyName: accountDetails.companyName,
+            role: accountDetails.role,
+            dba: accountDetails.dba,
+            industry: accountDetails.industry,
+            employees: accountDetails.employees,
+            annualRevenue: accountDetails.annualRevenue,
+            netProfit: accountDetails.netProfit,
+            legalEntity: accountDetails.legalEntity,
+            comment: accountDetails.comment,
+            ApplicationFormId: this.recordId
+        };
+
+        this.selectedAccountId = accountDetails.id;
+        this.editData = { ...this.formData };
+
+        console.log('Prefilled form data:', JSON.stringify(this.formData));
+
+    } catch (error) {
+        console.error('Error prefill:', error);
+    }
+}
+
+
  <lightning-card title="Borrowers / Guarantors">
 
     <!-- Read Only Form -->
