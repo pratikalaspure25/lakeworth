@@ -1,3 +1,42 @@
+async handleSave() {
+    try {
+        // Always set parent ApplicationForm__c (correct API name)
+        this.editData.ApplicationForm__c = this.recordId;
+
+        // ⚡ Fix Id casing issue
+        if (this.editData.id && !this.editData.Id) {
+            this.editData.Id = this.editData.id;
+            delete this.editData.id;
+        }
+
+        console.log('📤 Saving applicant:', JSON.stringify(this.editData));
+
+        const result = await saveApplicant({ applicant: this.editData });
+
+        this.formData = { ...result };
+        this.editData = { ...result };
+        this.isReadOnly = true;
+
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Success',
+                message: 'Applicant saved successfully',
+                variant: 'success'
+            })
+        );
+    } catch (error) {
+        console.error('Save error:', error);
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Error saving applicant',
+                message: error?.body?.message || error.message,
+                variant: 'error'
+            })
+        );
+    }
+}
+
+
  @AuraEnabled
     public static Applicant saveApplicant(Applicant applicant) {
         System.debug('🔵 Entered saveApplicant');
