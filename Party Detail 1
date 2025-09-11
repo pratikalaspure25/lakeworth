@@ -1,3 +1,6 @@
+SELECT Id, Name,ApplicationFormId,  Company_Name__c,Role,DBA__c,Legal_Entity__c,Industry__c,Employees__c,Annual_Revenue__c, Net_Profit__c from Applicant
+SELECT Id, Name,Role__c,nSBA__DBA__c,Legal_Entity__c,Industry,NumberOfEmployees,AnnualRevenue, Net_Profit__c from Account
+
 async prefillFromAppForm() {
     try {
         const accountDetails = await getAccountDetailsFromAppForm({ appFormId: this.recordId });
