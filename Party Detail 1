@@ -1,3 +1,9 @@
+ <div slot="actions">
+        <template if:true={isReadOnly}>
+            <lightning-button label="Edit" onclick={handleEdit} variant="bare"></lightning-button>
+        </template>
+    </div>
+
  <lightning-card title="Borrowers / Guarantors">
 
     <!-- Read Only Form -->
