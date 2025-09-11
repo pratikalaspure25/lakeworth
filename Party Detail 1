@@ -1,3 +1,131 @@
+<template if:true={applicants.length}>
+    <template for:each={applicants} for:item="applicant" for:index="index">
+        <div key={applicant.Id} class="slds-box slds-m-around_medium">
+            <lightning-card title="Borrower / Guarantor">
+                <template if:true={applicant.isReadOnly}>
+                    <div class="slds-grid slds-wrap slds-m-around_medium">
+                        <lightning-input class="slds-size_1-of-2" label="Company Name" value={applicant.Company_Name__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Role" value={applicant.Role__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="DBA" value={applicant.DBA__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Industry" value={applicant.Industry__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Employees" value={applicant.Employees__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={applicant.Annual_Revenue__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Net Profit" value={applicant.Net_Profit__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={applicant.Legal_Entity__c} readonly></lightning-input>
+                        <lightning-textarea class="slds-size_1-of-1" label="Comments" value={applicant.Comments__c} readonly></lightning-textarea>
+                    </div>
+                    <div class="slds-m-around_medium">
+                        <lightning-button variant="brand" label="Edit" onclick={handleEditApplicant} data-id={applicant.Id}></lightning-button>
+                    </div>
+                </template>
+
+                <template if:false={applicant.isReadOnly}>
+                    <div class="slds-grid slds-wrap slds-m-around_medium">
+                        <lightning-input class="slds-size_1-of-2" label="Company Name" value={applicant.editData.Company_Name__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Company_Name__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Role" value={applicant.editData.Role__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Role__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="DBA" value={applicant.editData.DBA__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="DBA__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Industry" value={applicant.editData.Industry__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Industry__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Employees" value={applicant.editData.Employees__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Employees__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={applicant.editData.Annual_Revenue__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Annual_Revenue__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Net Profit" value={applicant.editData.Net_Profit__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Net_Profit__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={applicant.editData.Legal_Entity__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Legal_Entity__c"></lightning-input>
+                        <lightning-textarea class="slds-size_1-of-1" label="Comments" value={applicant.editData.Comments__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Comments__c"></lightning-textarea>
+                    </div>
+                    <div class="slds-m-around_medium">
+                        <lightning-button variant="neutral" label="Cancel" onclick={handleCancelApplicant} data-id={applicant.Id}></lightning-button>
+                        <lightning-button class="slds-m-left_small" variant="brand" label="Save" onclick={handleSaveApplicant} data-id={applicant.Id}></lightning-button>
+                    </div>
+                </template>
+            </lightning-card>
+        </div>
+    </template>
+</template>
+
+
+ // New handler for the "Edit" button on an existing applicant
+    handleEditApplicant(event) {
+        const applicantId = event.target.dataset.id;
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                return { ...app, isReadOnly: false }; // Make this specific applicant editable
+            }
+            return app;
+        });
+    }
+
+    // New handler for the "Cancel" button on an existing applicant
+    handleCancelApplicant(event) {
+        const applicantId = event.target.dataset.id;
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                // Revert to original data and make it read-only again
+                return { ...app, isReadOnly: true, editData: { ...app } };
+            }
+            return app;
+        });
+    }
+
+    // New handler to update a specific applicant's editData as fields change
+    handleApplicantInputChange(event) {
+        const applicantId = event.target.dataset.id;
+        const field = event.target.dataset.field;
+        const value = event.target.value;
+
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                // Update the editData property for the specific field
+                const updatedEditData = { ...app.editData, [field]: value };
+                return { ...app, editData: updatedEditData };
+            }
+            return app;
+        });
+    }
+
+    // New handler to save the changes for a specific applicant
+    async handleSaveApplicant(event) {
+        const applicantId = event.target.dataset.id;
+        const applicantToSave = this.applicants.find(app => app.Id === applicantId);
+
+        if (!applicantToSave) return;
+
+        try {
+            const result = await saveApplicant({ applicant: applicantToSave.editData });
+            console.log('Saved applicant:', result);
+
+            this.applicants = this.applicants.map(app => {
+                if (app.Id === applicantId) {
+                    // Update the main applicant object with the saved data
+                    return {
+                        ...result,
+                        isReadOnly: true,
+                        editData: { ...result }
+                    };
+                }
+                return app;
+            });
+
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Success',
+                    message: 'Applicant saved successfully',
+                    variant: 'success'
+                })
+            );
+
+        } catch (error) {
+            console.error('Save error:', error);
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Error saving applicant',
+                    message: error?.body?.message || error.message,
+                    variant: 'error'
+                })
+            );
+        }
+    }
+
+
+
 <lightning-card title="Borrower / Guarantor">
     <!-- Read-Only Mode -->
     <template if:true={applicant.isReadOnly}>
