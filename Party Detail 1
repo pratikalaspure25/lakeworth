@@ -1,3 +1,24 @@
+ @AuraEnabled
+    public static Applicant saveApplicant(Applicant applicant) {
+        System.debug('🔵 Entered saveApplicant');
+        System.debug('📥 Incoming applicant data: ' + JSON.serialize(applicant));
+        
+        if (applicant.ApplicationFormId == null) {
+            System.debug('❌ ApplicationForm is NULL');
+            throw new AuraHandledException('ApplicationFormId is required.');
+        }
+
+        try {
+            upsert applicant;
+            System.debug('✅ Applicant saved with Id: ' + applicant.Id);
+        } catch (Exception e) {
+            System.debug('🔥 Error while saving applicant: ' + e.getMessage());
+            throw e;
+        }
+
+        return applicant;
+    }
+
 async handleSave() {
     try {
         // Always set parent ApplicationFormId
