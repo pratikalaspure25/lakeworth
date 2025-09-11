@@ -1,3 +1,23 @@
+@AuraEnabled
+public static Applicant__c saveApplicant(Applicant__c applicant) {
+    if (applicant.ApplicationFormId == null) {
+        throw new AuraHandledException('ApplicationFormId is required.');
+    }
+
+    upsert applicant;
+
+    // Always return record with Id after upsert
+    return [
+        SELECT Id, ApplicationFormId, Company_Name__c, Role__c, DBA__c,
+               Industry__c, Employees__c, Annual_Revenue__c, Net_Profit__c,
+               Legal_Entity__c, Comments__c
+        FROM Applicant__c
+        WHERE Id = :applicant.Id
+        LIMIT 1
+    ];
+}
+
+
 SELECT Id, Name,ApplicationFormId,  Company_Name__c,Role,DBA__c,Legal_Entity__c,Industry__c,Employees__c,Annual_Revenue__c, Net_Profit__c from Applicant
 SELECT Id, Name,Role__c,nSBA__DBA__c,Legal_Entity__c,Industry,NumberOfEmployees,AnnualRevenue, Net_Profit__c from Account
 
