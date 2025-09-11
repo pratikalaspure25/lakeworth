@@ -1,3 +1,384 @@
+import { LightningElement, track, api,wire } from 'lwc';
+import searchAccounts from '@salesforce/apex/PartyDetailsController.searchAccounts';
+import getAccountDetails from '@salesforce/apex/PartyDetailsController.getAccountDetails';
+import getAccountDetailsFromAppForm from '@salesforce/apex/PartyDetailsController.getAccountDetailsFromAppForm';
+import getApplicantsFromAppForm from '@salesforce/apex/PartyDetailsController.getApplicantsFromAppForm';
+import { getObjectInfo, getPicklistValuesByRecordType } from 'lightning/uiObjectInfoApi';
+import saveApplicant from '@salesforce/apex/PartyDetailsController.saveApplicant';
+import ACCOUNT_OBJECT from '@salesforce/schema/Account';
+import { OmniscriptBaseMixin } from 'omnistudio/omniscriptBaseMixin';
+
+export default class PartyDetails extends OmniscriptBaseMixin(LightningElement) {
+    @api recordId; // ApplicationForm Id
+    @track searchKey = '';
+    @track searchResults = [];
+    @track formData = {};
+    @track selectedAccountId;
+    @track applicants = [];
+
+    @track newApplicant = null;
+
+     @track industryOptions = [];
+    @track legalEntityOptions = [];
+    @track roleOptions = [];
+
+    // Fetch Account object info
+    @wire(getObjectInfo, { objectApiName: ACCOUNT_OBJECT })
+    objectInfo;
+
+    // Fetch picklist values dynamically from Account object
+    @wire(getPicklistValuesByRecordType, { objectApiName: ACCOUNT_OBJECT, recordTypeId: '$objectInfo.data.defaultRecordTypeId' })
+    wiredPicklistValues({ data, error }) {
+        if (data) {
+            this.industryOptions = data.picklistFieldValues.Industry.values;
+            this.legalEntityOptions = data.picklistFieldValues.Legal_Entity__c.values;
+            this.roleOptions = data.picklistFieldValues.Role__c.values;
+        }
+        if (error) {
+            console.error(error);
+        }
+    }
+
+
+    @api formData = {};     // Read-only data
+    @track editData = {};   // Editable form data
+    @track isReadOnly = true;
+
+    handleEdit() {
+        this.editData = { ...this.formData };
+        this.isReadOnly = false;
+    }
+
+    handleCancel() {
+        this.isReadOnly = true;
+    }
+
+    handleInputChange(event) {
+        const field = event.target.dataset.field;
+        this.editData = { ...this.editData, [field]: event.target.value };
+    }
+
+   async handleSave() {
+    try {
+        // Ensure we carry Id properly
+        if (this.editData.id && !this.editData.Id) {
+            this.editData.Id = this.editData.id;
+            delete this.editData.id;
+        }
+
+        const applicantToSave = {
+            Id: this.editData.Id,  //  required for update
+            ApplicationFormId: this.recordId,
+            Company_Name__c: this.editData.companyName,
+            Role__c: this.editData.role,
+            DBA__c: this.editData.dba,
+            Industry__c: this.editData.industry,
+            Employees__c: this.editData.employees,
+            Annual_Revenue__c: this.editData.annualRevenue,
+            Net_Profit__c: this.editData.netProfit,
+            Legal_Entity__c: this.editData.legalEntity,
+            Comments__c: this.editData.comment
+        };
+
+        console.log('Saving applicant:', JSON.stringify(applicantToSave));
+
+        const result = await saveApplicant({ applicant: applicantToSave });
+
+        // Refresh with latest DB values (Id now guaranteed)
+        this.formData = { ...result };
+        this.editData = { ...result };
+        this.isReadOnly = true;
+
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Success',
+                message: 'Applicant saved successfully',
+                variant: 'success'
+            })
+        );
+
+    } catch (error) {
+        console.error('Save error:', error);
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Error saving applicant',
+                message: error?.body?.message || error.message,
+                variant: 'error'
+            })
+        );
+    }
+}
+
+    connectedCallback() {
+        console.log('ApplicationForm Id', this.recordId);
+        if (this.recordId) {
+            this.prefillFromAppForm();
+            this.loadApplicants();
+        }
+    }
+
+    
+
+    // async prefillFromAppForm() {
+    //     try {
+    //         const accountDetails = await getAccountDetailsFromAppForm({ appFormId: this.recordId });
+    //         this.formData = { ...accountDetails };
+    //         this.selectedAccountId = accountDetails.id;
+    //     } catch (error) {
+    //         console.error('Error prefill:', error);
+    //     }
+    // }
+
+  async prefillFromAppForm() {
+    try {
+        const applicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
+
+        if (applicants && applicants.length > 0) {
+            // Use existing applicant
+            const app = applicants[0];
+            this.formData = {
+                Id: app.Id,  
+                companyName: app.Company_Name__c,
+                role: app.Role__c,
+                dba: app.DBA__c,
+                industry: app.Industry__c,
+                employees: app.Employees__c,
+                annualRevenue: app.Annual_Revenue__c,
+                netProfit: app.Net_Profit__c,
+                legalEntity: app.Legal_Entity__c,
+                comment: app.Comments__c,
+                ApplicationFormId: this.recordId
+            };
+        } else {
+            // No applicant yet → fallback to Account
+            const accountDetails = await getAccountDetailsFromAppForm({ appFormId: this.recordId });
+            this.formData = {
+                Id: null,
+                companyName: accountDetails.Name,
+                role: accountDetails.Role__c,
+                dba: accountDetails.nSBA__DBA__c,
+                industry: accountDetails.Industry,
+                employees: accountDetails.NumberOfEmployees,
+                annualRevenue: accountDetails.AnnualRevenue,
+                netProfit: accountDetails.Net_Profit__c,
+                legalEntity: accountDetails.Legal_Entity__c,
+                comment: accountDetails.Comments__c,
+                ApplicationFormId: this.recordId
+            };
+        }
+
+        this.editData = { ...this.formData };
+        this.selectedAccountId = this.formData.Id;
+
+    } catch (error) {
+        console.error('Error prefill:', error);
+    }
+}
+
+     async loadApplicants() {
+        try {
+            this.applicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
+             console.log('Loaded applicants : ', this.applicants);
+        } catch (error) {
+            console.error('Error fetching applicants', error);
+        }
+    }
+
+    addApplicant() {
+        this.newApplicant = {
+            searchKey: '',
+            searchResults: [],
+            Company_Name__c: '',
+            Role: '',
+            DBA__c: '',
+            Industry__c: '',
+            Employees__c: null,
+            Annual_Revenue__c: '',
+            Net_Profit__c: '',
+            Legal_Entity__c: '',
+            Comments__c: ''
+        };
+    }
+
+    handleNewApplicantFieldChange(event) {
+    const field = event.target.label.replace(/ /g, '_'); // replace spaces with underscores
+    this.newApplicant = { ...this.newApplicant, [field]: event.target.value };
+}
+
+handleNewApplicantAccountSelect(event) {
+    const selectedId = event.currentTarget.dataset.id;
+    const selectedAccount = this.newApplicant.searchResults.find(acc => acc.Id === selectedId);
+
+    if (selectedAccount) {
+        // Assign picklist only if value exists in options
+        const industryValue = this.industryOptions.find(opt => opt.value === selectedAccount.Industry)?.value || '';
+        const legalEntityValue = this.legalEntityOptions.find(opt => opt.value === selectedAccount.Legal_Entity__c)?.value || '';
+        const roleValue = this.roleOptions.find(opt => opt.value === selectedAccount.Role__c)?.value || '';
+
+        this.newApplicant = {
+            ...this.newApplicant,
+            AccountId: selectedAccount.Id,
+            Company_Name__c: selectedAccount.Name,
+            DBA__c: selectedAccount.DBA__c || '',
+            Industry__c: industryValue,
+            Employees__c: selectedAccount.NumberOfEmployees || '',
+            Annual_Revenue__c: selectedAccount.AnnualRevenue || '',
+            Net_Profit__c: selectedAccount.Net_Profit__c || '',
+            Legal_Entity__c: legalEntityValue,
+            Role__c: roleValue,
+            Comments__c: ''
+        };
+
+        this.newApplicant.searchResults = [];
+        this.newApplicant.searchKey = selectedAccount.Name;
+    }
+}
+    // handleNewApplicantSearchKeyChange(event) {
+    //     const searchKey = event.target.value;
+    //     this.newApplicant.searchKey = searchKey;
+    //     if (searchKey.length > 1) {
+    //         this.findAccounts(searchKey);
+    //     } else {
+    //         this.newApplicant.searchResults = [];
+    //     }
+    // }
+    handleNewApplicantSearchKeyChange(event) {
+    this.newApplicant.searchKey = event.target.value;
+
+    if(this.newApplicant.searchKey.length > 2){
+        searchAccounts({ searchKey: this.newApplicant.searchKey })
+        .then(result => {
+            this.newApplicant.searchResults = result;
+        })
+        .catch(error => {
+            this.newApplicant.searchResults = [];
+            console.error(error);
+        });
+    } else {
+        this.newApplicant.searchResults = [];
+    }
+}
+
+
+
+    async findAccounts(searchKey) {
+        try {
+            const results = await searchAccounts({ searchKey });
+            this.newApplicant.searchResults = results;
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    // async handleNewApplicantAccountSelect(event) {
+    //     const accountId = event.currentTarget.dataset.id;
+    //     this.newApplicant.searchResults = [];
+    //     try {
+    //         const details = await getAccountDetails({ accountId });
+    //         this.newApplicant = { ...this.newApplicant, ...details, AccountId: accountId };
+    //         // Optionally, save immediately
+    //         //await createApplicant({ appFormId: this.recordId, accDetails: details });
+    //         await this.loadApplicants(); // refresh list
+    //         this.newApplicant = null; // hide new applicant form
+    //     } catch (error) {
+    //         console.error(error);
+    //     }
+    // }
+
+    handleSearchKeyChange(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey.length > 1) {
+            this.findAccounts();
+        } else {
+            this.searchResults = [];
+        }
+    }
+
+    async findAccounts() {
+        try {
+            this.searchResults = await searchAccounts({ searchKey: this.searchKey });
+        } catch (error) {
+            console.error('Error searching accounts:', error);
+        }
+    }
+
+    async handleAccountSelect(event) {
+        this.selectedAccountId = event.currentTarget.dataset.id;
+        this.searchResults = [];
+        try {
+            const details = await getAccountDetails({ accountId: this.selectedAccountId });
+            this.formData = { ...details };
+            // Save as Applicant
+          //  await createApplicant({ appFormId: this.recordId, accDetails: this.formData });
+            this.loadApplicants(); // refresh
+        } catch (error) {
+            console.error('Error fetching account details:', error);
+        }
+    }
+
+    handleApplicantSearchKeyChange(event) {
+    const applicantId = event.target.dataset.id;
+    const value = event.target.value;
+
+    this.applicants = this.applicants.map(app => {
+        if (app.Id === applicantId) {
+            return { ...app, searchKey: value };
+        }
+        return app;
+    });
+
+    if (value.length > 1) {
+        this.findAccountsForApplicant(applicantId, value);
+    }
+}
+
+async findAccountsForApplicant(applicantId, searchKey) {
+    try {
+        const results = await searchAccounts({ searchKey });
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                return { ...app, searchResults: results };
+            }
+            return app;
+        });
+    } catch (error) {
+        console.error('Error searching accounts for applicant:', error);
+    }
+}
+
+async handleApplicantAccountSelect(event) {
+    const applicantId = event.currentTarget.dataset.applicantId;
+    const accountId = event.currentTarget.dataset.id;
+
+    try {
+        const details = await getAccountDetails({ accountId });
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                return { 
+                    ...app, 
+                    AccountId: accountId,
+                    Company_Name__c: details.companyName,
+                    Role : details.role,
+                    DBA__c: details.dba,
+                    Industry__c: details.industry,
+                    Employees__c: details.employees,
+                    Annual_Revenue__c: details.annualRevenue,
+                    Net_Profit__c: details.netProfit,
+                    Legal_Entity__c: details.legalEntity,
+                    Comments__c: details.comment,
+                    searchResults: []
+                };
+            }
+            return app;
+        });
+    } catch (error) {
+        console.error('Error fetching account details for applicant:', error);
+    }
+}
+
+
+}
+
 <!-- Existing Applicants -->
 <template if:true={applicants.length}>
     <template for:each={applicants} for:item="applicant" for:index="index">
