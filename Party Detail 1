@@ -1,3 +1,6 @@
+label: (a.Company_Name__c || '') + (a.Company_Name__c && a.Role__c ? ' - ' : '') + (a.Role__c || '')
+  label={applicant.label}
+
 // partyDetails.js
 getAccordionLabel(applicant) {
     const company = applicant.Company_Name__c ? applicant.Company_Name__c : '';
