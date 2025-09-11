@@ -1,3 +1,38 @@
+<template if:true={isReadOnly}>
+         <div class="slds-grid slds-wrap slds-m-around_medium">
+            <lightning-input class="slds-size_1-of-2" label="Company Name" value={formData.companyName} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Role" value={formData.role} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="DBA" value={formData.dba} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Industry" value={formData.industry} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Employees" value={formData.employees} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={formData.annualRevenue} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Net Profit" value={formData.netProfit} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={formData.legalEntity} readonly></lightning-input>
+            <lightning-textarea class="slds-size_1-of-1" label="Comment" value={formData.comment} readonly></lightning-textarea>
+        </div>
+
+        <div class="slds-m-around_medium">
+            <lightning-button variant="brand" label="Edit" onclick={handleEdit}></lightning-button>
+            <lightning-button-stateful
+            label-when-off="Edit"
+            label-when-on="Edit"
+            variant="text"
+            onclick={handleEdit}>
+        </lightning-button-stateful>
+        </div>
+    </template>
+
+
+ <div class="slds-m-around_medium">
+            <lightning-button variant="brand" label="Edit" onclick={handleEdit}></lightning-button>
+            <lightning-button-stateful
+            label-when-off="Edit"
+            label-when-on="Edit"
+            variant="text"
+            onclick={handleEdit}>
+        </lightning-button-stateful>
+        </div>
+
  <!-- Add Applicant Button -->
     <lightning-button label="Add Borrower / Guarantor" onclick={addApplicant} class="slds-m-top_small"></lightning-button>
 
