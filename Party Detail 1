@@ -17,6 +17,58 @@ public static Applicant__c saveApplicant(Applicant__c applicant) {
     ];
 }
 
+async handleSave() {
+    try {
+        // Ensure we carry Id properly
+        if (this.editData.id && !this.editData.Id) {
+            this.editData.Id = this.editData.id;
+            delete this.editData.id;
+        }
+
+        const applicantToSave = {
+            Id: this.editData.Id,  // ⬅️ required for update
+            ApplicationFormId: this.recordId,
+            Company_Name__c: this.editData.companyName,
+            Role__c: this.editData.role,
+            DBA__c: this.editData.dba,
+            Industry__c: this.editData.industry,
+            Employees__c: this.editData.employees,
+            Annual_Revenue__c: this.editData.annualRevenue,
+            Net_Profit__c: this.editData.netProfit,
+            Legal_Entity__c: this.editData.legalEntity,
+            Comments__c: this.editData.comment
+        };
+
+        console.log('📤 Saving applicant:', JSON.stringify(applicantToSave));
+
+        const result = await saveApplicant({ applicant: applicantToSave });
+
+        // Refresh with latest DB values (Id now guaranteed)
+        this.formData = { ...result };
+        this.editData = { ...result };
+        this.isReadOnly = true;
+
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Success',
+                message: 'Applicant saved successfully',
+                variant: 'success'
+            })
+        );
+
+    } catch (error) {
+        console.error('❌ Save error:', error);
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Error saving applicant',
+                message: error?.body?.message || error.message,
+                variant: 'error'
+            })
+        );
+    }
+}
+
+
 
 SELECT Id, Name,ApplicationFormId,  Company_Name__c,Role,DBA__c,Legal_Entity__c,Industry__c,Employees__c,Annual_Revenue__c, Net_Profit__c from Applicant
 SELECT Id, Name,Role__c,nSBA__DBA__c,Legal_Entity__c,Industry,NumberOfEmployees,AnnualRevenue, Net_Profit__c from Account
