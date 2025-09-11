@@ -1,3 +1,58 @@
+ <!-- Add Applicant Button -->
+    <lightning-button label="Add Borrower / Guarantor" onclick={addApplicant} class="slds-m-top_small"></lightning-button>
+
+    <!-- New Applicant Section -->
+    <template if:true={newApplicant}>
+        <div class="slds-box slds-m-around_medium">
+            <lightning-card title="New Applicant">
+                <!-- Account Lookup -->
+                <lightning-input label="Search Account" type="text" value={newApplicant.searchKey} onchange={handleNewApplicantSearchKeyChange} placeholder="Type account name...">
+                </lightning-input>
+                <template if:true={newApplicant.searchResults}>
+                    <div class="slds-box slds-m-top_x-small">
+                        <template for:each={newApplicant.searchResults} for:item="acc">
+                            <div key={acc.Id} class="slds-p-around_x-small slds-border_bottom" onclick={handleNewApplicantAccountSelect} data-id={acc.Id}>
+                                {acc.Name}
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Applicant Details -->
+                <div class="slds-grid slds-wrap slds-m-around_medium" >
+                    <lightning-input class="slds-size_1-of-2" style="width: 650px;" label="Company Name" value={newApplicant.Company_Name__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+                    <lightning-combobox style="width: 650px;" label="Role" 
+                    value={newApplicant.Role__c} 
+                    options={roleOptions} 
+                    placeholder="Select Role" 
+                    onchange={handleNewApplicantFieldChange} 
+                    data-field="Role__c">
+</lightning-combobox>
+                    <lightning-input style="width: 650px;" class="slds-size_1-of-2" label="DBA" value={newApplicant.DBA__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+                   <lightning-combobox style="width: 650px;" label="Industry" 
+                    value={newApplicant.Industry__c} 
+                    options={industryOptions} 
+                    placeholder="Select Industry" 
+                    onchange={handleNewApplicantFieldChange} 
+                    data-field="Industry__c">
+</lightning-combobox>
+                    <lightning-input style="width: 650px;" class="slds-size_1-of-2" label="Employees" value={newApplicant.Employees__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+                    <lightning-input style="width: 650px;" class="slds-size_1-of-2" label="Annual Revenue" value={newApplicant.Annual_Revenue__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+                    <lightning-input style="width: 650px;" class="slds-size_1-of-2" label="Net Profit" value={newApplicant.Net_Profit__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+                    <lightning-combobox style="width: 650px;" label="Legal Entity" 
+                    value={newApplicant.Legal_Entity__c} 
+                    options={legalEntityOptions} 
+                    placeholder="Select Legal Entity" 
+                    onchange={handleNewApplicantFieldChange} 
+                    data-field="Legal_Entity__c">
+</lightning-combobox>
+                    <lightning-textarea class="slds-size_1-of-1" label="Comments" value={newApplicant.Comments__c} onchange={handleNewApplicantFieldChange}></lightning-textarea>
+                </div>
+            </lightning-card>
+        </div>
+    </template>
+
+
 <template if:true={applicants.length}>
     <lightning-accordion allow-multiple-sections-open>
         <template for:each={applicants} for:item="applicant" for:index="index">
