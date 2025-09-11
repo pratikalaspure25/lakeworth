@@ -1,3 +1,17 @@
+async loadApplicants() {
+        try {
+            const fetchedApplicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
+            this.applicants = fetchedApplicants.map(app => ({
+                ...app,
+                isReadOnly: true,
+                editData: { ...app } // Initialize editData with existing values
+            }));
+            console.log('Loaded applicants: ', this.applicants);
+        } catch (error) {
+            console.error('Error fetching applicants', error);
+        }
+    }
+
 <template if:true={applicants.length}>
     <template for:each={applicants} for:item="applicant" for:index="index">
         <div key={applicant.Id} class="slds-box slds-m-around_medium">
