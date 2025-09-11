@@ -1,3 +1,65 @@
+// New handler to save the changes for a specific applicant
+async handleSaveApplicant(event) {
+    const applicantId = event.target.dataset.id;
+    const applicantToSave = this.applicants.find(app => app.Id === applicantId);
+
+    if (!applicantToSave) {
+        console.error('Applicant not found in the list.');
+        return;
+    }
+
+    try {
+        // Create a clean object to send to Apex, containing only the fields to be updated.
+        // This is crucial for matching the Apex method's expected input (Applicant sObject).
+        const applicantDataForApex = {
+            Id: applicantId, // The ID is essential for the update
+            ApplicationFormId: this.recordId,
+            Company_Name__c: applicantToSave.editData.Company_Name__c,
+            Role__c: applicantToSave.editData.Role__c,
+            DBA__c: applicantToSave.editData.DBA__c,
+            Industry__c: applicantToSave.editData.Industry__c,
+            Employees__c: applicantToSave.editData.Employees__c,
+            Annual_Revenue__c: applicantToSave.editData.Annual_Revenue__c,
+            Net_Profit__c: applicantToSave.editData.Net_Profit__c,
+            Legal_Entity__c: applicantToSave.editData.Legal_Entity__c,
+            Comments__c: applicantToSave.editData.Comments__c
+        };
+
+        const result = await saveApplicant({ applicant: applicantDataForApex });
+        console.log('Saved applicant:', result);
+
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                // Update the main applicant object with the saved data from Apex
+                return {
+                    ...result, // 'result' is the updated Applicant record from Apex
+                    isReadOnly: true,
+                    editData: { ...result }
+                };
+            }
+            return app;
+        });
+
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Success',
+                message: 'Applicant saved successfully.',
+                variant: 'success'
+            })
+        );
+
+    } catch (error) {
+        console.error('Save error:', error);
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Error saving applicant',
+                message: error?.body?.message || error.message,
+                variant: 'error'
+            })
+        );
+    }
+}
+
 async loadApplicants() {
     try {
         const fetchedApplicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
