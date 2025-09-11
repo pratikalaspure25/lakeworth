@@ -1,3 +1,9 @@
+ <div class="slds-m-around_medium slds-clearfix">
+        <div class="slds-float_right">
+            <lightning-button variant="base" label="Edit" onclick={handleEditApplicant} data-id={applicant.Id}></lightning-button>
+        </div>
+    </div>
+
  <template if:true={applicant.isReadOnly}>
                     <div slot="actions">
                         <template if:true={applicant.isReadOnly}>
