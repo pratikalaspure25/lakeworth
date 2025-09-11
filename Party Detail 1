@@ -1,4 +1,28 @@
 async loadApplicants() {
+    try {
+        const fetchedApplicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
+        if (fetchedApplicants && fetchedApplicants.length > 0) {
+            this.applicants = fetchedApplicants.map(app => {
+                // Defensive copy and initialization
+                const applicantData = { ...app };
+                return {
+                    ...applicantData,
+                    isReadOnly: true,
+                    // Create a separate copy for editing to avoid direct mutation
+                    editData: { ...applicantData } 
+                };
+            });
+            console.log('Loaded and initialized applicants:', this.applicants);
+        } else {
+            this.applicants = []; // Ensure it's an empty array if no data
+        }
+    } catch (error) {
+        console.error('Error fetching and initializing applicants', error);
+        this.applicants = []; // Handle the error by setting to an empty array
+    }
+}
+
+async loadApplicants() {
         try {
             const fetchedApplicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
             this.applicants = fetchedApplicants.map(app => ({
