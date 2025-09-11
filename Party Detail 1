@@ -1,3 +1,5 @@
+label={applicant.companyName + ' - ' + applicant.Role__c}
+
 <template if:true={applicants.length}>
     <lightning-accordion allow-multiple-sections-open>
         <template for:each={applicants} for:item="applicant" for:index="index">
