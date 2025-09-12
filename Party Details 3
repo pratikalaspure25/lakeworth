@@ -1,3 +1,88 @@
+import APPLICANT_OBJECT from '@salesforce/schema/Applicant__c';
+import ROLE_FIELD from '@salesforce/schema/Applicant__c.Role__c';
+import INDUSTRY_FIELD from '@salesforce/schema/Applicant__c.Industry__c';
+import LEGAL_ENTITY_FIELD from '@salesforce/schema/Applicant__c.Legal_Entity__c';
+
+roleOptions = [];
+    industryOptions = [];
+    legalEntityOptions = [];
+
+    // Get object info
+    @wire(getObjectInfo, { objectApiName: APPLICANT_OBJECT })
+    applicantObjectInfo;
+
+    // Role picklist
+    @wire(getPicklistValues, {
+        recordTypeId: '$applicantObjectInfo.data.defaultRecordTypeId',
+        fieldApiName: ROLE_FIELD
+    })
+    rolePicklistValues({ data, error }) {
+        if (data) this.roleOptions = data.values;
+    }
+
+    // Industry picklist
+    @wire(getPicklistValues, {
+        recordTypeId: '$applicantObjectInfo.data.defaultRecordTypeId',
+        fieldApiName: INDUSTRY_FIELD
+    })
+    industryPicklistValues({ data, error }) {
+        if (data) this.industryOptions = data.values;
+    }
+
+    // Legal Entity picklist
+    @wire(getPicklistValues, {
+        recordTypeId: '$applicantObjectInfo.data.defaultRecordTypeId',
+        fieldApiName: LEGAL_ENTITY_FIELD
+    })
+    legalEntityPicklistValues({ data, error }) {
+        if (data) this.legalEntityOptions = data.values;
+    }
+
+    handleApplicantInputChange(event) {
+        const applicantId = event.target.dataset.id;
+        const field = event.target.dataset.field;
+        const value = event.detail.value;
+
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                app.editData = { ...app.editData, [field]: value };
+            }
+            return app;
+        });
+    }
+
+<lightning-combobox
+    class="slds-size_1-of-2"
+    label="Role"
+    value={applicant.editData.Role__c}
+    options={roleOptions}
+    onchange={handleApplicantInputChange}
+    data-id={applicant.Id}
+    data-field="Role__c">
+</lightning-combobox>
+
+<!-- Industry -->
+<lightning-combobox
+    class="slds-size_1-of-2"
+    label="Industry"
+    value={applicant.editData.Industry__c}
+    options={industryOptions}
+    onchange={handleApplicantInputChange}
+    data-id={applicant.Id}
+    data-field="Industry__c">
+</lightning-combobox>
+
+<!-- Legal Entity -->
+<lightning-combobox
+    class="slds-size_1-of-2"
+    label="Legal Entity"
+    value={applicant.editData.Legal_Entity__c}
+    options={legalEntityOptions}
+    onchange={handleApplicantInputChange}
+    data-id={applicant.Id}
+    data-field="Legal_Entity__c">
+</lightning-combobox>
+
 <template if:true={applicants.length}>
     <lightning-accordion allow-multiple-sections-open>
         <template for:each={applicants} for:item="applicant" for:index="index">
