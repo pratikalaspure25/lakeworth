@@ -1,3 +1,183 @@
+<!-- Add Business button -->
+    <lightning-button 
+        label="Add Business" 
+        onclick={handleAddBusiness} 
+        variant="brand">
+    </lightning-button>
+
+    <!-- New Applicant Form -->
+    <template if:true={showForm}>
+        <lightning-card title="New Business Applicant">
+            <!-- Search Account -->
+            <lightning-input 
+                label="Search Account" 
+                value={searchKey} 
+                onchange={handleSearchKeyChange}
+                placeholder="Type account name...">
+            </lightning-input>
+
+            <!-- Search Results -->
+            <template if:true={searchResults}>
+                <div class="slds-box slds-m-top_x-small">
+                    <template for:each={searchResults} for:item="acc">
+                        <div 
+                            key={acc.Id} 
+                            class="slds-p-around_x-small slds-border_bottom" 
+                            onclick={handleAccountSelect} 
+                            data-id={acc.Id}>
+                            {acc.Name}
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+            <!-- Applicant Fields -->
+            <template if:true={selectedAccount}>
+                <div class="slds-grid slds-wrap slds-m-around_medium">
+                    <lightning-input 
+                        class="slds-size_1-of-2" 
+                        label="Company Name" 
+                        value={formData.Company_Name__c} 
+                        readonly>
+                    </lightning-input>
+
+                    <lightning-input 
+                        class="slds-size_1-of-2" 
+                        label="DBA" 
+                        value={formData.DBA__c} 
+                        readonly>
+                    </lightning-input>
+
+                    <lightning-input 
+                        class="slds-size_1-of-2" 
+                        label="Industry" 
+                        value={formData.Industry__c} 
+                        readonly>
+                    </lightning-input>
+
+                    <lightning-input 
+                        class="slds-size_1-of-2" 
+                        label="Employees" 
+                        value={formData.Employees__c} 
+                        readonly>
+                    </lightning-input>
+
+                    <lightning-input 
+                        class="slds-size_1-of-2" 
+                        label="Annual Revenue" 
+                        value={formData.Annual_Revenue__c} 
+                        readonly>
+                    </lightning-input>
+                </div>
+
+                <!-- Save button -->
+                <lightning-button 
+                    label="Save Applicant" 
+                    onclick={handleSaveApplicant} 
+                    variant="success">
+                </lightning-button>
+            </template>
+        </lightning-card>
+    </template>
+
+
+
+
+ handleAddBusiness() {
+        this.showForm = true;
+        this.formData = {};
+    }
+
+    handleSearchKeyChange(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey.length > 2) {
+            searchAccounts({ searchKey: this.searchKey })
+                .then(result => {
+                    this.searchResults = result;
+                })
+                .catch(error => {
+                    console.error(error);
+                    this.searchResults = [];
+                });
+        } else {
+            this.searchResults = [];
+        }
+    }
+
+    async handleAccountSelect(event) {
+        const accountId = event.currentTarget.dataset.id;
+        this.selectedAccount = accountId;
+        this.searchResults = [];
+
+        try {
+            const details = await getAccountDetails({ accountId });
+            this.formData = {
+                AccountId: details.id,
+                Company_Name__c: details.companyName,
+                DBA__c: details.dba,
+                Industry__c: details.industry,
+                Employees__c: details.employees,
+                Annual_Revenue__c: details.annualRevenue,
+                Net_Profit__c: details.netProfit,
+                Legal_Entity__c: details.legalEntity,
+                Comments__c: details.comment
+            };
+        } catch (error) {
+            console.error('Error fetching account details:', error);
+        }
+    }
+
+    async handleSaveApplicant() {
+        try {
+            const applicantRecord = {
+                ApplicationFormId: this.recordId,
+                ...this.formData
+            };
+
+            const result = await saveApplicant({ applicant: applicantRecord });
+
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Success',
+                    message: 'Applicant created successfully',
+                    variant: 'success'
+                })
+            );
+
+            this.showForm = false;
+            this.formData = {};
+            this.selectedAccount = null;
+        } catch (error) {
+            console.error('Save error:', error);
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Error',
+                    message: error?.body?.message || error.message,
+                    variant: 'error'
+                })
+            );
+        }
+    }
+
+
+
+
+@AuraEnabled(cacheable=true)
+public static List<Account> searchAccounts(String searchKey) {
+    String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
+    return [
+        SELECT Id, Name, nSBA__DBA__c, Industry, Legal_Entity__c,
+               NumberOfEmployees, AnnualRevenue, Net_Profit__c, Comments__c, Role__c
+        FROM Account
+        WHERE Name LIKE :key 
+        AND RecordType.Name = 'Business'
+        LIMIT 10
+    ];
+}
+
+
+
+
 @AuraEnabled(cacheable=true)
 public static List<Account> searchAccounts(String searchKey) {
     String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
