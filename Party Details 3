@@ -1,3 +1,84 @@
+public with sharing class PartyDetailsController {
+
+    // Account search
+    @AuraEnabled(cacheable=true)
+    public static List<Account> searchAccounts(String searchKey) {
+        String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
+        return [
+            SELECT Id, Name, Industry, Legal_Entity__c
+            FROM Account
+            WHERE Name LIKE :key
+            LIMIT 10
+        ];
+    }
+
+    // Get Account details
+    @AuraEnabled(cacheable=true)
+    public static Account getAccountDetails(Id accountId) {
+        return [
+            SELECT Id, Name, Industry, Legal_Entity__c
+            FROM Account
+            WHERE Id = :accountId
+            LIMIT 1
+        ];
+    }
+
+    // Get Account from Application Form
+    @AuraEnabled(cacheable=true)
+    public static Account getAccountDetailsFromAppForm(Id applicationFormId) {
+        Application_Form__c appForm = [
+            SELECT Id, Account__c, Account__r.Id, Account__r.Name, 
+                   Account__r.Industry, Account__r.Legal_Entity__c
+            FROM Application_Form__c
+            WHERE Id = :applicationFormId
+            LIMIT 1
+        ];
+        return appForm.Account__r;
+    }
+
+    // Get Applicants from Application Form
+    @AuraEnabled(cacheable=true)
+    public static List<Applicant__c> getApplicantsFromAppForm(Id applicationFormId) {
+        return [
+            SELECT Id, Company_Name__c, Role__c, DBA__c, Industry__c,
+                   Employees__c, Annual_Revenue__c, Net_Profit__c,
+                   Legal_Entity__c, Comments__c
+            FROM Applicant__c
+            WHERE ApplicationForm__c = :applicationFormId
+        ];
+    }
+
+    // Save Existing Applicant
+    @AuraEnabled
+    public static Applicant__c saveApplicant(Applicant__c applicant) {
+        upsert applicant;
+        return [
+            SELECT Id, Company_Name__c, Role__c, DBA__c, Industry__c,
+                   Employees__c, Annual_Revenue__c, Net_Profit__c,
+                   Legal_Entity__c, Comments__c
+            FROM Applicant__c
+            WHERE Id = :applicant.Id
+            LIMIT 1
+        ];
+    }
+
+    // Save New Applicant
+    @AuraEnabled
+    public static Applicant__c saveNewApplicant(Applicant__c applicant) {
+        insert applicant;
+        return [
+            SELECT Id, Company_Name__c, Role__c, DBA__c, Industry__c,
+                   Employees__c, Annual_Revenue__c, Net_Profit__c,
+                   Legal_Entity__c, Comments__c
+            FROM Applicant__c
+            WHERE Id = :applicant.Id
+            LIMIT 1
+        ];
+    }
+}
+
+
+Back up 12-09-2025 2:00 
 <!--
   @description       : 
   @author            : 
