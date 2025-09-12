@@ -1,3 +1,186 @@
+<template if:true={applicants.length}>
+    <lightning-accordion allow-multiple-sections-open>
+        <template for:each={applicants} for:item="applicant" for:index="index">
+            <lightning-accordion-section
+                key={applicant.Id}
+                label={applicant.label}
+                name={applicant.Id}
+            >
+                <template if:true={applicant.isReadOnly}>    
+                            <div class="slds-m-around_medium slds-clearfix">
+                <div class="slds-float_right">
+                    <lightning-button variant="base" label="Edit" onclick={handleEditApplicant} data-id={applicant.Id}></lightning-button>
+                </div>
+            </div>  
+                    <div class="slds-grid slds-wrap slds-m-around_medium">
+                        <lightning-input class="slds-size_1-of-2" label="Company Name" value={applicant.Company_Name__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Role" value={applicant.Role} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="DBA" value={applicant.DBA__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Industry" value={applicant.Industry__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Employees" value={applicant.Employees__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={applicant.Annual_Revenue__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Net Profit" value={applicant.Net_Profit__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={applicant.Legal_Entity__c} readonly></lightning-input>
+                        <lightning-textarea class="slds-size_1-of-1" label="Comments" value={applicant.Comments__c} readonly></lightning-textarea>
+                    </div>
+                   
+                </template>
+
+                <template if:false={applicant.isReadOnly}>
+                    <div class="slds-grid slds-wrap slds-m-around_medium">
+                        <lightning-input class="slds-size_1-of-2" label="Company Name" value={applicant.editData.Company_Name__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Company_Name__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Role" value={applicant.editData.Role} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Role__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="DBA" value={applicant.editData.DBA__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="DBA__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Industry" value={applicant.editData.Industry__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Industry__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Employees" value={applicant.editData.Employees__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Employees__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={applicant.editData.Annual_Revenue__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Annual_Revenue__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Net Profit" value={applicant.editData.Net_Profit__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Net_Profit__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={applicant.editData.Legal_Entity__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Legal_Entity__c"></lightning-input>
+                        <lightning-textarea class="slds-size_1-of-1" label="Comments" value={applicant.editData.Comments__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Comments__c"></lightning-textarea>
+                    </div>
+                    <div class="slds-m-around_medium">
+                        <lightning-button variant="neutral" label="Cancel" onclick={handleCancelApplicant} data-id={applicant.Id}></lightning-button>
+                        <lightning-button class="slds-m-left_small" variant="brand" label="Save" onclick={handleSaveApplicant} data-id={applicant.Id}></lightning-button>
+                    </div>
+                </template>
+            </lightning-accordion-section>
+        </template>
+    </lightning-accordion>
+</template>
+
+
+public class PartyDetailsController {
+
+    // Account search
+    @AuraEnabled(cacheable=true)
+    public static List<Account> searchAccounts(String searchKey) {
+        String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
+        return [
+            SELECT Id, Name, nSBA__DBA__c, Industry, Legal_Entity__c,
+                   NumberOfEmployees, AnnualRevenue, Net_Profit__c, Comments__c, role__c
+            FROM Account
+            WHERE Name LIKE :key 
+            LIMIT 10
+        ];
+    }
+
+    // Account details wrapper
+    public class AccountDetails {
+        @AuraEnabled public Id id;
+        @AuraEnabled public String companyName;
+        @AuraEnabled public String role;
+        @AuraEnabled public String dba;
+        @AuraEnabled public String industry;
+        @AuraEnabled public Integer employees;
+        @AuraEnabled public String annualRevenue;
+        @AuraEnabled public String netProfit;
+        @AuraEnabled public String legalEntity;
+        @AuraEnabled public String comment;
+    }
+
+    // Get account details
+    @AuraEnabled(cacheable=true)
+    public static AccountDetails getAccountDetails(Id accountId) {
+        if (accountId == null) return new AccountDetails();
+        Account acc = [
+            SELECT Id, Name, nSBA__DBA__c, Industry, Legal_Entity__c,
+                   NumberOfEmployees, AnnualRevenue, Net_Profit__c, Comments__c, Role__c
+            FROM Account
+            WHERE Id = :accountId
+            LIMIT 1
+        ];
+        return mapToWrapper(acc);
+    }
+
+    // Prefill from ApplicationForm
+    @AuraEnabled(cacheable=true)
+    public static AccountDetails getAccountDetailsFromAppForm(Id appFormId) {
+        if(appFormId == null) return new AccountDetails();
+        ApplicationForm app = [
+            SELECT Id, AccountId 
+            FROM ApplicationForm
+            WHERE Id = :appFormId
+            LIMIT 1
+        ];
+        if(app.AccountId == null) return new AccountDetails();
+        return getAccountDetails(app.AccountId);
+    }
+
+    // Get existing Applicants
+    @AuraEnabled(cacheable=true)
+    public static List<Applicant> getApplicantsFromAppForm(Id appFormId) {
+        return [
+            SELECT Id, Name, Company_Name__c,Role,DBA__c,Legal_Entity__c,Industry__c,Employees__c,Annual_Revenue__c, Net_Profit__c from Applicant
+            WHERE ApplicationFormId = :appFormId
+        ];
+    }
+
+    // Create new Applicant
+  /*  @AuraEnabled
+    public static Id createApplicant(Id appFormId, AccountDetails accDetails) {
+        Applicant app = new Applicant();
+        app.ApplicationFormId = appFormId;
+        app.Company_Name__c = accDetails.companyName;
+        app.DBA__c = accDetails.dba;
+        app.Industry__c = accDetails.industry;
+        app.Employees__c = accDetails.employees;
+        app.Annual_Revenue__c = accDetails.annualRevenue != null ? Decimal.valueOf(accDetails.annualRevenue) : null;
+        app.Net_Profit__c = accDetails.netProfit != null ? Decimal.valueOf(accDetails.netProfit) : null;
+        app.Legal_Entity__c = accDetails.legalEntity;
+        app.Comments__c = accDetails.comment;
+        insert app;
+        return app.Id;
+    } */
+
+    // Utility
+    private static AccountDetails mapToWrapper(Account acc) {
+        AccountDetails d = new AccountDetails();
+        d.id            = acc.Id;
+        d.companyName   = acc.Name;
+        d.dba           = acc.nSBA__DBA__c;
+        d.industry      = acc.Industry;
+        d.employees     = acc.NumberOfEmployees;
+        d.annualRevenue = acc.AnnualRevenue != null ? String.valueOf(acc.AnnualRevenue) : null;
+        d.netProfit     = acc.Net_Profit__c != null ? String.valueOf(acc.Net_Profit__c) : null;
+        d.legalEntity   = acc.Legal_Entity__c;
+        d.comment       = acc.Comments__c;
+        return d;
+    }
+
+ @AuraEnabled
+    public static void updateApplicant(Id applicantId, Map<String, Object> fields) {
+        Applicant app = new Applicant(Id = applicantId);
+        for (String key : fields.keySet()) {
+            SObjectField sf = Applicant.SObjectType.getDescribe().fields.getMap().get(key);
+            if (sf != null) {
+                app.put(sf, fields.get(key));
+            }
+        }
+        update app;
+    }
+
+    @AuraEnabled
+public static Applicant saveApplicant(Applicant applicant) {
+    if (applicant.ApplicationFormId == null) {
+        throw new AuraHandledException('ApplicationFormId is required.');
+    }
+
+    upsert applicant;
+
+    // Always return record with Id after upsert
+    return [
+        SELECT Id, ApplicationFormId, Company_Name__c, Role, DBA__c,
+               Industry__c, Employees__c, Annual_Revenue__c, Net_Profit__c,
+               Legal_Entity__c, Comments__c
+        FROM Applicant
+        WHERE Id = :applicant.Id
+        LIMIT 1
+    ];
+}
+
+}
+
+
 public with sharing class PartyDetailsController {
 
     // Account search
