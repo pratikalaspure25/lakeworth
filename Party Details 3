@@ -1,3 +1,45 @@
+// For Account object picklists
+@wire(getObjectInfo, { objectApiName: ACCOUNT_OBJECT })
+accountObjectInfo;
+
+@wire(getPicklistValuesByRecordType, { objectApiName: ACCOUNT_OBJECT, recordTypeId: '$accountObjectInfo.data.defaultRecordTypeId' })
+wiredAccountPicklistValues({ data, error }) {
+    if (data) {
+        this.industryOptions = data.picklistFieldValues.Industry.values;
+        this.legalEntityOptions = data.picklistFieldValues.Legal_Entity__c.values;
+        this.roleOptions = data.picklistFieldValues.Role__c.values;
+    } else if (error) {
+        console.error('Account picklist error', error);
+    }
+}
+
+// For Applicant object picklists
+@wire(getObjectInfo, { objectApiName: APPLICANT_OBJECT })
+applicantObjectInfo;
+
+@wire(getPicklistValuesByRecordType, { objectApiName: APPLICANT_OBJECT, recordTypeId: '$applicantObjectInfo.data.defaultRecordTypeId' })
+wiredApplicantPicklistValues({ data, error }) {
+    if (data) {
+        this.industryAppOptions = data.picklistFieldValues.Industry__c.values;
+        this.legalEntityAppOptions = data.picklistFieldValues.Legal_Entity__c.values;
+        this.roleAppOptions = data.picklistFieldValues.Role.values;
+    } else if (error) {
+        console.error('Applicant picklist error', error);
+    }
+}
+
+<lightning-combobox 
+    class="slds-size_1-of-2"
+    label="Role"
+    value={applicant.editData.Role}
+    options={roleAppOptions}
+    placeholder="Select Role"
+    onchange={handleApplicantInputChange}
+    data-id={applicant.Id}
+    data-field="Role">
+</lightning-combobox>
+
+
 public class PartyDetailsController {
 
     // Account search
