@@ -1,3 +1,200 @@
+<template>
+    <!-- Add Business Button -->
+    <lightning-button 
+        label="Add Business" 
+        onclick={handleAddBusiness} 
+        variant="brand">
+    </lightning-button>
+
+    <!-- Applicant Form -->
+    <template if:true={showForm}>
+        <lightning-card title="New Business Applicant">
+            <!-- Account Search -->
+            <lightning-input 
+                label="Search Account" 
+                value={searchKey} 
+                placeholder="Type to search..." 
+                onchange={handleSearchKeyChange}>
+            </lightning-input>
+
+            <!-- Search Results -->
+            <template if:true={searchResults}>
+                <div class="slds-box slds-m-around_small">
+                    <template for:each={searchResults} for:item="account">
+                        <div key={account.Id} class="slds-p-around_x-small">
+                            <a href="javascript:void(0);" data-id={account.Id} onclick={handleAccountSelect}>
+                                {account.Name}
+                            </a>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+            <!-- Editable Form -->
+            <template if:true={selectedAccount}>
+                <div class="slds-grid slds-wrap slds-m-around_medium">
+                    <lightning-input 
+                        class="slds-size_1-of-2" 
+                        label="Company Name" 
+                        value={formData.Company_Name__c} 
+                        onchange={handleInputChange}>
+                    </lightning-input>
+
+                    <lightning-input 
+                        class="slds-size_1-of-2" 
+                        label="DBA" 
+                        value={formData.DBA__c} 
+                        onchange={handleInputChange}>
+                    </lightning-input>
+
+                    <lightning-input 
+                        class="slds-size_1-of-2" 
+                        label="Industry" 
+                        value={formData.Industry__c} 
+                        onchange={handleInputChange}>
+                    </lightning-input>
+
+                    <lightning-input 
+                        class="slds-size_1-of-2" 
+                        label="Employees" 
+                        type="number"
+                        value={formData.Employees__c} 
+                        onchange={handleInputChange}>
+                    </lightning-input>
+
+                    <lightning-input 
+                        class="slds-size_1-of-2" 
+                        label="Annual Revenue" 
+                        type="number"
+                        value={formData.Annual_Revenue__c} 
+                        onchange={handleInputChange}>
+                    </lightning-input>
+
+                    <lightning-input 
+                        class="slds-size_1-of-2" 
+                        label="Net Profit" 
+                        type="number"
+                        value={formData.Net_Profit__c} 
+                        onchange={handleInputChange}>
+                    </lightning-input>
+
+                    <lightning-input 
+                        class="slds-size_1-of-2" 
+                        label="Legal Entity" 
+                        value={formData.Legal_Entity__c} 
+                        onchange={handleInputChange}>
+                    </lightning-input>
+
+                    <lightning-textarea 
+                        class="slds-size_1-of-1" 
+                        label="Comments" 
+                        value={formData.Comments__c} 
+                        onchange={handleInputChange}>
+                    </lightning-textarea>
+                </div>
+
+                <!-- Save button -->
+                <lightning-button 
+                    label="Save Applicant" 
+                    onclick={handleSaveApplicant} 
+                    variant="success">
+                </lightning-button>
+            </template>
+        </lightning-card>
+    </template>
+</template>
+
+
+ // Show form
+    handleAddBusiness() {
+        this.showForm = true;
+        this.formData = {};
+        this.selectedAccount = null;
+        this.searchResults = [];
+    }
+
+    // Account search
+    handleSearchKeyChange(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey.length > 2) {
+            searchAccounts({ searchKey: this.searchKey })
+                .then(result => {
+                    this.searchResults = result;
+                })
+                .catch(error => {
+                    console.error(error);
+                    this.searchResults = [];
+                });
+        } else {
+            this.searchResults = [];
+        }
+    }
+
+    // Account selection
+    async handleAccountSelect(event) {
+        const accountId = event.currentTarget.dataset.id;
+        this.selectedAccount = accountId;
+        this.searchResults = [];
+
+        try {
+            const details = await getAccountDetails({ accountId });
+            this.formData = {
+                AccountId: details.id,
+                Company_Name__c: details.companyName,
+                DBA__c: details.dba,
+                Industry__c: details.industry,
+                Employees__c: details.employees,
+                Annual_Revenue__c: details.annualRevenue,
+                Net_Profit__c: details.netProfit,
+                Legal_Entity__c: details.legalEntity,
+                Comments__c: details.comment
+            };
+        } catch (error) {
+            console.error('Error fetching account details:', error);
+        }
+    }
+
+    // Handle input change
+    handleInputChange(event) {
+        const field = event.target.label.replace(/\s+/g, '_'); // Match API field mapping
+        this.formData[field] = event.target.value;
+    }
+
+    // Save applicant
+    async handleSaveApplicant() {
+        try {
+            const applicantRecord = {
+                ApplicationFormId: this.recordId,
+                ...this.formData
+            };
+
+            await saveApplicant({ applicant: applicantRecord });
+
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Success',
+                    message: 'Applicant saved successfully',
+                    variant: 'success'
+                })
+            );
+
+            this.showForm = false;
+            this.formData = {};
+            this.selectedAccount = null;
+        } catch (error) {
+            console.error('Save error:', error);
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Error',
+                    message: error?.body?.message || error.message,
+                    variant: 'error'
+                })
+            );
+        }
+    }
+
+
+
  <template if:true={selectedAccount}>
                 <div class="slds-grid slds-wrap slds-m-around_medium">
                     <lightning-input 
