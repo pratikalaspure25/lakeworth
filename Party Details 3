@@ -1,0 +1,765 @@
+<!--
+  @description       : 
+  @author            : 
+  @group             : 
+  @last modified on  : 08-09-2025
+  @last modified by  : Pratik
+-->
+<template>
+   <lightning-card title="Borrowers / Guarantors">
+    <div slot="actions">
+        <template if:true={isReadOnly}>
+            <lightning-button label="Edit" onclick={handleEdit} variant="base"></lightning-button>
+        </template>
+    </div>
+
+    <!-- Read Only Form -->
+    <template if:true={isReadOnly}>
+         <div class="slds-grid slds-wrap slds-m-around_medium">
+            <lightning-input class="slds-size_1-of-2" label="Company Name" value={formData.companyName} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Role" value={formData.role} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="DBA" value={formData.dba} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Industry" value={formData.industry} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Employees" value={formData.employees} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={formData.annualRevenue} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Net Profit" value={formData.netProfit} readonly></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={formData.legalEntity} readonly></lightning-input>
+            <lightning-textarea class="slds-size_1-of-1" label="Comment" value={formData.comment} readonly></lightning-textarea>
+        </div>
+    </template>
+
+    <!-- Editable Form -->
+    <template if:false={isReadOnly}>
+        <div class="slds-grid slds-wrap slds-m-around_medium">
+            <lightning-input class="slds-size_1-of-2" label="Company Name" value={editData.companyName} onchange={handleInputChange} data-field="companyName"></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Role" value={editData.role} onchange={handleInputChange} data-field="role"></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="DBA" value={editData.dba} onchange={handleInputChange} data-field="dba"></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Industry" value={editData.industry} onchange={handleInputChange} data-field="industry"></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Employees" value={editData.employees} onchange={handleInputChange} data-field="employees"></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={editData.annualRevenue} onchange={handleInputChange} data-field="annualRevenue"></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Net Profit" value={editData.netProfit} onchange={handleInputChange} data-field="netProfit"></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={editData.legalEntity} onchange={handleInputChange} data-field="legalEntity"></lightning-input>
+            <lightning-textarea class="slds-size_1-of-1" label="Comment" value={editData.comment} onchange={handleInputChange} data-field="comment"></lightning-textarea>
+        </div>
+
+        <div class="slds-m-around_medium">
+            <lightning-button variant="neutral" label="Cancel" onclick={handleCancel}></lightning-button>
+            <lightning-button class="slds-m-left_small" variant="brand" label="Save" onclick={handleSave}></lightning-button>
+        </div>
+    </template>
+     <!-- Add Applicant Button -->
+    <lightning-button label="Add Business" onclick={addApplicant} class="slds-m-top_small"></lightning-button>
+     <lightning-button label="Add Indivisual" onclick={addApplicant} class="slds-m-top_small"></lightning-button>
+</lightning-card>
+
+    
+
+<template if:true={applicants.length}>
+    <lightning-accordion allow-multiple-sections-open>
+        <template for:each={applicants} for:item="applicant" for:index="index">
+            <lightning-accordion-section
+                key={applicant.Id}
+                label={applicant.label}
+                name={applicant.Id}
+            >
+                <template if:true={applicant.isReadOnly}>    
+                            <div class="slds-m-around_medium slds-clearfix">
+                <div class="slds-float_right">
+                    <lightning-button variant="base" label="Edit" onclick={handleEditApplicant} data-id={applicant.Id}></lightning-button>
+                </div>
+            </div>  
+                    <div class="slds-grid slds-wrap slds-m-around_medium">
+                        <lightning-input class="slds-size_1-of-2" label="Company Name" value={applicant.Company_Name__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Role" value={applicant.Role} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="DBA" value={applicant.DBA__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Industry" value={applicant.Industry__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Employees" value={applicant.Employees__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={applicant.Annual_Revenue__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Net Profit" value={applicant.Net_Profit__c} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={applicant.Legal_Entity__c} readonly></lightning-input>
+                        <lightning-textarea class="slds-size_1-of-1" label="Comments" value={applicant.Comments__c} readonly></lightning-textarea>
+                    </div>
+                   
+                </template>
+
+                <template if:false={applicant.isReadOnly}>
+                    <div class="slds-grid slds-wrap slds-m-around_medium">
+                        <lightning-input class="slds-size_1-of-2" label="Company Name" value={applicant.editData.Company_Name__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Company_Name__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Role" value={applicant.editData.Role__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Role__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="DBA" value={applicant.editData.DBA__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="DBA__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Industry" value={applicant.editData.Industry__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Industry__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Employees" value={applicant.editData.Employees__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Employees__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={applicant.editData.Annual_Revenue__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Annual_Revenue__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Net Profit" value={applicant.editData.Net_Profit__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Net_Profit__c"></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={applicant.editData.Legal_Entity__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Legal_Entity__c"></lightning-input>
+                        <lightning-textarea class="slds-size_1-of-1" label="Comments" value={applicant.editData.Comments__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Comments__c"></lightning-textarea>
+                    </div>
+                    <div class="slds-m-around_medium">
+                        <lightning-button variant="neutral" label="Cancel" onclick={handleCancelApplicant} data-id={applicant.Id}></lightning-button>
+                        <lightning-button class="slds-m-left_small" variant="brand" label="Save" onclick={handleSaveApplicant} data-id={applicant.Id}></lightning-button>
+                    </div>
+                </template>
+            </lightning-accordion-section>
+        </template>
+    </lightning-accordion>
+</template>
+
+   
+
+    <!-- New Applicant Section -->
+    <template if:true={newApplicant}>
+        <div class="slds-box slds-m-around_medium">
+            <lightning-card title="New Business">
+                <!-- Account Lookup -->
+                <lightning-input label="Search Account" type="text" value={newApplicant.searchKey} onchange={handleNewApplicantSearchKeyChange} placeholder="Type account name...">
+                </lightning-input>
+                <template if:true={newApplicant.searchResults}>
+                    <div class="slds-box slds-m-top_x-small">
+                        <template for:each={newApplicant.searchResults} for:item="acc">
+                            <div key={acc.Id} class="slds-p-around_x-small slds-border_bottom" onclick={handleNewApplicantAccountSelect} data-id={acc.Id}>
+                                {acc.Name}
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Applicant Details -->
+                <div class="slds-grid slds-wrap slds-m-around_medium" >
+                    <lightning-input class="slds-size_1-of-2" style="width: 650px;" label="Company Name" value={newApplicant.Company_Name__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+                    <lightning-combobox style="width: 650px;" label="Role" 
+                    value={newApplicant.Role__c} 
+                    options={roleOptions} 
+                    placeholder="Select Role" 
+                    onchange={handleNewApplicantFieldChange} 
+                    data-field="Role__c">
+</lightning-combobox>
+                    <lightning-input style="width: 650px;" class="slds-size_1-of-2" label="DBA" value={newApplicant.DBA__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+                   <lightning-combobox style="width: 650px;" label="Industry" 
+                    value={newApplicant.Industry__c} 
+                    options={industryOptions} 
+                    placeholder="Select Industry" 
+                    onchange={handleNewApplicantFieldChange} 
+                    data-field="Industry__c">
+</lightning-combobox>
+                    <lightning-input style="width: 650px;" class="slds-size_1-of-2" label="Employees" value={newApplicant.Employees__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+                    <lightning-input style="width: 650px;" class="slds-size_1-of-2" label="Annual Revenue" value={newApplicant.Annual_Revenue__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+                    <lightning-input style="width: 650px;" class="slds-size_1-of-2" label="Net Profit" value={newApplicant.Net_Profit__c} onchange={handleNewApplicantFieldChange}></lightning-input>
+                    <lightning-combobox style="width: 650px;" label="Legal Entity" 
+                    value={newApplicant.Legal_Entity__c} 
+                    options={legalEntityOptions} 
+                    placeholder="Select Legal Entity" 
+                    onchange={handleNewApplicantFieldChange} 
+                    data-field="Legal_Entity__c">
+</lightning-combobox>
+                    <lightning-textarea class="slds-size_1-of-1" label="Comments" value={newApplicant.Comments__c} onchange={handleNewApplicantFieldChange}></lightning-textarea>
+                </div>
+            </lightning-card>
+        </div>
+    </template>
+
+
+</template>
+
+
+import { LightningElement, track, api,wire } from 'lwc';
+import searchAccounts from '@salesforce/apex/PartyDetailsController.searchAccounts';
+import getAccountDetails from '@salesforce/apex/PartyDetailsController.getAccountDetails';
+import getAccountDetailsFromAppForm from '@salesforce/apex/PartyDetailsController.getAccountDetailsFromAppForm';
+import getApplicantsFromAppForm from '@salesforce/apex/PartyDetailsController.getApplicantsFromAppForm';
+import { getObjectInfo, getPicklistValuesByRecordType } from 'lightning/uiObjectInfoApi';
+import saveApplicant from '@salesforce/apex/PartyDetailsController.saveApplicant';
+import ACCOUNT_OBJECT from '@salesforce/schema/Account';
+import { OmniscriptBaseMixin } from 'omnistudio/omniscriptBaseMixin';
+
+export default class PartyDetails extends OmniscriptBaseMixin(LightningElement) {
+    @api recordId; // ApplicationForm Id
+    @track searchKey = '';
+    @track searchResults = [];
+    @track formData = {};
+    @track selectedAccountId;
+    @track applicants = [];
+
+    @track newApplicant = null;
+
+     @track industryOptions = [];
+    @track legalEntityOptions = [];
+    @track roleOptions = [];
+
+    // Fetch Account object info
+    @wire(getObjectInfo, { objectApiName: ACCOUNT_OBJECT })
+    objectInfo;
+
+    // Fetch picklist values dynamically from Account object
+    @wire(getPicklistValuesByRecordType, { objectApiName: ACCOUNT_OBJECT, recordTypeId: '$objectInfo.data.defaultRecordTypeId' })
+    wiredPicklistValues({ data, error }) {
+        if (data) {
+            this.industryOptions = data.picklistFieldValues.Industry.values;
+            this.legalEntityOptions = data.picklistFieldValues.Legal_Entity__c.values;
+            this.roleOptions = data.picklistFieldValues.Role__c.values;
+        }
+        if (error) {
+            console.error(error);
+        }
+    }
+
+
+    @api formData = {};     // Read-only data
+    @track editData = {};   // Editable form data
+    @track isReadOnly = true;
+
+    handleEdit() {
+        this.editData = { ...this.formData };
+        this.isReadOnly = false;
+    }
+
+    handleCancel() {
+        this.isReadOnly = true;
+    }
+
+    handleInputChange(event) {
+        const field = event.target.dataset.field;
+        this.editData = { ...this.editData, [field]: event.target.value };
+    }
+
+   async handleSave() {
+    try {
+        // Ensure we carry Id properly
+        if (this.editData.id && !this.editData.Id) {
+            this.editData.Id = this.editData.id;
+            delete this.editData.id;
+        }
+
+        const applicantToSave = {
+            Id: this.editData.Id,  //  required for update
+            ApplicationFormId: this.recordId,
+            Company_Name__c: this.editData.companyName,
+            Role__c: this.editData.role,
+            DBA__c: this.editData.dba,
+            Industry__c: this.editData.industry,
+            Employees__c: this.editData.employees,
+            Annual_Revenue__c: this.editData.annualRevenue,
+            Net_Profit__c: this.editData.netProfit,
+            Legal_Entity__c: this.editData.legalEntity,
+            Comments__c: this.editData.comment
+        };
+
+        console.log('Saving applicant:', JSON.stringify(applicantToSave));
+
+        const result = await saveApplicant({ applicant: applicantToSave });
+
+        // Refresh with latest DB values (Id now guaranteed)
+        this.formData = { ...result };
+        this.editData = { ...result };
+        this.isReadOnly = true;
+
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Success',
+                message: 'Applicant saved successfully',
+                variant: 'success'
+            })
+        );
+
+    } catch (error) {
+        console.error('Save error:', error);
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Error saving applicant',
+                message: error?.body?.message || error.message,
+                variant: 'error'
+            })
+        );
+    }
+}
+
+    connectedCallback() {
+        console.log('ApplicationForm Id', this.recordId);
+        if (this.recordId) {
+            this.prefillFromAppForm();
+            this.loadApplicants();
+        }
+    }
+
+    
+
+
+  async prefillFromAppForm() {
+    try {
+        const applicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
+
+        if (applicants && applicants.length > 0) {
+            // Use existing applicant
+            const app = applicants[0];
+            this.formData = {
+                Id: app.Id,  
+                companyName: app.Company_Name__c,
+                role: app.Role__c,
+                dba: app.DBA__c,
+                industry: app.Industry__c,
+                employees: app.Employees__c,
+                annualRevenue: app.Annual_Revenue__c,
+                netProfit: app.Net_Profit__c,
+                legalEntity: app.Legal_Entity__c,
+                comment: app.Comments__c,
+                ApplicationFormId: this.recordId
+            };
+        } else {
+            // No applicant yet → fallback to Account
+            const accountDetails = await getAccountDetailsFromAppForm({ appFormId: this.recordId });
+            this.formData = {
+                Id: null,
+                companyName: accountDetails.Name,
+                role: accountDetails.Role__c,
+                dba: accountDetails.nSBA__DBA__c,
+                industry: accountDetails.Industry,
+                employees: accountDetails.NumberOfEmployees,
+                annualRevenue: accountDetails.AnnualRevenue,
+                netProfit: accountDetails.Net_Profit__c,
+                legalEntity: accountDetails.Legal_Entity__c,
+                comment: accountDetails.Comments__c,
+                ApplicationFormId: this.recordId
+            };
+        }
+
+        this.editData = { ...this.formData };
+        this.selectedAccountId = this.formData.Id;
+
+    } catch (error) {
+        console.error('Error prefill:', error);
+    }
+}
+
+
+    async loadApplicants() {
+    try {
+        const fetchedApplicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
+        if (fetchedApplicants && fetchedApplicants.length > 0) {
+            this.applicants = fetchedApplicants.map(app => {
+                // Defensive copy and initialization
+                const applicantData = { ...app };
+                return {
+                    ...applicantData,
+                    label: (app.Company_Name__c || '') + (app.Company_Name__c && app.Role ? ' - ' : '') + (app.Role || ''),
+                    isReadOnly: true,
+                    // Create a separate copy for editing to avoid direct mutation
+                    editData: { ...applicantData } 
+                };
+            });
+            console.log('Loaded and initialized applicants:', this.applicants);
+        } else {
+            this.applicants = []; // Ensure it's an empty array if no data
+        }
+    } catch (error) {
+        console.error('Error fetching and initializing applicants', error);
+        this.applicants = []; // Handle the error by setting to an empty array
+    }
+}
+
+    addApplicant() {
+        this.newApplicant = {
+            searchKey: '',
+            searchResults: [],
+            Company_Name__c: '',
+            Role: '',
+            DBA__c: '',
+            Industry__c: '',
+            Employees__c: null,
+            Annual_Revenue__c: '',
+            Net_Profit__c: '',
+            Legal_Entity__c: '',
+            Comments__c: ''
+        };
+    }
+
+    handleNewApplicantFieldChange(event) {
+    const field = event.target.label.replace(/ /g, '_'); // replace spaces with underscores
+    this.newApplicant = { ...this.newApplicant, [field]: event.target.value };
+}
+
+handleNewApplicantAccountSelect(event) {
+    const selectedId = event.currentTarget.dataset.id;
+    const selectedAccount = this.newApplicant.searchResults.find(acc => acc.Id === selectedId);
+
+    if (selectedAccount) {
+        // Assign picklist only if value exists in options
+        const industryValue = this.industryOptions.find(opt => opt.value === selectedAccount.Industry)?.value || '';
+        const legalEntityValue = this.legalEntityOptions.find(opt => opt.value === selectedAccount.Legal_Entity__c)?.value || '';
+        const roleValue = this.roleOptions.find(opt => opt.value === selectedAccount.Role__c)?.value || '';
+
+        this.newApplicant = {
+            ...this.newApplicant,
+            AccountId: selectedAccount.Id,
+            Company_Name__c: selectedAccount.Name,
+            DBA__c: selectedAccount.DBA__c || '',
+            Industry__c: industryValue,
+            Employees__c: selectedAccount.NumberOfEmployees || '',
+            Annual_Revenue__c: selectedAccount.AnnualRevenue || '',
+            Net_Profit__c: selectedAccount.Net_Profit__c || '',
+            Legal_Entity__c: legalEntityValue,
+            Role__c: roleValue,
+            Comments__c: ''
+        };
+
+        this.newApplicant.searchResults = [];
+        this.newApplicant.searchKey = selectedAccount.Name;
+    }
+}
+   
+    handleNewApplicantSearchKeyChange(event) {
+    this.newApplicant.searchKey = event.target.value;
+
+    if(this.newApplicant.searchKey.length > 2){
+        searchAccounts({ searchKey: this.newApplicant.searchKey })
+        .then(result => {
+            this.newApplicant.searchResults = result;
+        })
+        .catch(error => {
+            this.newApplicant.searchResults = [];
+            console.error(error);
+        });
+    } else {
+        this.newApplicant.searchResults = [];
+    }
+}
+
+
+
+    async findAccounts(searchKey) {
+        try {
+            const results = await searchAccounts({ searchKey });
+            this.newApplicant.searchResults = results;
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+   
+    handleSearchKeyChange(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey.length > 1) {
+            this.findAccounts();
+        } else {
+            this.searchResults = [];
+        }
+    }
+
+    async findAccounts() {
+        try {
+            this.searchResults = await searchAccounts({ searchKey: this.searchKey });
+        } catch (error) {
+            console.error('Error searching accounts:', error);
+        }
+    }
+
+    async handleAccountSelect(event) {
+        this.selectedAccountId = event.currentTarget.dataset.id;
+        this.searchResults = [];
+        try {
+            const details = await getAccountDetails({ accountId: this.selectedAccountId });
+            this.formData = { ...details };
+            // Save as Applicant
+          //  await createApplicant({ appFormId: this.recordId, accDetails: this.formData });
+            this.loadApplicants(); // refresh
+        } catch (error) {
+            console.error('Error fetching account details:', error);
+        }
+    }
+
+    handleApplicantSearchKeyChange(event) {
+    const applicantId = event.target.dataset.id;
+    const value = event.target.value;
+
+    this.applicants = this.applicants.map(app => {
+        if (app.Id === applicantId) {
+            return { ...app, searchKey: value };
+        }
+        return app;
+    });
+
+    if (value.length > 1) {
+        this.findAccountsForApplicant(applicantId, value);
+    }
+}
+
+async findAccountsForApplicant(applicantId, searchKey) {
+    try {
+        const results = await searchAccounts({ searchKey });
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                return { ...app, searchResults: results };
+            }
+            return app;
+        });
+    } catch (error) {
+        console.error('Error searching accounts for applicant:', error);
+    }
+}
+
+async handleApplicantAccountSelect(event) {
+    const applicantId = event.currentTarget.dataset.applicantId;
+    const accountId = event.currentTarget.dataset.id;
+
+    try {
+        const details = await getAccountDetails({ accountId });
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                return { 
+                    ...app, 
+                    AccountId: accountId,
+                    Company_Name__c: details.companyName,
+                    Role : details.role,
+                    DBA__c: details.dba,
+                    Industry__c: details.industry,
+                    Employees__c: details.employees,
+                    Annual_Revenue__c: details.annualRevenue,
+                    Net_Profit__c: details.netProfit,
+                    Legal_Entity__c: details.legalEntity,
+                    Comments__c: details.comment,
+                    searchResults: []
+                };
+            }
+            return app;
+        });
+    } catch (error) {
+        console.error('Error fetching account details for applicant:', error);
+    }
+}
+
+// New handler for the "Edit" button on an existing applicant
+    handleEditApplicant(event) {
+        const applicantId = event.target.dataset.id;
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                return { ...app, isReadOnly: false }; // Make this specific applicant editable
+            }
+            return app;
+        });
+    }
+
+    // New handler for the "Cancel" button on an existing applicant
+    handleCancelApplicant(event) {
+        const applicantId = event.target.dataset.id;
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                // Revert to original data and make it read-only again
+                return { ...app, isReadOnly: true, editData: { ...app } };
+            }
+            return app;
+        });
+    }
+
+    // New handler to update a specific applicant's editData as fields change
+    handleApplicantInputChange(event) {
+        const applicantId = event.target.dataset.id;
+        const field = event.target.dataset.field;
+        const value = event.target.value;
+
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                // Update the editData property for the specific field
+                const updatedEditData = { ...app.editData, [field]: value };
+                return { ...app, editData: updatedEditData };
+            }
+            return app;
+        });
+    }
+
+   // New handler to save the changes for a specific applicant
+async handleSaveApplicant(event) {
+    const applicantId = event.target.dataset.id;
+    const applicantToSave = this.applicants.find(app => app.Id === applicantId);
+
+    if (!applicantToSave) {
+        console.error('Applicant not found in the list.');
+        return;
+    }
+
+    try {
+        // Create a clean object to send to Apex, containing only the fields to be updated.
+        // This is crucial for matching the Apex method's expected input (Applicant sObject).
+        const applicantDataForApex = {
+            Id: applicantId, // The ID is essential for the update
+            ApplicationFormId: this.recordId,
+            Company_Name__c: applicantToSave.editData.Company_Name__c,
+            Role: applicantToSave.editData.Role,
+            DBA__c: applicantToSave.editData.DBA__c,
+            Industry__c: applicantToSave.editData.Industry__c,
+            Employees__c: applicantToSave.editData.Employees__c,
+            Annual_Revenue__c: applicantToSave.editData.Annual_Revenue__c,
+            Net_Profit__c: applicantToSave.editData.Net_Profit__c,
+            Legal_Entity__c: applicantToSave.editData.Legal_Entity__c,
+            Comments__c: applicantToSave.editData.Comments__c
+        };
+
+        const result = await saveApplicant({ applicant: applicantDataForApex });
+        console.log('Saved applicant:', result);
+
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                // Update the main applicant object with the saved data from Apex
+                return {
+                    ...result, // 'result' is the updated Applicant record from Apex
+                    isReadOnly: true,
+                    editData: { ...result }
+                };
+            }
+            return app;
+        });
+
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Success',
+                message: 'Applicant saved successfully.',
+                variant: 'success'
+            })
+        );
+
+    } catch (error) {
+        console.error('Save error:', error);
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Error saving applicant',
+                message: error?.body?.message || error.message,
+                variant: 'error'
+            })
+        );
+    }
+}
+
+
+}
+
+
+
+public class PartyDetailsController {
+
+    // Account search
+    @AuraEnabled(cacheable=true)
+    public static List<Account> searchAccounts(String searchKey) {
+        String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
+        return [
+            SELECT Id, Name, nSBA__DBA__c, Industry, Legal_Entity__c,
+                   NumberOfEmployees, AnnualRevenue, Net_Profit__c, Comments__c, role__c
+            FROM Account
+            WHERE Name LIKE :key 
+            LIMIT 10
+        ];
+    }
+
+    // Account details wrapper
+    public class AccountDetails {
+        @AuraEnabled public Id id;
+        @AuraEnabled public String companyName;
+        @AuraEnabled public String role;
+        @AuraEnabled public String dba;
+        @AuraEnabled public String industry;
+        @AuraEnabled public Integer employees;
+        @AuraEnabled public String annualRevenue;
+        @AuraEnabled public String netProfit;
+        @AuraEnabled public String legalEntity;
+        @AuraEnabled public String comment;
+    }
+
+    // Get account details
+    @AuraEnabled(cacheable=true)
+    public static AccountDetails getAccountDetails(Id accountId) {
+        if (accountId == null) return new AccountDetails();
+        Account acc = [
+            SELECT Id, Name, nSBA__DBA__c, Industry, Legal_Entity__c,
+                   NumberOfEmployees, AnnualRevenue, Net_Profit__c, Comments__c, Role__c
+            FROM Account
+            WHERE Id = :accountId
+            LIMIT 1
+        ];
+        return mapToWrapper(acc);
+    }
+
+    // Prefill from ApplicationForm
+    @AuraEnabled(cacheable=true)
+    public static AccountDetails getAccountDetailsFromAppForm(Id appFormId) {
+        if(appFormId == null) return new AccountDetails();
+        ApplicationForm app = [
+            SELECT Id, AccountId 
+            FROM ApplicationForm
+            WHERE Id = :appFormId
+            LIMIT 1
+        ];
+        if(app.AccountId == null) return new AccountDetails();
+        return getAccountDetails(app.AccountId);
+    }
+
+    // Get existing Applicants
+    @AuraEnabled(cacheable=true)
+    public static List<Applicant> getApplicantsFromAppForm(Id appFormId) {
+        return [
+            SELECT Id, Name, Company_Name__c,Role,DBA__c,Legal_Entity__c,Industry__c,Employees__c,Annual_Revenue__c, Net_Profit__c from Applicant
+            WHERE ApplicationFormId = :appFormId
+        ];
+    }
+
+    // Create new Applicant
+    @AuraEnabled
+    public static Id createApplicant(Id appFormId, AccountDetails accDetails) {
+        Applicant app = new Applicant();
+        app.ApplicationFormId = appFormId;
+        app.Company_Name__c = accDetails.companyName;
+        app.DBA__c = accDetails.dba;
+        app.Industry__c = accDetails.industry;
+        app.Employees__c = accDetails.employees;
+        app.Annual_Revenue__c = accDetails.annualRevenue != null ? Decimal.valueOf(accDetails.annualRevenue) : null;
+        app.Net_Profit__c = accDetails.netProfit != null ? Decimal.valueOf(accDetails.netProfit) : null;
+        app.Legal_Entity__c = accDetails.legalEntity;
+        app.Comments__c = accDetails.comment;
+        insert app;
+        return app.Id;
+    }
+
+    // Utility
+    private static AccountDetails mapToWrapper(Account acc) {
+        AccountDetails d = new AccountDetails();
+        d.id            = acc.Id;
+        d.companyName   = acc.Name;
+        d.dba           = acc.nSBA__DBA__c;
+        d.industry      = acc.Industry;
+        d.employees     = acc.NumberOfEmployees;
+        d.annualRevenue = acc.AnnualRevenue != null ? String.valueOf(acc.AnnualRevenue) : null;
+        d.netProfit     = acc.Net_Profit__c != null ? String.valueOf(acc.Net_Profit__c) : null;
+        d.legalEntity   = acc.Legal_Entity__c;
+        d.comment       = acc.Comments__c;
+        return d;
+    }
+
+ @AuraEnabled
+    public static void updateApplicant(Id applicantId, Map<String, Object> fields) {
+        Applicant app = new Applicant(Id = applicantId);
+        for (String key : fields.keySet()) {
+            SObjectField sf = Applicant.SObjectType.getDescribe().fields.getMap().get(key);
+            if (sf != null) {
+                app.put(sf, fields.get(key));
+            }
+        }
+        update app;
+    }
+
+    @AuraEnabled
+public static Applicant saveApplicant(Applicant applicant) {
+    if (applicant.ApplicationFormId == null) {
+        throw new AuraHandledException('ApplicationFormId is required.');
+    }
+
+    upsert applicant;
+
+    // Always return record with Id after upsert
+    return [
+        SELECT Id, ApplicationFormId, Company_Name__c, Role, DBA__c,
+               Industry__c, Employees__c, Annual_Revenue__c, Net_Profit__c,
+               Legal_Entity__c, Comments__c
+        FROM Applicant
+        WHERE Id = :applicant.Id
+        LIMIT 1
+    ];
+}
+
+}
+
+
