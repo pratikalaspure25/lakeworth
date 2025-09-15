@@ -1,4 +1,364 @@
- @AuraEnabled
+import { LightningElement, track, api, wire } from 'lwc';
+import searchAccounts from '@salesforce/apex/PartyDetailsController.searchAccounts';
+import getAccountDetails from '@salesforce/apex/PartyDetailsController.getAccountDetails';
+import getAccountDetailsFromAppForm from '@salesforce/apex/PartyDetailsController.getAccountDetailsFromAppForm';
+import getApplicantsFromAppForm from '@salesforce/apex/PartyDetailsController.getApplicantsFromAppForm';
+import { getObjectInfo, getPicklistValuesByRecordType } from 'lightning/uiObjectInfoApi';
+import saveApplicant from '@salesforce/apex/PartyDetailsController.saveApplicant';
+import ACCOUNT_OBJECT from '@salesforce/schema/Account';
+import APPLICANT_OBJECT from '@salesforce/schema/Applicant';
+import { OmniscriptBaseMixin } from 'omnistudio/omniscriptBaseMixin';
+import searchBusinessAccounts from '@salesforce/apex/PartyDetailsController.searchBusinessAccounts';
+import fetchAccountDetails from '@salesforce/apex/PartyDetailsController.fetchAccountDetails';
+import saveApplicant1 from '@salesforce/apex/PartyDetailsController.saveApplicant1';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+
+export default class PartyDetails extends OmniscriptBaseMixin(LightningElement) {
+    @api recordId; // ApplicationForm Id
+    @track searchKey = '';
+    @track searchResults = [];
+    @track formData = {};
+    @track selectedAccountId;
+    @track applicants = [];
+
+    @track newApplicant = null;
+
+    @track industryOptions = [];
+    @track legalEntityOptions = [];
+    @track roleOptions = [];
+
+    @track industryAppOptions = [];
+    @track legalEntityAppOptions = [];
+    @track roleAppOptions = [];
+
+    // For Account object picklists
+    @wire(getObjectInfo, { objectApiName: ACCOUNT_OBJECT })
+    accountObjectInfo;
+
+    @wire(getPicklistValuesByRecordType, { objectApiName: ACCOUNT_OBJECT, recordTypeId: '$accountObjectInfo.data.defaultRecordTypeId' })
+    wiredAccountPicklistValues({ data, error }) {
+        if (data) {
+            this.industryOptions = data.picklistFieldValues.Industry.values;
+            this.legalEntityOptions = data.picklistFieldValues.Legal_Entity__c.values;
+            this.roleOptions = data.picklistFieldValues.Role__c.values;
+        } else if (error) {
+            console.error('Account picklist error', error);
+        }
+    }
+
+    // For Applicant object picklists
+    @wire(getObjectInfo, { objectApiName: APPLICANT_OBJECT })
+    applicantObjectInfo;
+
+    @wire(getPicklistValuesByRecordType, { objectApiName: APPLICANT_OBJECT, recordTypeId: '$applicantObjectInfo.data.defaultRecordTypeId' })
+    wiredApplicantPicklistValues({ data, error }) {
+        if (data) {
+            this.industryAppOptions = data.picklistFieldValues.Industry__c.values;
+            this.legalEntityAppOptions = data.picklistFieldValues.Legal_Entity__c.values;
+            this.roleAppOptions = data.picklistFieldValues.Role.values;
+        } else if (error) {
+            console.error('Applicant picklist error', error);
+        }
+    }
+
+    @track showForm = false;
+    @api formData = {};     // Read-only data
+    @track editData = {};   // Editable form data
+    @track isReadOnly = true;
+
+    @api applicationFormId;
+    @track showForm = false;
+    @track searchKey = '';
+    @track searchResults = [];
+    @track formData = {
+        Company_Name__c: '',
+        DBA__c: '',
+        Industry__c: '',
+        Employees__c: null,
+        Annual_Revenue__c: null,
+        Net_Profit__c: null,
+        Legal_Entity__c: '',
+        Comments__c: ''
+    };
+
+    // Open form
+    openApplicantForm() {
+        this.showForm = true;
+        this.resetForm();
+    }
+
+    // Cancel form
+    cancelApplicantForm() {
+        this.showForm = false;
+    }
+
+    // Reset form data
+    resetForm() {
+        this.searchKey = '';
+        this.searchResults = [];
+        this.formData = {
+            Company_Name__c: '',
+            DBA__c: '',
+            Industry__c: '',
+            Employees__c: null,
+            Annual_Revenue__c: null,
+            Net_Profit__c: null,
+            Legal_Entity__c: '',
+            Comments__c: '',
+            applicationFormId :''
+        };
+    }
+
+    // Handle search keyword
+    handleKeywordUpdate(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey.length > 2) {
+            searchBusinessAccounts({ keyword: this.searchKey })
+                .then(result => {
+                    this.searchResults = result;
+                })
+                .catch(error => {
+                    this.showToast('Error', error.body.message, 'error');
+                });
+        } else {
+            this.searchResults = [];
+        }
+    }
+
+    // Select account → auto fill
+    chooseAccount(event) {
+        let accountId = event.currentTarget.dataset.id;
+        fetchAccountDetails({ accountId })
+            .then(acc => {
+                this.formData = {
+                    Company_Name__c: acc.Name,
+                    DBA__c: acc.nSBA__DBA__c,
+                    Industry__c: acc.Industry,
+                    Employees__c: acc.NumberOfEmployees,
+                    Annual_Revenue__c: acc.AnnualRevenue,
+                    Net_Profit__c: acc.Net_Profit__c,
+                    Legal_Entity__c: acc.Legal_Entity__c,
+                    Comments__c: acc.Comments__c
+                };
+                this.searchResults = []; // hide results
+                this.searchKey = acc.Name;
+            })
+            .catch(error => {
+                this.showToast('Error', error.body.message, 'error');
+            });
+    }
+
+    // Manual input
+    updateInput(event) {
+        const fieldName = event.target.dataset.field;
+        this.formData[fieldName] = event.target.value;
+    }
+
+    // Save
+    // saveApplicantRecord() {
+    //     saveApplicant1({ applicantRecord: this.formData, applicationFormId: this.applicationFormId })
+    //         .then(() => {
+    //             this.showToast('Success', 'Applicant saved successfully', 'success');
+    //             this.showForm = false;
+    //             this.resetForm();
+    //         })
+    //         .catch(error => {
+    //             this.showToast('Error', error.body.message, 'error');
+    //         });
+    // }
+
+
+     saveApplicantRecord() {
+        const applicantRec = {
+            sobjectType: 'Applicant',
+            ...this.formData
+        };
+
+        saveApplicant({
+            applicantRecord: applicantRec,
+            applicationFormId: this.applicationFormId
+        })
+            .then(() => {
+                this.dispatchEvent(
+                    new ShowToastEvent({
+                        title: 'Success',
+                        message: 'Applicant created successfully',
+                        variant: 'success'
+                    })
+                );
+                this.showForm = false;
+                this.formData = {};
+            })
+            .catch(error => {
+                this.dispatchEvent(
+                    new ShowToastEvent({
+                        title: 'Error creating record',
+                        message: error.body.message,
+                        variant: 'error'
+                    })
+                );
+            });
+    }
+
+    // Toast helper
+    showToast(title, message, variant) {
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title,
+                message,
+                variant
+            })
+        );
+    }
+
+
+    connectedCallback() {
+        console.log('ApplicationForm Id', this.recordId);
+        if (this.recordId) {
+            //  this.prefillFromAppForm();
+            this.loadApplicants();
+        }
+    }
+
+
+    // Existing Applicant Record 
+    async loadApplicants() {
+        try {
+            const fetchedApplicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
+            if (fetchedApplicants && fetchedApplicants.length > 0) {
+                this.applicants = fetchedApplicants.map(app => {
+                    // Defensive copy and initialization
+                    const applicantData = { ...app };
+                    return {
+                        ...applicantData,
+                        label: (app.Company_Name__c || '') + (app.Company_Name__c && app.Role ? ' - ' : '') + (app.Role || ''),
+                        isReadOnly: true,
+                        // Create a separate copy for editing to avoid direct mutation
+                        editData: { ...applicantData }
+                    };
+                });
+                console.log('Loaded and initialized applicants:', this.applicants);
+            } else {
+                this.applicants = []; // Ensure it's an empty array if no data
+            }
+        } catch (error) {
+            console.error('Error fetching and initializing applicants', error);
+            this.applicants = []; // Handle the error by setting to an empty array
+        }
+    }
+
+
+
+    // New handler for the "Edit" button on an existing applicant record
+    handleEditApplicant(event) {
+        const applicantId = event.target.dataset.id;
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                return { ...app, isReadOnly: false }; // Make this specific applicant editable
+            }
+            return app;
+        });
+    }
+
+    // New handler for the "Cancel" button on an existing applicant record
+    handleCancelApplicant(event) {
+        const applicantId = event.target.dataset.id;
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                // Revert to original data and make it read-only again
+                return { ...app, isReadOnly: true, editData: { ...app } };
+            }
+            return app;
+        });
+    }
+
+    // New handler to update a specific applicant's editData as fields change existing applicant record
+    handleApplicantInputChange(event) {
+        const applicantId = event.target.dataset.id;
+        const field = event.target.dataset.field;
+        const value = event.target.value;
+
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                // Update the editData property for the specific field
+                const updatedEditData = { ...app.editData, [field]: value };
+                return { ...app, editData: updatedEditData };
+            }
+            return app;
+        });
+    }
+
+    // New handler to save the changes for a specific applicant existing applicant record
+    async handleSaveApplicant(event) {
+        const applicantId = event.target.dataset.id;
+        const applicantToSave = this.applicants.find(app => app.Id === applicantId);
+
+        if (!applicantToSave) {
+            console.error('Applicant not found in the list.');
+            return;
+        }
+
+        try {
+            // Create a clean object to send to Apex, containing only the fields to be updated.
+            // This is crucial for matching the Apex method's expected input (Applicant sObject).
+            const applicantDataForApex = {
+                Id: applicantId, // The ID is essential for the update
+                ApplicationFormId: this.recordId,
+                Company_Name__c: applicantToSave.editData.Company_Name__c,
+                Role: applicantToSave.editData.Role,
+                DBA__c: applicantToSave.editData.DBA__c,
+                Industry__c: applicantToSave.editData.Industry__c,
+                Employees__c: applicantToSave.editData.Employees__c,
+                Annual_Revenue__c: applicantToSave.editData.Annual_Revenue__c,
+                Net_Profit__c: applicantToSave.editData.Net_Profit__c,
+                Legal_Entity__c: applicantToSave.editData.Legal_Entity__c,
+                Comments__c: applicantToSave.editData.Comments__c
+            };
+
+            const result = await saveApplicant({ applicant: applicantDataForApex });
+            console.log('Saved applicant:', result);
+
+            this.applicants = this.applicants.map(app => {
+                if (app.Id === applicantId) {
+                    // Update the main applicant object with the saved data from Apex
+                    return {
+                        ...result, // 'result' is the updated Applicant record from Apex
+                        isReadOnly: true,
+                        editData: { ...result }
+                    };
+                }
+                return app;
+            });
+
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Success',
+                    message: 'Applicant saved successfully.',
+                    variant: 'success'
+                })
+            );
+
+        } catch (error) {
+            console.error('Save error:', error);
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Error saving applicant',
+                    message: error?.body?.message || error.message,
+                    variant: 'error'
+                })
+            );
+        }
+    }
+
+
+}
+
+
+
+
+
+
+@AuraEnabled
     public static Id saveApplicant(Applicant__c applicantRecord, Id applicationFormId) {
         // Make sure lookup is populated
         applicantRecord.ApplicationFormId = applicationFormId;
