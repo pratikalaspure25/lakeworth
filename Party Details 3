@@ -1,3 +1,72 @@
+<template if:true={showIndividualForm}>
+    <lightning-card title="New Individual Applicant">
+
+        <!-- Search Individual -->
+        <lightning-input 
+            label="Search Individual" 
+            value={searchKey} 
+            onchange={handleIndividualSearchChange}>
+        </lightning-input>
+
+        <template if:true={individualResults}>
+            <template for:each={individualResults} for:item="ind">
+                <div key={ind.Id} class="slds-p-around_x-small">
+                    <a href="javascript:void(0);" onclick={selectIndividual} data-id={ind.Id}>
+                        {ind.FirstName} {ind.LastName}
+                    </a>
+                </div>
+            </template>
+        </template>
+
+        <!-- Prefilled Form -->
+        <lightning-input 
+            label="First Name" 
+            value={formData1.FirstName} 
+            onchange={handleInputChange} 
+            data-field="FirstName">
+        </lightning-input>
+
+        <lightning-input 
+            label="Last Name" 
+            value={formData1.LastName} 
+            onchange={handleInputChange} 
+            data-field="LastName">
+        </lightning-input>
+
+        <lightning-input 
+            label="Phone" 
+            value={formData1.Phone} 
+            onchange={handleInputChange} 
+            data-field="Phone">
+        </lightning-input>
+
+        <lightning-input 
+            label="Email" 
+            value={formData1.Email} 
+            onchange={handleInputChange} 
+            data-field="Email">
+        </lightning-input>
+
+        <lightning-input 
+            label="Role" 
+            value={formData1.Role} 
+            onchange={handleInputChange} 
+            data-field="Role">
+        </lightning-input>
+
+        <lightning-button 
+            label="Save Individual" 
+            onclick={saveIndividualRecord} 
+            variant="brand">
+        </lightning-button>
+
+    </lightning-card>
+</template>
+
+
+
+
+
 <lightning-card title="New Individual Applicant">
     <div class="slds-grid slds-wrap slds-m-around_medium">
 
