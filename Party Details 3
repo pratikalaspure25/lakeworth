@@ -1,3 +1,84 @@
+isBusiness: app.Applicant_Type__c === 'Business',
+                    isIndividual: app.Applicant_Type__c === 'Individual',
+
+// Handle Edit
+    handleEditApplicant(event) {
+        let id = event.target.dataset.id;
+        this.applicants = this.applicants.map(app => {
+            return {
+                ...app,
+                isReadOnly: app.Id === id ? false : app.isReadOnly
+            };
+        });
+    }
+
+<template for:each={applicants} for:item="applicant">
+    <lightning-accordion-section key={applicant.Id} label={applicant.Company_Name__c || (applicant.FirstName__c + ' ' + applicant.LastName__c)} name={applicant.Id}>
+        
+        <!-- READONLY VIEW -->
+        <template if:true={applicant.isReadOnly}>
+            
+            <!-- Business Applicant -->
+            <template if:true={applicant.isBusiness}>
+                <div class="slds-grid slds-wrap slds-m-around_medium">
+                    <lightning-input class="slds-size_1-of-2" label="Company Name" value={applicant.Company_Name__c} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Role" value={applicant.Role__c} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Employees" value={applicant.Employees__c} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={applicant.Annual_Revenue__c} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={applicant.Legal_Entity__c} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Net Profit" value={applicant.Net_Profit__c} readonly></lightning-input>
+                </div>
+            </template>
+
+            <!-- Individual Applicant -->
+            <template if:true={applicant.isIndividual}>
+                <div class="slds-grid slds-wrap slds-m-around_medium">
+                    <lightning-input class="slds-size_1-of-2" label="First Name" value={applicant.FirstName__c} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Last Name" value={applicant.LastName__c} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Role" value={applicant.Role__c} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Phone" value={applicant.Phone__c} readonly></lightning-input>
+                </div>
+            </template>
+
+        </template>
+
+        <!-- EDIT MODE -->
+        <template if:false={applicant.isReadOnly}>
+            <lightning-card title="Edit Applicant">
+
+                <!-- Business Applicant -->
+                <template if:true={applicant.isBusiness}>
+                    <div class="slds-grid slds-wrap slds-m-around_medium">
+                        <lightning-input label="Company Name" value={applicant.editData.Company_Name__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Company_Name__c"></lightning-input>
+                        <lightning-input label="Employees" value={applicant.editData.Employees__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Employees__c"></lightning-input>
+                        <lightning-input label="Annual Revenue" value={applicant.editData.Annual_Revenue__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Annual_Revenue__c"></lightning-input>
+                        <lightning-input label="Net Profit" value={applicant.editData.Net_Profit__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Net_Profit__c"></lightning-input>
+                    </div>
+                </template>
+
+                <!-- Individual Applicant -->
+                <template if:true={applicant.isIndividual}>
+                    <div class="slds-grid slds-wrap slds-m-around_medium">
+                        <lightning-input label="First Name" value={applicant.editData.FirstName__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="FirstName__c"></lightning-input>
+                        <lightning-input label="Last Name" value={applicant.editData.LastName__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="LastName__c"></lightning-input>
+                        <lightning-input label="Phone" value={applicant.editData.Phone__c} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Phone__c"></lightning-input>
+                    </div>
+                </template>
+
+                <div class="slds-m-around_medium slds-grid slds-grid_align-end">
+                    <lightning-button label="Cancel" variant="neutral" onclick={handleCancelApplicant} data-id={applicant.Id}></lightning-button>
+                    <lightning-button label="Save" variant="brand" onclick={handleSaveApplicant} data-id={applicant.Id}></lightning-button>
+                </div>
+
+            </lightning-card>
+        </template>
+    </lightning-accordion-section>
+</template>
+
+
+
+
+
 <template for:each={applicants} for:item="applicant" for:index="index">
     <lightning-accordion-section key={applicant.Id} label={applicant.label} name={applicant.Id}>
 
