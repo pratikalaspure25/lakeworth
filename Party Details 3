@@ -1,3 +1,17 @@
+ <!-- Add Business Button -->
+            <lightning-button 
+                label="Add Business" 
+                onclick={openApplicantForm} 
+                variant="brand">
+            </lightning-button> 
+
+<!-- Add Individual Button -->
+<lightning-button 
+    label="Add Individual" 
+    onclick={handleAddIndividual} 
+    variant="brand">
+</lightning-button>
+
 <template if:false={applicant.isReadOnly}>
     <lightning-card title="Edit Applicant">
         
