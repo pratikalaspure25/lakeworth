@@ -1,3 +1,63 @@
+ @AuraEnabled
+    public static Id saveApplicant(Applicant__c applicantRecord, Id applicationFormId) {
+        // Make sure lookup is populated
+        applicantRecord.ApplicationFormId = applicationFormId;
+        insert applicantRecord;
+        return applicantRecord.Id;
+    }
+
+
+ @api applicationFormId; // Passed from parent component
+
+    openApplicantForm() {
+        this.showForm = true;
+    }
+
+    cancelApplicantForm() {
+        this.showForm = false;
+        this.formData = {};
+    }
+
+    updateInput(event) {
+        const field = event.target.label
+            .replace(/\s/g, '_')  // Convert "Company Name" → "Company_Name"
+            .replace(/[^\w]/g, ''); // Clean extra characters
+
+        this.formData[field + '__c'] = event.target.value;
+    }
+
+    saveApplicantRecord() {
+        const applicantRec = {
+            sobjectType: 'Applicant__c',
+            ...this.formData
+        };
+
+        saveApplicant({
+            applicantRecord: applicantRec,
+            applicationFormId: this.applicationFormId
+        })
+            .then(() => {
+                this.dispatchEvent(
+                    new ShowToastEvent({
+                        title: 'Success',
+                        message: 'Applicant created successfully',
+                        variant: 'success'
+                    })
+                );
+                this.showForm = false;
+                this.formData = {};
+            })
+            .catch(error => {
+                this.dispatchEvent(
+                    new ShowToastEvent({
+                        title: 'Error creating record',
+                        message: error.body.message,
+                        variant: 'error'
+                    })
+                );
+            });
+    }
+
 SELECT Id, Name,ApplicationFormId,  Company_Name__c,Role,DBA__c,Legal_Entity__c,Industry__c,Employees__c,Annual_Revenue__c, Net_Profit__c from Applicant
 
   <!-- Add Business Button -->
