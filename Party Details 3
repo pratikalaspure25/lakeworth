@@ -1,3 +1,5 @@
+SELECT Id, Name,ApplicationFormId,  Company_Name__c,Role,DBA__c,Legal_Entity__c,Industry__c,Employees__c,Annual_Revenue__c, Net_Profit__c from Applicant
+
   <!-- Add Business Button -->
 <lightning-button 
     label="Add Business" 
