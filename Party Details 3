@@ -1,3 +1,159 @@
+/ Fetch details of one Individual Account
+@AuraEnabled(cacheable=true)
+public static Account fetchIndividualAccountDetails(Id accountId) {
+    return [
+        SELECT Id, Name, FirstName, LastName, Phone, PersonEmail
+        FROM Account
+        WHERE Id = :accountId
+        LIMIT 1
+    ];
+}
+
+
+ <template if:true={showIndividualForm}>
+        <lightning-card title="New Individual Applicant">
+
+            <!-- Search Individual -->
+            <lightning-input label="Search Individual Account"
+                             value={searchKey}
+                             placeholder="Type name..."
+                             onchange={handleSearchKeyChange}>
+            </lightning-input>
+
+            <!-- Search Results -->
+            <template if:true={searchResults}>
+                <template for:each={searchResults} for:item="acc">
+                    <div key={acc.Id} class="slds-p-around_x-small">
+                        <a href="javascript:void(0);" data-id={acc.Id} onclick={handleSelectAccount}>
+                            {acc.Name}
+                        </a>
+                    </div>
+                </template>
+            </template>
+
+            <!-- Form -->
+            <div class="slds-m-around_medium">
+                <lightning-input label="First Name"
+                                 value={individualForm.FirstName__c}
+                                 data-field="FirstName__c"
+                                 onchange={handleInputChange}></lightning-input>
+
+                <lightning-input label="Last Name"
+                                 value={individualForm.LastName__c}
+                                 data-field="LastName__c"
+                                 onchange={handleInputChange}></lightning-input>
+
+                <lightning-input type="phone" label="Phone"
+                                 value={individualForm.Phone__c}
+                                 data-field="Phone__c"
+                                 onchange={handleInputChange}></lightning-input>
+
+                <lightning-input type="email" label="Email"
+                                 value={individualForm.Email__c}
+                                 data-field="Email__c"
+                                 onchange={handleInputChange}></lightning-input>
+
+                <lightning-input label="Role"
+                                 value={individualForm.Role__c}
+                                 data-field="Role__c"
+                                 onchange={handleInputChange}></lightning-input>
+            </div>
+
+            <!-- Actions -->
+            <div class="slds-m-around_medium">
+                <lightning-button variant="neutral" label="Cancel" onclick={handleCancel}></lightning-button>
+                <lightning-button variant="brand" label="Save" onclick={saveIndividualApplicant}></lightning-button>
+            </div>
+
+        </lightning-card>
+    </template>
+
+
+import searchIndividualAccounts from '@salesforce/apex/PartyDetailsController.searchIndividualAccounts';
+import fetchIndividualAccountDetails from '@salesforce/apex/PartyDetailsController.fetchIndividualAccountDetails';
+
+ // Open form
+    handleAddIndividual() {
+        this.showIndividualForm = true;
+        this.individualForm = {};
+    }
+
+    // Cancel
+    handleCancel() {
+        this.showIndividualForm = false;
+        this.searchResults = [];
+        this.searchKey = '';
+    }
+
+    // Handle search input
+    handleSearchKeyChange(event) {
+        this.searchKey = event.target.value;
+
+        if (this.searchKey.length > 2) {
+            searchIndividualAccounts({ searchKey: this.searchKey })
+                .then(result => {
+                    this.searchResults = result;
+                })
+                .catch(error => {
+                    this.showToast('Error', error.body.message, 'error');
+                });
+        } else {
+            this.searchResults = [];
+        }
+    }
+
+    // Select account → auto-fill
+    handleSelectAccount(event) {
+        let accId = event.currentTarget.dataset.id;
+        fetchIndividualAccountDetails({ accountId: accId })
+            .then(acc => {
+                this.individualForm = {
+                    FirstName__c: acc.FirstName,
+                    LastName__c: acc.LastName,
+                    Phone__c: acc.Phone,
+                    Email__c: acc.PersonEmail,
+                    Role__c: ''
+                };
+                this.searchResults = []; // hide results
+                this.searchKey = acc.Name;
+            })
+            .catch(error => {
+                this.showToast('Error', error.body.message, 'error');
+            });
+    }
+
+    // Manual input update
+    handleInputChange(event) {
+        const field = event.target.dataset.field;
+        this.individualForm[field] = event.target.value;
+    }
+
+    // Save record
+    saveIndividualApplicant() {
+        const applicantRec = {
+            sobjectType: 'Applicant__c',
+            ApplicationFormId__c: this.recordId,
+            ...this.individualForm
+        };
+
+        saveApplicant1({ applicantRecord: applicantRec, applicationFormId: this.recordId })
+            .then(() => {
+                this.showToast('Success', 'Applicant saved successfully', 'success');
+                this.handleCancel();
+            })
+            .catch(error => {
+                this.showToast('Error', error.body.message, 'error');
+            });
+    }
+
+    // Toast helper
+    showToast(title, message, variant) {
+        this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
+    }
+
+
+
+
 <template>
     <!-- Add Individual Button -->
     <lightning-button 
