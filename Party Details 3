@@ -1,3 +1,83 @@
+<lightning-card title="New Individual Applicant">
+    <div class="slds-grid slds-wrap slds-m-around_medium">
+
+        <!-- First Name -->
+        <lightning-input 
+            class="slds-size_1-of-2 slds-p-around_x-small" 
+            label="First Name" 
+            value={formData.First_Name__c} 
+            data-field="First_Name__c" 
+            onchange={updateInput}>
+        </lightning-input>
+
+        <!-- Last Name -->
+        <lightning-input 
+            class="slds-size_1-of-2 slds-p-around_x-small" 
+            label="Last Name" 
+            value={formData.Last_Name__c} 
+            data-field="Last_Name__c" 
+            onchange={updateInput}>
+        </lightning-input>
+
+        <!-- Phone -->
+        <lightning-input 
+            class="slds-size_1-of-2 slds-p-around_x-small" 
+            label="Phone" 
+            type="tel" 
+            value={formData.Phone__c} 
+            data-field="Phone__c" 
+            onchange={updateInput}>
+        </lightning-input>
+
+        <!-- Email -->
+        <lightning-input 
+            class="slds-size_1-of-2 slds-p-around_x-small" 
+            label="Email" 
+            type="email" 
+            value={formData.Email__c} 
+            data-field="Email__c" 
+            onchange={updateInput}>
+        </lightning-input>
+
+        <!-- Role -->
+        <lightning-combobox 
+            class="slds-size_1-of-2 slds-p-around_x-small" 
+            label="Role" 
+            value={formData.Role__c} 
+            data-field="Role__c" 
+            options={roleAppOptions} 
+            onchange={updateInput}>
+        </lightning-combobox>
+
+    </div>
+
+    <!-- Footer with buttons -->
+    <div class="slds-m-around_medium slds-grid slds-grid_align-end">
+        <lightning-button 
+            label="Cancel" 
+            variant="neutral" 
+            onclick={handleCancel} 
+            class="slds-m-right_small">
+        </lightning-button>
+
+        <lightning-button 
+            label="Save" 
+            variant="brand" 
+            onclick={saveIndividualRecord}>
+        </lightning-button>
+    </div>
+</lightning-card>
+
+
+
+handleCancel() {
+    this.showIndividualForm = false;
+    this.formData = {}; // reset form
+}
+
+
+
+
 @AuraEnabled(cacheable=true)
 public static List<Account> searchIndividuals(String searchKey) {
     String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
