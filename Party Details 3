@@ -1,3 +1,217 @@
+public with sharing class ApplicantController {
+    
+    @AuraEnabled
+    public static Applicant__c saveApplicant(Applicant__c applicantRecord, Id applicationFormId) {
+        // Relating with Application Form if required
+        if(applicationFormId != null) {
+            applicantRecord.Application_Form__c = applicationFormId;
+        }
+        
+        insert applicantRecord;
+        return applicantRecord;
+    }
+
+    // Search only Business accounts
+    @AuraEnabled(cacheable=true)
+    public static List<Account> searchBusinessAccounts(String keyword) {
+        String searchKey = '%' + String.escapeSingleQuotes(keyword) + '%';
+        return [
+            SELECT Id, Name, Industry, nSBA__DBA__c, NumberOfEmployees, AnnualRevenue, 
+                   Net_Profit__c, Legal_Entity__c, Comments__c
+            FROM Account
+            WHERE RecordType.DeveloperName = 'Business' 
+              AND Name LIKE :searchKey
+            LIMIT 20
+        ];
+    }
+
+    // Fetch selected account details
+    @AuraEnabled(cacheable=true)
+    public static Account fetchAccountDetails(Id accountId) {
+        return [
+            SELECT Id, Name, Industry, nSBA__DBA__c, NumberOfEmployees, AnnualRevenue, 
+                   Net_Profit__c, Legal_Entity__c, Comments__c
+            FROM Account
+            WHERE Id = :accountId
+            LIMIT 1
+        ];
+    }
+}
+
+
+import searchBusinessAccounts from '@salesforce/apex/ApplicantController.searchBusinessAccounts';
+import fetchAccountDetails from '@salesforce/apex/ApplicantController.fetchAccountDetails';
+import saveApplicant from '@salesforce/apex/ApplicantController.saveApplicant';
+
+ @api applicationFormId;
+    @track showForm = false;
+    @track searchKey = '';
+    @track searchResults = [];
+    @track formData = {
+        Company_Name__c: '',
+        DBA__c: '',
+        Industry__c: '',
+        Employees__c: null,
+        Annual_Revenue__c: null,
+        Net_Profit__c: null,
+        Legal_Entity__c: '',
+        Comments__c: ''
+    };
+
+    // Open form
+    openApplicantForm() {
+        this.showForm = true;
+        this.resetForm();
+    }
+
+    // Cancel form
+    cancelApplicantForm() {
+        this.showForm = false;
+    }
+
+    // Reset form data
+    resetForm() {
+        this.searchKey = '';
+        this.searchResults = [];
+        this.formData = {
+            Company_Name__c: '',
+            DBA__c: '',
+            Industry__c: '',
+            Employees__c: null,
+            Annual_Revenue__c: null,
+            Net_Profit__c: null,
+            Legal_Entity__c: '',
+            Comments__c: ''
+        };
+    }
+
+    // Handle search keyword
+    handleKeywordUpdate(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey.length > 2) {
+            searchBusinessAccounts({ keyword: this.searchKey })
+                .then(result => {
+                    this.searchResults = result;
+                })
+                .catch(error => {
+                    this.showToast('Error', error.body.message, 'error');
+                });
+        } else {
+            this.searchResults = [];
+        }
+    }
+
+    // Select account → auto fill
+    chooseAccount(event) {
+        let accountId = event.currentTarget.dataset.id;
+        fetchAccountDetails({ accountId })
+            .then(acc => {
+                this.formData = {
+                    Company_Name__c: acc.Name,
+                    DBA__c: acc.nSBA__DBA__c,
+                    Industry__c: acc.Industry,
+                    Employees__c: acc.NumberOfEmployees,
+                    Annual_Revenue__c: acc.AnnualRevenue,
+                    Net_Profit__c: acc.Net_Profit__c,
+                    Legal_Entity__c: acc.Legal_Entity__c,
+                    Comments__c: acc.Comments__c
+                };
+                this.searchResults = []; // hide results
+                this.searchKey = acc.Name;
+            })
+            .catch(error => {
+                this.showToast('Error', error.body.message, 'error');
+            });
+    }
+
+    // Manual input
+    updateInput(event) {
+        const fieldName = event.target.dataset.field;
+        this.formData[fieldName] = event.target.value;
+    }
+
+    // Save
+    saveApplicantRecord() {
+        saveApplicant({ applicantRecord: this.formData, applicationFormId: this.applicationFormId })
+            .then(() => {
+                this.showToast('Success', 'Applicant saved successfully', 'success');
+                this.showForm = false;
+                this.resetForm();
+            })
+            .catch(error => {
+                this.showToast('Error', error.body.message, 'error');
+            });
+    }
+
+    // Toast helper
+    showToast(title, message, variant) {
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title,
+                message,
+                variant
+            })
+        );
+    }
+
+
+<!-- Add Business Button -->
+<lightning-button 
+    label="Add Business" 
+    onclick={openApplicantForm} 
+    variant="brand">
+</lightning-button>
+
+<!-- Applicant Form -->
+<template if:true={showForm}>
+    <lightning-card title="New Applicant">
+
+        <!-- Optional Account Search -->
+        <lightning-input 
+            label="Search Business Account (optional)" 
+            value={searchKey} 
+            placeholder="Type to search..." 
+            onchange={handleKeywordUpdate}>
+        </lightning-input>
+
+        <!-- Search Results -->
+        <template if:true={searchResults}>
+            <div>
+                <template for:each={searchResults} for:item="account">
+                    <div key={account.Id} class="slds-p-around_x-small">
+                        <a href="javascript:void(0);" data-id={account.Id} onclick={chooseAccount}>
+                            {account.Name}
+                        </a>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <!-- Editable Form -->
+        <div class="slds-grid slds-wrap slds-m-around_medium">
+            <lightning-input class="slds-size_1-of-2" label="Company Name" value={formData.Company_Name__c} data-field="Company_Name__c" onchange={updateInput}></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="DBA" value={formData.DBA__c} data-field="DBA__c" onchange={updateInput}></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Industry" value={formData.Industry__c} data-field="Industry__c" onchange={updateInput}></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Employees" type="number" value={formData.Employees__c} data-field="Employees__c" onchange={updateInput}></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Annual Revenue" type="number" value={formData.Annual_Revenue__c} data-field="Annual_Revenue__c" onchange={updateInput}></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Net Profit" type="number" value={formData.Net_Profit__c} data-field="Net_Profit__c" onchange={updateInput}></lightning-input>
+            <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={formData.Legal_Entity__c} data-field="Legal_Entity__c" onchange={updateInput}></lightning-input>
+            <lightning-textarea class="slds-size_1-of-1" label="Comments" value={formData.Comments__c} data-field="Comments__c" onchange={updateInput}></lightning-textarea>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="slds-m-around_medium">
+            <lightning-button variant="neutral" label="Cancel" onclick={cancelApplicantForm}></lightning-button>
+            <lightning-button class="slds-m-left_small" variant="brand" label="Save" onclick={saveApplicantRecord}></lightning-button>
+        </div>
+
+    </lightning-card>
+</template>
+
+
+
+
+
   <!-- Add Business Button -->
     <lightning-button 
         label="Add Business" 
