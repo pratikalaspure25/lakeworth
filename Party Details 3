@@ -1,6 +1,101 @@
 <template if:true={showIndividualForm}>
     <lightning-card title="New Individual Applicant">
 
+        <!-- 🔍 Search Individual -->
+        <div class="slds-m-around_medium">
+            <lightning-input 
+                label="Search Individual" 
+                value={searchKey} 
+                onchange={handleIndividualSearchChange}>
+            </lightning-input>
+
+            <template if:true={individualResults}>
+                <div class="slds-box slds-m-top_small">
+                    <template for:each={individualResults} for:item="ind">
+                        <div key={ind.Id} class="slds-p-around_x-small slds-border_bottom">
+                            <a href="javascript:void(0);" 
+                               onclick={selectIndividual} 
+                               data-id={ind.Id}>
+                                {ind.FirstName} {ind.LastName} - {ind.Email}
+                            </a>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </div>
+
+        <!-- 📝 Prefilled Form -->
+        <div class="slds-grid slds-wrap slds-m-around_medium">
+
+            <lightning-input 
+                class="slds-size_1-of-2 slds-p-around_x-small"
+                label="First Name" 
+                value={formData1.FirstName} 
+                onchange={handleInputChange} 
+                data-field="FirstName">
+            </lightning-input>
+
+            <lightning-input 
+                class="slds-size_1-of-2 slds-p-around_x-small"
+                label="Last Name" 
+                value={formData1.LastName} 
+                onchange={handleInputChange} 
+                data-field="LastName">
+            </lightning-input>
+
+            <lightning-input 
+                class="slds-size_1-of-2 slds-p-around_x-small"
+                label="Phone" 
+                type="tel"
+                value={formData1.Phone} 
+                onchange={handleInputChange} 
+                data-field="Phone">
+            </lightning-input>
+
+            <lightning-input 
+                class="slds-size_1-of-2 slds-p-around_x-small"
+                label="Email" 
+                type="email"
+                value={formData1.Email} 
+                onchange={handleInputChange} 
+                data-field="Email">
+            </lightning-input>
+
+            <lightning-input 
+                class="slds-size_1-of-2 slds-p-around_x-small"
+                label="Role" 
+                value={formData1.Role} 
+                onchange={handleInputChange} 
+                data-field="Role">
+            </lightning-input>
+
+        </div>
+
+        <!-- Footer Buttons -->
+        <div class="slds-m-around_medium slds-grid slds-grid_align-end">
+            <lightning-button 
+                label="Cancel" 
+                variant="neutral" 
+                onclick={handleCancel} 
+                class="slds-m-right_small">
+            </lightning-button>
+
+            <lightning-button 
+                label="Save" 
+                variant="brand" 
+                onclick={saveIndividualRecord}>
+            </lightning-button>
+        </div>
+
+    </lightning-card>
+</template>
+
+
+
+
+<template if:true={showIndividualForm}>
+    <lightning-card title="New Individual Applicant">
+
         <!-- Search Individual -->
         <lightning-input 
             label="Search Individual" 
