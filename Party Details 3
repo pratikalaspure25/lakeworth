@@ -1,3 +1,185 @@
+@AuraEnabled(cacheable=true)
+public static List<Account> searchIndividuals(String searchKey) {
+    String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
+    return [
+        SELECT Id, FirstName, LastName, Phone, Email, role__c
+        FROM Account
+        WHERE RecordType.DeveloperName = 'Individual'
+        AND (FirstName LIKE :key OR LastName LIKE :key OR Email LIKE :key)
+        LIMIT 10
+    ];
+}
+
+@AuraEnabled(cacheable=true)
+public static Account getIndividualDetails(Id accountId) {
+    if (accountId == null) {
+        throw new AuraHandledException('Account Id cannot be null');
+    }
+    return [
+        SELECT Id, FirstName, LastName, Phone, Email, role__c
+        FROM Account
+        WHERE Id = :accountId
+        LIMIT 1
+    ];
+}
+
+
+
+<!-- Add Individual Button -->
+<lightning-button 
+    label="Add Individual" 
+    onclick={handleAddIndividual} 
+    variant="brand">
+</lightning-button>
+
+<!-- Individual Applicant Form -->
+<template if:true={showIndividualForm}>
+    <lightning-card title="New Individual Applicant">
+
+        <!-- Search Individual -->
+        <lightning-input 
+            label="Search Individual" 
+            value={searchKey} 
+            onchange={handleIndividualSearchChange}>
+        </lightning-input>
+
+        <template if:true={individualResults}>
+            <template for:each={individualResults} for:item="ind">
+                <div key={ind.Id} class="slds-p-around_x-small">
+                    <a href="javascript:void(0);" onclick={selectIndividual} data-id={ind.Id}>
+                        {ind.FirstName} {ind.LastName} - {ind.Email}
+                    </a>
+                </div>
+            </template>
+        </template>
+
+        <!-- Prefilled Form -->
+        <lightning-input 
+            label="First Name" 
+            value={formData.FirstName} 
+            onchange={handleInputChange} 
+            data-field="FirstName">
+        </lightning-input>
+
+        <lightning-input 
+            label="Last Name" 
+            value={formData.LastName} 
+            onchange={handleInputChange} 
+            data-field="LastName">
+        </lightning-input>
+
+        <lightning-input 
+            label="Phone" 
+            value={formData.Phone} 
+            onchange={handleInputChange} 
+            data-field="Phone">
+        </lightning-input>
+
+        <lightning-input 
+            label="Email" 
+            value={formData.Email} 
+            onchange={handleInputChange} 
+            data-field="Email">
+        </lightning-input>
+
+        <lightning-input 
+            label="Role" 
+            value={formData.Role} 
+            onchange={handleInputChange} 
+            data-field="Role">
+        </lightning-input>
+
+        <lightning-button 
+            label="Save Individual" 
+            onclick={saveIndividualRecord} 
+            variant="brand">
+        </lightning-button>
+
+    </lightning-card>
+</template>
+
+
+
+import searchIndividuals from '@salesforce/apex/PartyDetailsController.searchIndividuals';
+import getIndividualDetails from '@salesforce/apex/PartyDetailsController.getIndividualDetails';
+
+   @track showIndividualForm = false;
+    @track searchKey = '';
+    @track individualResults = [];
+
+ handleAddIndividual() {
+        this.showIndividualForm = true;
+    }
+
+    handleIndividualSearchChange(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey.length > 2) {
+            searchIndividuals({ searchKey: this.searchKey })
+                .then(result => {
+                    this.individualResults = result;
+                })
+                .catch(error => {
+                    console.error('Error in search', error);
+                });
+        } else {
+            this.individualResults = [];
+        }
+    }
+
+    selectIndividual(event) {
+        const accountId = event.currentTarget.dataset.id;
+        getIndividualDetails({ accountId })
+            .then(result => {
+                this.formData = {
+                    FirstName: result.FirstName,
+                    LastName: result.LastName,
+                    Phone: result.Phone,
+                    Email: result.Email,
+                    Role: result.role__c
+                };
+            })
+            .catch(error => {
+                console.error('Error fetching individual details', error);
+            });
+    }
+
+    handleInputChange(event) {
+        const field = event.target.dataset.field;
+        this.formData[field] = event.target.value;
+    }
+
+    saveIndividualRecord() {
+        const applicantRec = {
+            sobjectType: 'Applicant__c',
+            ApplicationFormId: this.recordId,
+            First_Name__c: this.formData.FirstName,
+            Last_Name__c: this.formData.LastName,
+            Phone__c: this.formData.Phone,
+            Email__c: this.formData.Email,
+            Role__c: this.formData.Role
+        };
+
+        saveApplicant1({ applicantRecord: applicantRec, applicationFormId: this.recordId })
+            .then(() => {
+                this.dispatchEvent(new ShowToastEvent({
+                    title: 'Success',
+                    message: 'Individual Applicant created successfully',
+                    variant: 'success'
+                }));
+                this.showIndividualForm = false;
+                this.formData = {};
+            })
+            .catch(error => {
+                this.dispatchEvent(new ShowToastEvent({
+                    title: 'Error',
+                    message: error.body.message,
+                    variant: 'error'
+                }));
+            });
+    }
+
+
+
 / Fetch details of one Individual Account
 @AuraEnabled(cacheable=true)
 public static Account fetchIndividualAccountDetails(Id accountId) {
