@@ -1,3 +1,166 @@
+<template>
+    <!-- Add Individual Button -->
+    <lightning-button 
+        label="Add Individual" 
+        onclick={handleAddIndividual} 
+        variant="brand">
+    </lightning-button>
+
+    <!-- Individual Applicant Form -->
+    <template if:true={showIndividualForm}>
+        <lightning-card title="New Individual Applicant">
+
+            <!-- Search Account (Individual only) -->
+            <lightning-input type="search"
+                             label="Search Individual Account"
+                             onchange={handleSearchKeyChange}>
+            </lightning-input>
+
+            <!-- Search Results -->
+            <template if:true={searchResults}>
+                <template for:each={searchResults} for:item="acc">
+                    <div key={acc.Id} class="slds-m-around_x-small">
+                        <lightning-button variant="neutral"
+                                          label={acc.Name}
+                                          data-id={acc.Id}
+                                          onclick={handleSelectAccount}>
+                        </lightning-button>
+                    </div>
+                </template>
+            </template>
+
+            <!-- Manual Form (if selected OR no match) -->
+            <div class="slds-m-around_medium">
+                <lightning-input label="First Name"
+                                 value={individualForm.FirstName__c}
+                                 onchange={handleInputChange}
+                                 data-field="FirstName__c"></lightning-input>
+
+                <lightning-input label="Last Name"
+                                 value={individualForm.LastName__c}
+                                 onchange={handleInputChange}
+                                 data-field="LastName__c"></lightning-input>
+
+                <lightning-input type="phone" label="Phone"
+                                 value={individualForm.Phone__c}
+                                 onchange={handleInputChange}
+                                 data-field="Phone__c"></lightning-input>
+
+                <lightning-input type="email" label="Email"
+                                 value={individualForm.Email__c}
+                                 onchange={handleInputChange}
+                                 data-field="Email__c"></lightning-input>
+
+                <lightning-input label="Role"
+                                 value={individualForm.Role__c}
+                                 onchange={handleInputChange}
+                                 data-field="Role__c"></lightning-input>
+            </div>
+
+            <div class="slds-m-around_medium">
+                <lightning-button variant="brand"
+                                  label="Save"
+                                  onclick={saveIndividualApplicant}>
+                </lightning-button>
+            </div>
+        </lightning-card>
+    </template>
+</template>
+
+
+
+import searchIndividualAccounts from '@salesforce/apex/PartyDetailsController.searchIndividualAccounts';
+
+ @track showIndividualForm = false;
+    @track individualForm = {};
+
+ handleAddIndividual() {
+        this.showIndividualForm = true;
+        this.individualForm = {};
+        this.searchResults = null;
+    }
+
+    handleSearchKeyChange(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey && this.searchKey.length > 2) {
+            searchIndividualAccounts({ searchKey: this.searchKey })
+                .then(result => {
+                    this.searchResults = result;
+                })
+                .catch(() => {
+                    this.searchResults = null;
+                });
+        } else {
+            this.searchResults = null;
+        }
+    }
+
+    handleSelectAccount(event) {
+        const accId = event.target.dataset.id;
+        const selectedAcc = this.searchResults.find(acc => acc.Id === accId);
+        if (selectedAcc) {
+            this.individualForm.FirstName__c = selectedAcc.FirstName__c;
+            this.individualForm.LastName__c = selectedAcc.LastName__c;
+            this.individualForm.Phone__c = selectedAcc.Phone;
+            this.individualForm.Email__c = selectedAcc.PersonEmail;
+        }
+    }
+
+    handleInputChange(event) {
+        const field = event.target.dataset.field;
+        this.individualForm[field] = event.target.value;
+    }
+
+    saveIndividualApplicant() {
+        const applicantRec = {
+            sobjectType: 'Applicant__c',
+            ApplicationFormId__c: this.recordId,
+            FirstName__c: this.individualForm.FirstName__c,
+            LastName__c: this.individualForm.LastName__c,
+            Phone__c: this.individualForm.Phone__c,
+            Email__c: this.individualForm.Email__c,
+            Role__c: this.individualForm.Role__c
+        };
+
+        saveApplicant1({ applicantRecord: applicantRec, applicationFormId: this.recordId })
+            .then(() => {
+                this.dispatchEvent(
+                    new ShowToastEvent({
+                        title: 'Success',
+                        message: 'Individual Applicant created successfully',
+                        variant: 'success'
+                    })
+                );
+                this.showIndividualForm = false;
+            })
+            .catch(error => {
+                this.dispatchEvent(
+                    new ShowToastEvent({
+                        title: 'Error',
+                        message: error.body.message,
+                        variant: 'error'
+                    })
+                );
+            });
+    }
+
+
+// Search only Individual type Accounts
+    @AuraEnabled(cacheable=true)
+    public static List<Account> searchIndividualAccounts(String searchKey) {
+        String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
+        return [
+            SELECT Id, Name, FirstName__c, LastName__c, Phone, PersonEmail
+            FROM Account
+            WHERE RecordType.DeveloperName = 'Individual'
+            AND Name LIKE :key
+            LIMIT 10
+        ];
+    }
+
+
+
+
 <!-- Add Business Button -->
 <lightning-button 
     label="Add Business" 
