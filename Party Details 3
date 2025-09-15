@@ -1,3 +1,160 @@
+<!-- Add Business Button -->
+<lightning-button 
+    label="Add Business" 
+    onclick={handleAddBusiness} 
+    variant="brand">
+</lightning-button>
+
+<!-- Add Individual Button -->
+<lightning-button 
+    label="Add Individual" 
+    onclick={handleAddIndividual} 
+    variant="brand">
+</lightning-button>
+
+<!-- Business Applicant Form -->
+<template if:true={showBusinessForm}>
+    <lightning-card title="New Business Applicant">
+        <div class="slds-m-around_medium">
+            <lightning-input label="Company Name" value={formData.Company_Name__c}
+                             onchange={handleInputChange} data-field="Company_Name__c"></lightning-input>
+            <lightning-input label="DBA" value={formData.DBA__c}
+                             onchange={handleInputChange} data-field="DBA__c"></lightning-input>
+            <lightning-input label="Industry" value={formData.Industry__c}
+                             onchange={handleInputChange} data-field="Industry__c"></lightning-input>
+            <lightning-input type="number" label="Employees" value={formData.Employees__c}
+                             onchange={handleInputChange} data-field="Employees__c"></lightning-input>
+            <lightning-input type="number" label="Annual Revenue" value={formData.Annual_Revenue__c}
+                             onchange={handleInputChange} data-field="Annual_Revenue__c"></lightning-input>
+            <lightning-input type="number" label="Net Profit" value={formData.Net_Profit__c}
+                             onchange={handleInputChange} data-field="Net_Profit__c"></lightning-input>
+            <lightning-input label="Legal Entity" value={formData.Legal_Entity__c}
+                             onchange={handleInputChange} data-field="Legal_Entity__c"></lightning-input>
+            <lightning-input label="Role" value={formData.Role}
+                             onchange={handleInputChange} data-field="Role"></lightning-input>
+        </div>
+
+        <div class="slds-m-around_medium">
+            <lightning-button variant="brand" label="Save" onclick={saveBusinessApplicant}></lightning-button>
+        </div>
+    </lightning-card>
+</template>
+
+<!-- Individual Applicant Form -->
+<template if:true={showIndividualForm}>
+    <lightning-card title="New Individual Applicant">
+        <div class="slds-m-around_medium">
+            <lightning-input label="First Name" value={individualForm.FirstName}
+                             onchange={handleIndividualChange} data-field="FirstName"></lightning-input>
+            <lightning-input label="Last Name" value={individualForm.LastName}
+                             onchange={handleIndividualChange} data-field="LastName"></lightning-input>
+            <lightning-input type="phone" label="Phone" value={individualForm.Phone}
+                             onchange={handleIndividualChange} data-field="Phone"></lightning-input>
+            <lightning-input type="email" label="Email" value={individualForm.Email}
+                             onchange={handleIndividualChange} data-field="Email"></lightning-input>
+            <lightning-input label="Role" value={individualForm.Role}
+                             onchange={handleIndividualChange} data-field="Role"></lightning-input>
+        </div>
+
+        <div class="slds-m-around_medium">
+            <lightning-button variant="brand" label="Save" onclick={saveIndividualApplicant}></lightning-button>
+        </div>
+    </lightning-card>
+</template>
+
+
+ // Business form
+    @track showBusinessForm = false;
+    @track formData = {};
+
+    // Individual form
+    @track showIndividualForm = false;
+    @track individualForm = {};
+
+    // Button handlers
+    handleAddBusiness() {
+        this.showBusinessForm = true;
+        this.showIndividualForm = false;
+    }
+
+    handleAddIndividual() {
+        this.showIndividualForm = true;
+        this.showBusinessForm = false;
+    }
+
+    // Handle Business input
+    handleInputChange(event) {
+        const field = event.target.dataset.field;
+        this.formData[field] = event.target.value;
+    }
+
+    // Handle Individual input
+    handleIndividualChange(event) {
+        const field = event.target.dataset.field;
+        this.individualForm[field] = event.target.value;
+    }
+
+    // Save Business Applicant
+    saveBusinessApplicant() {
+        const applicantRec = {
+            sobjectType: 'Applicant__c',
+            ApplicationFormId__c: this.recordId,
+            Company_Name__c: this.formData.Company_Name__c,
+            DBA__c: this.formData.DBA__c,
+            Industry__c: this.formData.Industry__c,
+            Employees__c: this.formData.Employees__c,
+            Annual_Revenue__c: this.formData.Annual_Revenue__c,
+            Net_Profit__c: this.formData.Net_Profit__c,
+            Legal_Entity__c: this.formData.Legal_Entity__c,
+            Role__c: this.formData.Role
+        };
+
+        saveApplicant1({ applicantRecord: applicantRec, applicationFormId: this.recordId })
+            .then(() => {
+                this.dispatchEvent(new ShowToastEvent({ title: 'Success', message: 'Business Applicant created', variant: 'success' }));
+                this.showBusinessForm = false;
+            })
+            .catch(error => {
+                this.dispatchEvent(new ShowToastEvent({ title: 'Error', message: error.body.message, variant: 'error' }));
+            });
+    }
+
+    // Save Individual Applicant
+    saveIndividualApplicant() {
+        const applicantRec = {
+            sobjectType: 'Applicant__c',
+            ApplicationFormId__c: this.recordId,
+            FirstName__c: this.individualForm.FirstName,
+            LastName__c: this.individualForm.LastName,
+            Phone__c: this.individualForm.Phone,
+            Email__c: this.individualForm.Email,
+            Role__c: this.individualForm.Role
+        };
+
+        saveApplicant1({ applicantRecord: applicantRec, applicationFormId: this.recordId })
+            .then(() => {
+                this.dispatchEvent(new ShowToastEvent({ title: 'Success', message: 'Individual Applicant created', variant: 'success' }));
+                this.showIndividualForm = false;
+            })
+            .catch(error => {
+                this.dispatchEvent(new ShowToastEvent({ title: 'Error', message: error.body.message, variant: 'error' }));
+            });
+    }
+
+@AuraEnabled(cacheable=true)
+public static List<Account> searchIndividualAccounts(String keyword) {
+    String searchKey = '%' + String.escapeSingleQuotes(keyword) + '%';
+    return [
+        SELECT Id, FirstName, LastName, Phone, Email
+        FROM Account
+        WHERE RecordType.Name = 'Individual'
+          AND (FirstName LIKE :searchKey OR LastName LIKE :searchKey)
+        LIMIT 20
+    ];
+}
+
+
+
 saveApplicantRecord() {
     const applicantRec = {
         sobjectType: 'Applicant',
