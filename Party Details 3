@@ -1,3 +1,155 @@
+<template for:each={applicants} for:item="applicant" for:index="index">
+    <lightning-accordion-section key={applicant.Id} label={applicant.label} name={applicant.Id}>
+
+        <!-- READ-ONLY VIEW -->
+        <template if:true={applicant.isReadOnly}>
+            <div class="slds-m-around_medium slds-clearfix">
+                <div class="slds-float_right">
+                    <lightning-button variant="base" label="Edit" onclick={handleEditApplicant}
+                        data-id={applicant.Id}></lightning-button>
+                </div>
+            </div>
+
+            <div class="slds-grid slds-wrap slds-m-around_medium">
+
+                <!-- BUSINESS FIELDS -->
+                <template if:true={isBusiness(applicant)}>
+                    <lightning-input class="slds-size_1-of-2" label="Company Name" value={applicant.Company_Name__c} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Role" value={applicant.Role} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="DBA" value={applicant.DBA__c} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Industry" value={applicant.Industry__c} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Employees" value={applicant.Employees__c} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Annual Revenue" value={applicant.Annual_Revenue__c} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Legal Entity" value={applicant.Legal_Entity__c} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Net Profit" value={applicant.Net_Profit__c} readonly></lightning-input>
+                    <lightning-textarea class="slds-size_1-of-1" label="Comments" value={applicant.Comments__c} readonly></lightning-textarea>
+                </template>
+
+                <!-- INDIVIDUAL FIELDS -->
+                <template if:true={isIndividual(applicant)}>
+                    <lightning-input class="slds-size_1-of-2" label="First Name" value={applicant.FirstName} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Last Name" value={applicant.LastName} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Role" value={applicant.Role} readonly></lightning-input>
+                    <lightning-input class="slds-size_1-of-2" label="Phone" value={applicant.Phone} readonly></lightning-input>
+                </template>
+
+            </div>
+        </template>
+
+        <!-- EDITABLE VIEW -->
+        <template if:false={applicant.isReadOnly}>
+            <lightning-card title="Edit Applicant">
+
+                <div class="slds-grid slds-wrap slds-m-around_medium">
+
+                    <!-- BUSINESS EDITABLE -->
+                    <template if:true={isBusiness(applicant)}>
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Company Name"
+                            value={applicant.editData.Company_Name__c} onchange={handleApplicantInputChange}
+                            data-id={applicant.Id} data-field="Company_Name__c">
+                        </lightning-input>
+
+                        <lightning-combobox class="slds-size_1-of-2 slds-p-around_x-small" label="Role"
+                            value={applicant.editData.Role} options={roleAppOptions} placeholder="Select Role"
+                            onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Role">
+                        </lightning-combobox>
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="DBA"
+                            value={applicant.editData.DBA__c} onchange={handleApplicantInputChange}
+                            data-id={applicant.Id} data-field="DBA__c">
+                        </lightning-input>
+
+                        <lightning-combobox class="slds-size_1-of-2 slds-p-around_x-small" label="Industry"
+                            value={applicant.editData.Industry__c} options={industryAppOptions}
+                            placeholder="Select Industry" onchange={handleApplicantInputChange}
+                            data-id={applicant.Id} data-field="Industry__c">
+                        </lightning-combobox>
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Employees"
+                            value={applicant.editData.Employees__c} onchange={handleApplicantInputChange}
+                            data-id={applicant.Id} data-field="Employees__c">
+                        </lightning-input>
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Annual Revenue"
+                            value={applicant.editData.Annual_Revenue__c} onchange={handleApplicantInputChange}
+                            data-id={applicant.Id} data-field="Annual_Revenue__c">
+                        </lightning-input>
+
+                        <lightning-combobox class="slds-size_1-of-2 slds-p-around_x-small" label="Legal Entity"
+                            value={applicant.editData.Legal_Entity__c} options={legalEntityAppOptions}
+                            placeholder="Select Legal Entity" onchange={handleApplicantInputChange}
+                            data-id={applicant.Id} data-field="Legal_Entity__c">
+                        </lightning-combobox>
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Net Profit"
+                            value={applicant.editData.Net_Profit__c} onchange={handleApplicantInputChange}
+                            data-id={applicant.Id} data-field="Net_Profit__c">
+                        </lightning-input>
+
+                        <lightning-textarea class="slds-size_1-of-1 slds-p-around_x-small" label="Comments"
+                            value={applicant.editData.Comments__c} onchange={handleApplicantInputChange}
+                            data-id={applicant.Id} data-field="Comments__c">
+                        </lightning-textarea>
+                    </template>
+
+                    <!-- INDIVIDUAL EDITABLE -->
+                    <template if:true={isIndividual(applicant)}>
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="First Name"
+                            value={applicant.editData.FirstName} onchange={handleApplicantInputChange}
+                            data-id={applicant.Id} data-field="FirstName">
+                        </lightning-input>
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Last Name"
+                            value={applicant.editData.LastName} onchange={handleApplicantInputChange}
+                            data-id={applicant.Id} data-field="LastName">
+                        </lightning-input>
+
+                        <lightning-combobox class="slds-size_1-of-2 slds-p-around_x-small" label="Role"
+                            value={applicant.editData.Role} options={roleAppOptions} placeholder="Select Role"
+                            onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Role">
+                        </lightning-combobox>
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Phone"
+                            value={applicant.editData.Phone} onchange={handleApplicantInputChange}
+                            data-id={applicant.Id} data-field="Phone">
+                        </lightning-input>
+                    </template>
+
+                </div>
+
+                <!-- Footer Buttons -->
+                <div class="slds-m-around_medium slds-grid slds-grid_align-end">
+                    <lightning-button label="Cancel" variant="neutral" onclick={handleCancelApplicant}
+                        data-id={applicant.Id} class="slds-m-right_small">
+                    </lightning-button>
+
+                    <lightning-button label="Save" variant="brand" onclick={handleSaveApplicant}
+                        data-id={applicant.Id}>
+                    </lightning-button>
+                </div>
+
+            </lightning-card>
+        </template>
+
+    </lightning-accordion-section>
+</template>
+
+
+
+
+isBusiness(applicant) {
+    return applicant.Applicant_Type__c === 'Business';
+}
+
+isIndividual(applicant) {
+    return applicant.Applicant_Type__c === 'Individual';
+}
+
+
+
+
+
+
  <!-- Existing Applicant Record -->
             <template for:each={applicants} for:item="applicant" for:index="index">
                 <lightning-accordion-section key={applicant.Id} label={applicant.label} name={applicant.Id}>
