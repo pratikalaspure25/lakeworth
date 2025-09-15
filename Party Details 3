@@ -1,3 +1,8 @@
+const label = app.Company_Name__c 
+    ? app.Company_Name__c + (app.Role ? ' - ' + app.Role : '')
+    : app.FirstName + ' ' + app.LastName + (app.Role ? ' - ' + app.Role : '');
+
+
 label: (app.Company_Name__c || '') + (app.Company_Name__c && app.Role ? ' - ' : '') + (app.Role || ''),
 
 <div class="slds-m-bottom_medium slds-grid slds-grid_align-start slds-gutters">
