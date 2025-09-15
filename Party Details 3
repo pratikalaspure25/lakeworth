@@ -1,4 +1,126 @@
 <template if:true={showForm}>
+    <lightning-card title="New Business Applicant">
+
+        <!-- 🔍 Search Business Account -->
+        <div class="slds-m-around_medium">
+            <lightning-input 
+                label="Search Business Account (optional)" 
+                value={searchKey} 
+                placeholder="Type to search..." 
+                onchange={handleKeywordUpdate}>
+            </lightning-input>
+
+            <!-- Search Results -->
+            <template if:true={searchResults}>
+                <div class="slds-box slds-m-top_small">
+                    <template for:each={searchResults} for:item="account">
+                        <div key={account.Id} class="slds-p-around_x-small slds-border_bottom">
+                            <a href="javascript:void(0);" data-id={account.Id} onclick={chooseAccount}>
+                                {account.Name} - {account.Industry}
+                            </a>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </div>
+
+        <!-- 📝 Prefilled / Editable Form -->
+        <div class="slds-grid slds-wrap slds-m-around_medium">
+
+            <lightning-input 
+                class="slds-size_1-of-2 slds-p-around_x-small"
+                label="Company Name" 
+                value={formData.Company_Name__c} 
+                data-field="Company_Name__c" 
+                onchange={updateInput}>
+            </lightning-input>
+
+            <lightning-input 
+                class="slds-size_1-of-2 slds-p-around_x-small"
+                label="DBA" 
+                value={formData.DBA__c} 
+                data-field="DBA__c" 
+                onchange={updateInput}>
+            </lightning-input>
+
+            <lightning-combobox 
+                class="slds-size_1-of-2 slds-p-around_x-small"
+                label="Industry" 
+                value={formData.Industry__c} 
+                options={industryAppOptions} 
+                data-field="Industry__c" 
+                onchange={updateInput}>
+            </lightning-combobox>
+
+            <lightning-input 
+                class="slds-size_1-of-2 slds-p-around_x-small"
+                label="Employees" 
+                type="number" 
+                value={formData.Employees__c} 
+                data-field="Employees__c" 
+                onchange={updateInput}>
+            </lightning-input>
+
+            <lightning-input 
+                class="slds-size_1-of-2 slds-p-around_x-small"
+                label="Annual Revenue" 
+                type="number" 
+                value={formData.Annual_Revenue__c} 
+                data-field="Annual_Revenue__c" 
+                onchange={updateInput}>
+            </lightning-input>
+
+            <lightning-input 
+                class="slds-size_1-of-2 slds-p-around_x-small"
+                label="Net Profit" 
+                type="number" 
+                value={formData.Net_Profit__c} 
+                data-field="Net_Profit__c" 
+                onchange={updateInput}>
+            </lightning-input>
+
+            <lightning-combobox 
+                class="slds-size_1-of-2 slds-p-around_x-small"
+                label="Legal Entity" 
+                value={formData.Legal_Entity__c} 
+                options={legalEntityAppOptions} 
+                data-field="Legal_Entity__c" 
+                onchange={updateInput}>
+            </lightning-combobox>
+
+            <lightning-textarea 
+                class="slds-size_1-of-1 slds-p-around_x-small" 
+                label="Comments" 
+                value={formData.Comments__c} 
+                data-field="Comments__c" 
+                onchange={updateInput}>
+            </lightning-textarea>
+
+        </div>
+
+        <!-- Footer Buttons -->
+        <div class="slds-m-around_medium slds-grid slds-grid_align-end">
+            <lightning-button 
+                label="Cancel" 
+                variant="neutral" 
+                onclick={cancelApplicantForm} 
+                class="slds-m-right_small">
+            </lightning-button>
+
+            <lightning-button 
+                label="Save" 
+                variant="brand" 
+                onclick={saveApplicantRecord}>
+            </lightning-button>
+        </div>
+
+    </lightning-card>
+</template>
+
+
+
+
+<template if:true={showForm}>
     <lightning-card title="New Applicant">
 
         <!-- Optional Account Search -->
