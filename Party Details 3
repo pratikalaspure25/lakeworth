@@ -1,3 +1,24 @@
+<div class="slds-m-bottom_medium slds-grid slds-grid_align-start slds-gutters">
+    <!-- Add Business Button -->
+    <div class="slds-col">
+        <lightning-button 
+            label="Add Business" 
+            onclick={openApplicantForm} 
+            variant="brand">
+        </lightning-button>
+    </div>
+
+    <!-- Add Individual Button -->
+    <div class="slds-col">
+        <lightning-button 
+            label="Add Individual" 
+            onclick={handleAddIndividual} 
+            variant="brand">
+        </lightning-button>
+    </div>
+</div>
+
+
  <!-- Add Business Button -->
             <lightning-button 
                 label="Add Business" 
