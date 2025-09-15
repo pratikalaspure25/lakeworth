@@ -1,3 +1,57 @@
+saveApplicantRecord() {
+    const applicantRec = {
+        sobjectType: 'Applicant',
+        ApplicationFormId: this.recordId, // ensure relation to ApplicationForm
+        Company_Name__c: this.formData.Company_Name__c,
+        DBA__c: this.formData.DBA__c,
+        Industry__c: this.formData.Industry__c,
+        Employees__c: this.formData.Employees__c,
+        Annual_Revenue__c: this.formData.Annual_Revenue__c,
+        Net_Profit__c: this.formData.Net_Profit__c,
+        Legal_Entity__c: this.formData.Legal_Entity__c,
+        Comments__c: this.formData.Comments__c,
+        Role: this.formData.Role // if role field exists
+    };
+
+    saveApplicant1({
+        applicantRecord: applicantRec,
+        applicationFormId: this.recordId
+    })
+        .then(() => {
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Success',
+                    message: 'Applicant created successfully',
+                    variant: 'success'
+                })
+            );
+            this.showForm = false;
+            this.resetForm();
+            this.loadApplicants(); // reload list
+        })
+        .catch(error => {
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Error creating record',
+                    message: error.body.message,
+                    variant: 'error'
+                })
+            );
+        });
+}
+
+
+
+@AuraEnabled
+public static Id saveApplicant1(Applicant applicantRecord, Id applicationFormId) {
+    if (applicationFormId != null) {
+        applicantRecord.ApplicationFormId = applicationFormId;
+    }
+    insert applicantRecord;
+    return applicantRecord.Id;
+}
+
+
 
   <!-- Add Business Button -->
 <lightning-button 
