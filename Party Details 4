@@ -1,3 +1,61 @@
+async saveApplicantRecord() {
+    // ✅ Make sure Role API name is correct everywhere
+    const applicantRec = {
+        sobjectType: 'Applicant',
+        ApplicationFormId: this.recordId,
+        Company_Name__c: this.formData.Company_Name__c,
+        DBA__c: this.formData.DBA__c,
+        Industry__c: this.formData.Industry__c,
+        Employees__c: this.formData.Employees__c,
+        Annual_Revenue__c: this.formData.Annual_Revenue__c,
+        Net_Profit__c: this.formData.Net_Profit__c,
+        Legal_Entity__c: this.formData.Legal_Entity__c,
+        Comments__c: this.formData.Comments__c,
+        Role__c: this.formData.Role__c // ← or Role if that’s your real field
+    };
+
+    // Remember currently open section (optional)
+    const acc = this.template.querySelector('lightning-accordion');
+    const openBefore = acc?.activeSectionName;
+
+    try {
+        const createdId = await saveApplicant1({
+            applicantRecord: applicantRec,
+            applicationFormId: this.recordId
+        }); // If your Apex returns Id, keep it; if not, this will be undefined
+
+        this.dispatchEvent(new ShowToastEvent({
+            title: 'Success',
+            message: 'Applicant created successfully',
+            variant: 'success'
+        }));
+
+        this.showForm = false;
+        this.resetForm();
+
+        // 🔁 Refresh list from server (same path as edit)
+        await this.loadApplicants();
+
+        // (Optional) Open the newly created record section if you have its Id
+        if (createdId && acc && this.applicants.some(a => a.Id === createdId)) {
+            acc.activeSectionName = createdId;
+        } else if (openBefore && acc) {
+            acc.activeSectionName = openBefore; // preserve previous open section
+        }
+
+    } catch (error) {
+        this.dispatchEvent(new ShowToastEvent({
+            title: 'Error creating record',
+            message: error?.body?.message || error.message,
+            variant: 'error'
+        }));
+    }
+}
+
+
+
+
+
 normalizeApplicant(app) {
     return {
         ...app,
