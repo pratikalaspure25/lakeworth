@@ -1,3 +1,51 @@
+async handleSaveApplicant(event) {
+    const applicantId = event.target.dataset.id;
+    const row = this.applicants.find(a => a.Id === applicantId);
+    if (!row) return;
+
+    const payload = {
+        Id: applicantId,
+        ApplicationFormId: this.recordId,
+        Company_Name__c: row.editData.Company_Name__c,
+        Role: row.editData.Role, // or Role__c if that's the real API name
+        DBA__c: row.editData.DBA__c,
+        Industry__c: row.editData.Industry__c,
+        Employees__c: row.editData.Employees__c,
+        Annual_Revenue__c: row.editData.Annual_Revenue__c,
+        Net_Profit__c: row.editData.Net_Profit__c,
+        Legal_Entity__c: row.editData.Legal_Entity__c,
+        Comments__c: row.editData.Comments__c
+    };
+
+    const acc = this.template.querySelector('lightning-accordion');
+    const openSection = acc?.activeSectionName;
+
+    try {
+        await saveApplicant({ applicant: payload });
+        await this.loadApplicants(); // <-- key line: refresh list without page reload
+
+        if (openSection && acc && this.applicants.some(a => a.Id === openSection)) {
+            acc.activeSectionName = openSection; // keep same section open
+        }
+
+        this.dispatchEvent(new ShowToastEvent({
+            title: 'Success',
+            message: 'Applicant saved successfully.',
+            variant: 'success'
+        }));
+    } catch (error) {
+        this.dispatchEvent(new ShowToastEvent({
+            title: 'Error saving applicant',
+            message: error?.body?.message || error.message,
+            variant: 'error'
+        }));
+    }
+}
+
+
+
+
+
 normalizeApplicant = (app) => ({
     ...app,
     label: `${app.Company_Name__c || ''}${app.Company_Name__c && app.Role ? ' - ' : ''}${app.Role || ''}`,
