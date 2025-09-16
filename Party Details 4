@@ -7,7 +7,7 @@ async handleSaveApplicant(event) {
         Id: applicantId,
         ApplicationFormId: this.recordId,
         Company_Name__c: row.editData.Company_Name__c,
-        Role: row.editData.Role, // or Role__c if that's the real API name
+        Role__c: row.editData.Role, 
         DBA__c: row.editData.DBA__c,
         Industry__c: row.editData.Industry__c,
         Employees__c: row.editData.Employees__c,
@@ -17,30 +17,31 @@ async handleSaveApplicant(event) {
         Comments__c: row.editData.Comments__c
     };
 
-    const acc = this.template.querySelector('lightning-accordion');
-    const openSection = acc?.activeSectionName;
-
     try {
+        // Save via Apex
         await saveApplicant({ applicant: payload });
-        await this.loadApplicants(); // <-- key line: refresh list without page reload
 
-        if (openSection && acc && this.applicants.some(a => a.Id === openSection)) {
-            acc.activeSectionName = openSection; // keep same section open
-        }
+        // Requery from server so UI shows latest
+        await this.loadApplicants();
 
-        this.dispatchEvent(new ShowToastEvent({
-            title: 'Success',
-            message: 'Applicant saved successfully.',
-            variant: 'success'
-        }));
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Success',
+                message: 'Applicant saved successfully.',
+                variant: 'success'
+            })
+        );
     } catch (error) {
-        this.dispatchEvent(new ShowToastEvent({
-            title: 'Error saving applicant',
-            message: error?.body?.message || error.message,
-            variant: 'error'
-        }));
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title: 'Error saving applicant',
+                message: error?.body?.message || error.message,
+                variant: 'error'
+            })
+        );
     }
 }
+
 
 
 
