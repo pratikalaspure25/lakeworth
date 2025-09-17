@@ -1,3 +1,754 @@
+<!--
+  @description       : 
+  @author            : 
+  @group             : 
+  @last modified on  : 08-09-2025
+  @last modified by  : Pratik
+-->
+<template>
+
+    <template if:true={applicants.length}>
+        <lightning-accordion allow-multiple-sections-open>
+           
+            <div class="slds-m-around_medium slds-grid slds-grid_align-end">
+                <lightning-button label="Add Business" variant="brand" onclick={openApplicantForm}
+                    class="slds-m-right_small">
+                </lightning-button>
+
+                <lightning-button label="Add Individual" variant="brand" onclick={handleAddIndividual}>
+                </lightning-button>
+            </div>
+
+            <!-- Applicant Form -->
+            <template if:true={showForm}>
+                <lightning-card>
+
+                    <!-- Search Business Account -->
+                    <div class="slds-m-around_medium">
+                        <lightning-input label="Search Business" value={searchKey}
+                            placeholder="Type to search..." onchange={handleKeywordUpdate}>
+                        </lightning-input>
+
+                        <!-- Search Results -->
+                        <template if:true={searchResults}>
+                            <template for:each={searchResults} for:item="account">
+                                <div key={account.Id} class="slds-p-around_x-small slds-border_bottom">
+                                    <a href="javascript:void(0);" data-id={account.Id} onclick={chooseAccount}>
+                                        {account.Name} - {account.Industry}
+                                    </a>
+                                </div>
+                            </template>
+
+                        </template>
+                    </div>
+
+                    <!--Prefilled / Editable Form -->
+                    <div class="slds-grid slds-wrap slds-m-around_medium">
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Company Name"
+                            value={formData.Company_Name__c} data-field="Company_Name__c" onchange={updateInput}>
+                        </lightning-input>
+
+                        <lightning-combobox class="slds-size_1-of-2 slds-p-around_x-small" label="Role"
+                            value={formData.Role__C} options={roleAppOptions} data-field="Role"
+                            onchange={updateInput}>
+                        </lightning-combobox>
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="DBA"
+                            value={formData.DBA__c} data-field="DBA__c" onchange={updateInput}>
+                        </lightning-input>
+
+                        <lightning-combobox class="slds-size_1-of-2 slds-p-around_x-small" label="Industry"
+                            value={formData.Industry__c} options={industryAppOptions} data-field="Industry__c"
+                            onchange={updateInput}>
+                        </lightning-combobox>
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Employees" type="number"
+                            value={formData.Employees__c} data-field="Employees__c" onchange={updateInput}>
+                        </lightning-input>
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Annual Revenue"
+                            type="number" value={formData.Annual_Revenue__c} data-field="Annual_Revenue__c"
+                            onchange={updateInput}>
+                        </lightning-input>
+
+                        <lightning-combobox class="slds-size_1-of-2 slds-p-around_x-small" label="Legal Entity"
+                            value={formData.Legal_Entity__c} options={legalEntityAppOptions}
+                            data-field="Legal_Entity__c" onchange={updateInput}>
+                        </lightning-combobox>
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Net Profit" type="number"
+                            value={formData.Net_Profit__c} data-field="Net_Profit__c" onchange={updateInput}>
+                        </lightning-input>
+
+
+                        <lightning-textarea class="slds-size_1-of-1 slds-p-around_x-small" label="Comments"
+                            value={formData.Comments__c} data-field="Comments__c" onchange={updateInput}>
+                        </lightning-textarea>
+
+                    </div>
+
+                    <!-- Footer Buttons -->
+                    <div class="slds-m-around_medium slds-grid slds-grid_align-end">
+                        <lightning-button label="Cancel" variant="neutral" onclick={cancelApplicantForm}
+                            class="slds-m-right_small">
+                        </lightning-button>
+
+                        <lightning-button label="Save" variant="brand" onclick={saveApplicantRecord}>
+                        </lightning-button>
+                    </div>
+
+                </lightning-card>
+            </template>
+
+
+
+
+            <!-- Individual Applicant Form -->
+            <template if:true={showIndividualForm}>
+                <lightning-card>
+
+                    <!--Search Individual -->
+                    <div class="slds-m-around_medium">
+                        <lightning-input label="Search Individual" value={searchKey}
+                            onchange={handleIndividualSearchChange}>
+                        </lightning-input>
+
+                        <template if:true={individualResults}>
+                            <template for:each={individualResults} for:item="ind">
+                                <div key={ind.Id} class="slds-p-around_x-small slds-border_bottom">
+                                    <a href="javascript:void(0);" onclick={selectIndividual} data-id={ind.Id}>
+                                        {ind.FirstName} {ind.LastName}
+                                    </a>
+                                </div>
+                            </template>
+
+                        </template>
+                    </div>
+
+                    <!-- Prefilled Form -->
+                    <div class="slds-grid slds-wrap slds-m-around_medium">
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="First Name"
+                            value={formData1.FirstName} onchange={handleInputChange} data-field="FirstName">
+                        </lightning-input>
+
+                         <!-- <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Role"
+                            value={formData1.Role} onchange={handleInputChange} data-field="Role">
+                        </lightning-input> -->
+
+                         <lightning-combobox class="slds-size_1-of-2 slds-p-around_x-small" label="Role"
+                            value={formData1.Role__C} options={roleAppOptions} data-field="Role"
+                            onchange={handleInputChange}>
+                        </lightning-combobox>
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Last Name"
+                            value={formData1.LastName} onchange={handleInputChange} data-field="LastName">
+                        </lightning-input>
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Phone" type="tel"
+                            value={formData1.Phone} onchange={handleInputChange} data-field="Phone">
+                        </lightning-input>
+
+                        <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Email" type="email"
+                            value={formData1.Email} onchange={handleInputChange} data-field="Email">
+                        </lightning-input>
+
+                       
+
+                    </div>
+
+                    <!-- Footer Buttons -->
+                    <div class="slds-m-around_medium slds-grid slds-grid_align-end">
+                        <lightning-button label="Cancel" variant="neutral" onclick={handleCancel}
+                            class="slds-m-right_small">
+                        </lightning-button>
+
+                        <lightning-button label="Save" variant="brand" onclick={saveIndividualRecord}>
+                        </lightning-button>
+                    </div>
+
+                </lightning-card>
+            </template>
+
+
+            <!-- ******************** -->
+        
+
+            <!-- Existing Applicant Record -->
+            <template for:each={applicants} for:item="applicant" for:index="index">
+                <lightning-accordion-section key={applicant.Id} label={applicant.label} name={applicant.Id}>
+                    <template if:true={applicant.isReadOnly}>
+                        <div class="slds-m-around_medium slds-clearfix">
+                            <div class="slds-float_right">
+                                <lightning-button variant="base" label="Edit" onclick={handleEditApplicant}
+                                    data-id={applicant.Id}></lightning-button>
+                            </div>
+                        </div>
+                        <div class="slds-grid slds-wrap slds-m-around_medium">
+                            <lightning-input class="slds-size_1-of-2" label="Company Name"
+                                value={applicant.Company_Name__c} readonly></lightning-input>
+                            <lightning-input class="slds-size_1-of-2" label="Role" value={applicant.Role} readonly>
+                            </lightning-input>
+                            <lightning-input class="slds-size_1-of-2" label="DBA" value={applicant.DBA__c} readonly>
+                            </lightning-input>
+                            <lightning-input class="slds-size_1-of-2" label="Industry" value={applicant.Industry__c}
+                                readonly></lightning-input>
+                            <lightning-input class="slds-size_1-of-2" label="Employees" value={applicant.Employees__c}
+                                readonly></lightning-input>
+                            <lightning-input class="slds-size_1-of-2" label="Annual Revenue"
+                                value={applicant.Annual_Revenue__c} readonly></lightning-input>
+                            <lightning-input class="slds-size_1-of-2" label="Legal Entity"
+                                value={applicant.Legal_Entity__c} readonly></lightning-input>
+                            <lightning-input class="slds-size_1-of-2" label="Net Profit" value={applicant.Net_Profit__c}
+                                readonly></lightning-input>
+                            <lightning-textarea class="slds-size_1-of-1" label="Comments" value={applicant.Comments__c}
+                                readonly></lightning-textarea>
+                        </div>
+
+
+                    </template>
+
+                    <template if:false={applicant.isReadOnly}>
+                        <lightning-card title="Edit Applicant">
+
+                            <!-- Editable Form -->
+                            <div class="slds-grid slds-wrap slds-m-around_medium">
+
+                                <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Company Name"
+                                    value={applicant.editData.Company_Name__c} onchange={handleApplicantInputChange}
+                                    data-id={applicant.Id} data-field="Company_Name__c">
+                                </lightning-input>
+
+                                <lightning-combobox class="slds-size_1-of-2 slds-p-around_x-small" label="Role"
+                                    value={applicant.editData.Role} options={roleAppOptions} placeholder="Select Role"
+                                    onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Role">
+                                </lightning-combobox>
+
+                                <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="DBA"
+                                    value={applicant.editData.DBA__c} onchange={handleApplicantInputChange}
+                                    data-id={applicant.Id} data-field="DBA__c">
+                                </lightning-input>
+
+                                <lightning-combobox class="slds-size_1-of-2 slds-p-around_x-small" label="Industry"
+                                    value={applicant.editData.Industry__c} options={industryAppOptions}
+                                    placeholder="Select Industry" onchange={handleApplicantInputChange}
+                                    data-id={applicant.Id} data-field="Industry__c">
+                                </lightning-combobox>
+
+                                <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Employees"
+                                    value={applicant.editData.Employees__c} onchange={handleApplicantInputChange}
+                                    data-id={applicant.Id} data-field="Employees__c">
+                                </lightning-input>
+
+                                <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Annual Revenue"
+                                    value={applicant.editData.Annual_Revenue__c} onchange={handleApplicantInputChange}
+                                    data-id={applicant.Id} data-field="Annual_Revenue__c">
+                                </lightning-input>
+
+                                <lightning-combobox class="slds-size_1-of-2 slds-p-around_x-small" label="Legal Entity"
+                                    value={applicant.editData.Legal_Entity__c} options={legalEntityAppOptions}
+                                    placeholder="Select Legal Entity" onchange={handleApplicantInputChange}
+                                    data-id={applicant.Id} data-field="Legal_Entity__c">
+                                </lightning-combobox>
+
+                                <lightning-input class="slds-size_1-of-2 slds-p-around_x-small" label="Net Profit"
+                                    value={applicant.editData.Net_Profit__c} onchange={handleApplicantInputChange}
+                                    data-id={applicant.Id} data-field="Net_Profit__c">
+                                </lightning-input>
+
+
+
+                                <lightning-textarea class="slds-size_1-of-1 slds-p-around_x-small" label="Comments"
+                                    value={applicant.editData.Comments__c} onchange={handleApplicantInputChange}
+                                    data-id={applicant.Id} data-field="Comments__c">
+                                </lightning-textarea>
+
+                            </div>
+
+                            <!-- Footer Buttons -->
+                            <div class="slds-m-around_medium slds-grid slds-grid_align-end">
+                                <lightning-button label="Cancel" variant="neutral" onclick={handleCancelApplicant}
+                                    data-id={applicant.Id} class="slds-m-right_small">
+                                </lightning-button>
+
+                                <lightning-button label="Save" variant="brand" onclick={handleSaveApplicant}
+                                    data-id={applicant.Id}>
+                                </lightning-button>
+                            </div>
+
+                        </lightning-card>
+                    </template>
+                </lightning-accordion-section>
+            </template>
+        </lightning-accordion>
+    </template>
+    
+
+</template>
+
+
+
+import { LightningElement, track, api, wire } from 'lwc';
+import getApplicantsFromAppForm from '@salesforce/apex/PartyDetailsController.getApplicantsFromAppForm';
+import { getObjectInfo, getPicklistValuesByRecordType } from 'lightning/uiObjectInfoApi';
+import saveApplicant from '@salesforce/apex/PartyDetailsController.saveApplicant';
+import ACCOUNT_OBJECT from '@salesforce/schema/Account';
+import APPLICANT_OBJECT from '@salesforce/schema/Applicant';
+import { OmniscriptBaseMixin } from 'omnistudio/omniscriptBaseMixin';
+import searchBusinessAccounts from '@salesforce/apex/PartyDetailsController.searchBusinessAccounts';
+import fetchAccountDetails from '@salesforce/apex/PartyDetailsController.fetchAccountDetails';
+import saveApplicant1 from '@salesforce/apex/PartyDetailsController.saveApplicant1';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import searchIndividuals from '@salesforce/apex/PartyDetailsController.searchIndividuals';
+import getIndividualDetails from '@salesforce/apex/PartyDetailsController.getIndividualDetails';
+
+export default class PartyDetails extends OmniscriptBaseMixin(LightningElement) {
+    @api recordId; // ApplicationForm Id
+    @track searchKey = '';
+    @track searchResults = [];
+    @track formData = {};
+    @track selectedAccountId;
+    @track applicants = [];
+
+    @track newApplicant = null;
+
+    @track industryOptions = [];
+    @track legalEntityOptions = [];
+    @track roleOptions = [];
+
+    @track industryAppOptions = [];
+    @track legalEntityAppOptions = [];
+    @track roleAppOptions = [];
+
+
+     @track showIndividualForm = false;
+    @track individualForm = {};
+
+    // For Account object picklists
+    @wire(getObjectInfo, { objectApiName: ACCOUNT_OBJECT })
+    accountObjectInfo;
+
+    @wire(getPicklistValuesByRecordType, { objectApiName: ACCOUNT_OBJECT, recordTypeId: '$accountObjectInfo.data.defaultRecordTypeId' })
+    wiredAccountPicklistValues({ data, error }) {
+        if (data) {
+            this.industryOptions = data.picklistFieldValues.Industry.values;
+            this.legalEntityOptions = data.picklistFieldValues.Legal_Entity__c.values;
+            this.roleOptions = data.picklistFieldValues.Role__c.values;
+        } else if (error) {
+            console.error('Account picklist error', error);
+        }
+    }
+
+    // For Applicant object picklists
+    @wire(getObjectInfo, { objectApiName: APPLICANT_OBJECT })
+    applicantObjectInfo;
+
+    @wire(getPicklistValuesByRecordType, { objectApiName: APPLICANT_OBJECT, recordTypeId: '$applicantObjectInfo.data.defaultRecordTypeId' })
+    wiredApplicantPicklistValues({ data, error }) {
+        if (data) {
+            this.industryAppOptions = data.picklistFieldValues.Industry__c.values;
+            this.legalEntityAppOptions = data.picklistFieldValues.Legal_Entity__c.values;
+            this.roleAppOptions = data.picklistFieldValues.Role.values;
+        } else if (error) {
+            console.error('Applicant picklist error', error);
+        }
+    }
+
+    @track showForm = false;
+    @api formData = {};     // Read-only data
+    @track editData = {};   // Editable form data
+    @track isReadOnly = true;
+
+    @api applicationFormId;
+    @track showForm = false;
+    @track searchKey = '';
+    @track searchResults = [];
+    @track formData = {
+        Company_Name__c: '',
+        DBA__c: '',
+        Industry__c: '',
+        Employees__c: null,
+        Annual_Revenue__c: null,
+        Net_Profit__c: null,
+        Legal_Entity__c: '',
+        Comments__c: ''
+    };
+
+    // Open form
+    openApplicantForm() {
+        this.showForm = true;
+        this.resetForm();
+    }
+
+    // Cancel form
+    cancelApplicantForm() {
+        this.showForm = false;
+    }
+
+    // Reset form data
+    resetForm() {
+        this.searchKey = '';
+        this.searchResults = [];
+        this.formData = {
+            Company_Name__c: '',
+            DBA__c: '',
+            Industry__c: '',
+            Employees__c: null,
+            Annual_Revenue__c: null,
+            Net_Profit__c: null,
+            Legal_Entity__c: '',
+            Comments__c: '',
+            applicationFormId :''
+        };
+    }
+
+    // Handle search keyword
+    handleKeywordUpdate(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey.length > 2) {
+            searchBusinessAccounts({ keyword: this.searchKey })
+                .then(result => {
+                    this.searchResults = result;
+                })
+                .catch(error => {
+                    this.showToast('Error', error.body.message, 'error');
+                });
+        } else {
+            this.searchResults = [];
+        }
+    }
+
+    // Select account → auto fill
+    chooseAccount(event) {
+        let accountId = event.currentTarget.dataset.id;
+        fetchAccountDetails({ accountId })
+            .then(acc => {
+                this.formData = {
+                    Company_Name__c: acc.Name,
+                    DBA__c: acc.nSBA__DBA__c,
+                    Industry__c: acc.Industry,
+                    Employees__c: acc.NumberOfEmployees,
+                    Annual_Revenue__c: acc.AnnualRevenue,
+                    Net_Profit__c: acc.Net_Profit__c,
+                    Legal_Entity__c: acc.Legal_Entity__c,
+                    Comments__c: acc.Comments__c
+                };
+                this.searchResults = []; // hide results
+                this.searchKey = acc.Name;
+            })
+            .catch(error => {
+                this.showToast('Error', error.body.message, 'error');
+            });
+    }
+
+    // Manual input
+    updateInput(event) {
+        const fieldName = event.target.dataset.field;
+        this.formData[fieldName] = event.target.value;
+    }
+
+    // Save
+    // saveApplicantRecord() {
+    //     saveApplicant1({ applicantRecord: this.formData, applicationFormId: this.applicationFormId })
+    //         .then(() => {
+    //             this.showToast('Success', 'Applicant saved successfully', 'success');
+    //             this.showForm = false;
+    //             this.resetForm();
+    //         })
+    //         .catch(error => {
+    //             this.showToast('Error', error.body.message, 'error');
+    //         });
+    // }
+
+
+  async saveApplicantRecord() {
+    const applicantRec = {
+        sobjectType: 'Applicant',
+        ApplicationFormId: this.recordId,
+        Company_Name__c: this.formData.Company_Name__c,
+        DBA__c: this.formData.DBA__c,
+        Industry__c: this.formData.Industry__c,
+        Employees__c: this.formData.Employees__c,
+        Annual_Revenue__c: this.formData.Annual_Revenue__c,
+        Net_Profit__c: this.formData.Net_Profit__c,
+        Legal_Entity__c: this.formData.Legal_Entity__c,
+        Comments__c: this.formData.Comments__c,
+        Role: this.formData.Role // ← keep standard field
+    };
+
+    try {
+        //Apex should: insert, then `return applicantRecord.Id;`
+        const newId = await saveApplicant1({
+            applicantRecord: applicantRec,
+            applicationFormId: this.recordId
+        });
+
+        // Push the new row into UI immediately
+        const newRow = this.normalizeApplicant({ ...applicantRec, Id: newId });
+        this.applicants = [newRow, ...this.applicants];
+
+        // (Optional) open the new section
+        const acc = this.template.querySelector('lightning-accordion');
+        if (acc) acc.activeSectionName = newId;
+
+        this.dispatchEvent(new ShowToastEvent({
+            title: 'Success',
+            message: 'Applicant created successfully',
+            variant: 'success'
+        }));
+
+        this.showForm = false;
+        this.resetForm();
+
+        // (Optional) if you also want server truth, requery in the background:
+        // await this.loadApplicants();
+
+    } catch (error) {
+        this.dispatchEvent(new ShowToastEvent({
+            title: 'Error creating record',
+            message: error?.body?.message || error.message,
+            variant: 'error'
+        }));
+    }
+}
+
+
+    // Toast helper
+    showToast(title, message, variant) {
+        this.dispatchEvent(
+            new ShowToastEvent({
+                title,
+                message,
+                variant
+            })
+        );
+    }
+
+
+    connectedCallback() {
+        console.log('ApplicationForm Id', this.recordId);
+        if (this.recordId) {
+            //  this.prefillFromAppForm();
+            this.loadApplicants();
+        }
+    }
+
+
+ @track showIndividualForm = false;
+    @track searchKey = '';
+    @track individualResults = [];
+    @api formData1 = {}; 
+
+ handleAddIndividual() {
+        this.showIndividualForm = true;
+    }
+
+    handleIndividualSearchChange(event) {
+        this.searchKey = event.target.value;
+        if (this.searchKey.length > 2) {
+            searchIndividuals({ searchKey: this.searchKey })
+                .then(result => {
+                    this.individualResults = result;
+                })
+                .catch(error => {
+                    console.error('Error in search', error);
+                });
+        } else {
+            this.individualResults = [];
+        }
+    }
+
+    selectIndividual(event) {
+        const accountId = event.currentTarget.dataset.id;
+        getIndividualDetails({ accountId })
+            .then(result => {
+                this.formData1 = {
+                    FirstName: result.FirstName,
+                    LastName: result.LastName,
+                    Phone: result.Phone,
+                    Email: result.Email,
+                    Role: result.role__c
+                };
+            })
+            .catch(error => {
+                console.error('Error fetching individual details', error);
+            });
+    }
+
+    handleInputChange(event) {
+        const field = event.target.dataset.field;
+        this.formData1[field] = event.target.value;
+    }
+
+    saveIndividualRecord() {
+        const applicantRec = {
+            sobjectType: 'Applicant',
+            ApplicationFormId: this.recordId,
+            FirstName: this.formData1.FirstName,
+            LastName : this.formData1.LastName,
+            Phone: this.formData1.Phone,
+            Email: this.formData1.Email,
+            Role: this.formData1.Role
+        };
+
+        saveApplicant1({ applicantRecord: applicantRec, applicationFormId: this.recordId })
+            .then(() => {
+                this.dispatchEvent(new ShowToastEvent({
+                    title: 'Success',
+                    message: 'Individual Applicant created successfully',
+                    variant: 'success'
+                }));
+                this.showIndividualForm = false;
+                this.formData1 = {};
+            })
+            .catch(error => {
+                this.dispatchEvent(new ShowToastEvent({
+                    title: 'Error',
+                    message: error.body.message,
+                    variant: 'error'
+                }));
+            });
+    }
+
+    
+
+    // Existing Applicant Record 
+    async loadApplicants() {
+        try {
+            const fetchedApplicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
+            if (fetchedApplicants && fetchedApplicants.length > 0) {
+                this.applicants = fetchedApplicants.map(app => {
+                    // Defensive copy and initialization
+                    const applicantData = { ...app };
+                    return {
+                        ...applicantData,
+                        label: (app.Company_Name__c || '') + (app.Company_Name__c && app.Role ? ' - ' : '') + (app.Role || ''),
+                        isReadOnly: true,
+                        // Create a separate copy for editing to avoid direct mutation
+                        editData: { ...applicantData }
+                    };
+                });
+                console.log('Loaded and initialized applicants:', this.applicants);
+            } else {
+                this.applicants = []; // Ensure it's an empty array if no data
+            }
+        } catch (error) {
+            console.error('Error fetching and initializing applicants', error);
+            this.applicants = []; // Handle the error by setting to an empty array
+        }
+    }
+
+
+
+    // New handler for the "Edit" button on an existing applicant record
+    handleEditApplicant(event) {
+        const applicantId = event.target.dataset.id;
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                return { ...app, isReadOnly: false }; // Make this specific applicant editable
+            }
+            return app;
+        });
+    }
+
+    // New handler for the "Cancel" button on an existing applicant record
+    handleCancelApplicant(event) {
+        const applicantId = event.target.dataset.id;
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                // Revert to original data and make it read-only again
+                return { ...app, isReadOnly: true, editData: { ...app } };
+            }
+            return app;
+        });
+    }
+
+    // New handler to update a specific applicant's editData as fields change existing applicant record
+    handleApplicantInputChange(event) {
+        const applicantId = event.target.dataset.id;
+        const field = event.target.dataset.field;
+        const value = event.target.value;
+
+        this.applicants = this.applicants.map(app => {
+            if (app.Id === applicantId) {
+                // Update the editData property for the specific field
+                const updatedEditData = { ...app.editData, [field]: value };
+                return { ...app, editData: updatedEditData };
+            }
+            return app;
+        });
+    }
+
+   normalizeApplicant(app) {
+    return {
+        ...app,
+        label: `${app.Company_Name__c || ''}${app.Company_Name__c && (app.Role||app.Role) ? ' - ' : ''}${app.Role || app.Role || ''}`,
+        isReadOnly: true,
+        editData: { ...app }
+    };
+}
+
+async handleSaveApplicant(event) {
+    const applicantId = event.target.dataset.id;
+    const row = this.applicants.find(a => a.Id === applicantId);
+    if (!row) return;
+
+    const payload = {
+        Id: applicantId,
+        ApplicationFormId: this.recordId,
+        Company_Name__c: row.editData.Company_Name__c,
+        Role: row.editData.Role,      // ← use the TRUE API name (Role__c or Role)
+        DBA__c: row.editData.DBA__c,
+        Industry__c: row.editData.Industry__c,
+        Employees__c: row.editData.Employees__c,
+        Annual_Revenue__c: row.editData.Annual_Revenue__c,
+        Net_Profit__c: row.editData.Net_Profit__c,
+        Legal_Entity__c: row.editData.Legal_Entity__c,
+        Comments__c: row.editData.Comments__c
+    };
+
+    try {
+        await saveApplicant({ applicant: payload });
+
+        // Immediately reflect changes in UI (no server fetch)
+        this.applicants = this.applicants.map(a =>
+            a.Id === applicantId
+                ? this.normalizeApplicant({ ...a, ...row.editData })
+                : a
+        );
+
+        this.dispatchEvent(new ShowToastEvent({
+            title: 'Success',
+            message: 'Applicant saved successfully.',
+            variant: 'success'
+        }));
+    } catch (error) {
+        this.dispatchEvent(new ShowToastEvent({
+            title: 'Error saving applicant',
+            message: error?.body?.message || error.message,
+            variant: 'error'
+        }));
+    }
+}
+
+    
+handleCancel() {
+    this.showIndividualForm = false;
+    this.formData1 = {}; // reset form
+}
+
+
+
+}
+
+
+
+
+
+
+
+
 async saveApplicantRecord() {
     const applicantRec = {
         sobjectType: 'Applicant',
