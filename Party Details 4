@@ -1,4 +1,38 @@
 normalizeApplicant(app) {
+    const isBusiness = app.Applicant_Type__c === 'Business';
+    const isIndividual = app.Applicant_Type__c === 'Individual';
+
+    const label = isBusiness
+        ? `${app.Company_Name__c || 'Business'}${app.Role__c ? ' - ' + app.Role__c : ''}`
+        : `${app.FirstName__c || ''} ${app.LastName__c || ''}${app.Role__c ? ' - ' + app.Role__c : ''}`;
+
+    return {
+        ...app,
+        isBusiness,
+        isIndividual,
+        label,
+        isReadOnly: true,
+        editData: { ...app }
+    };
+}
+
+
+
+<!-- READ ONLY: INDIVIDUAL -->
+<template if:true={applicant.isIndividual}>
+  <div class="slds-grid slds-wrap slds-m-around_medium">
+    <lightning-input class="slds-size_1-of-2" label="First Name" value={applicant.FirstName__c} readonly></lightning-input>
+    <lightning-input class="slds-size_1-of-2" label="Last Name" value={applicant.LastName__c} readonly></lightning-input>
+    <lightning-input class="slds-size_1-of-2" label="Role" value={applicant.Role__c} readonly></lightning-input>
+    <lightning-input class="slds-size_1-of-2" label="Phone" value={applicant.Phone__c} readonly></lightning-input>
+    <lightning-input class="slds-size_1-of-2" label="Email" value={applicant.Email__c} readonly></lightning-input>
+    <lightning-textarea class="slds-size_1-of-1" label="Comments" value={applicant.Comments__c} readonly></lightning-textarea>
+  </div>
+</template>
+
+
+
+normalizeApplicant(app) {
   const type = app.Applicant_Type__c;
   return {
     ...app,
