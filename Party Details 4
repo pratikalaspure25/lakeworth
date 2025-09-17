@@ -3,8 +3,13 @@
 
 async loadApplicants() {
     try {
+        // Fetch applicants based on the ApplicationFormId
         const fetchedApplicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
 
+        // Log data to the console to verify it's being fetched
+        console.log('Fetched Applicants:', fetchedApplicants);
+
+        // Filter business applicants
         this.businessApplicants = fetchedApplicants
             .filter(app => app.Applicant_Type__c === 'Business')
             .map(app => ({
@@ -14,6 +19,7 @@ async loadApplicants() {
                 editData: { ...app }
             }));
 
+        // Filter individual applicants
         this.individualApplicants = fetchedApplicants
             .filter(app => app.Applicant_Type__c === 'Individual')
             .map(app => ({
@@ -23,10 +29,17 @@ async loadApplicants() {
                 editData: { ...app }
             }));
 
+        // Log filtered arrays to verify
+        console.log('Business Applicants:', this.businessApplicants);
+        console.log('Individual Applicants:', this.individualApplicants);
+
     } catch (error) {
         console.error('Error loading applicants:', error);
     }
 }
+
+
+
 
 <template>
     <!-- Business Applicants Section -->
