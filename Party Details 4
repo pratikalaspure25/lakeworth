@@ -1,3 +1,99 @@
+@track individualApplicants = [];
+@track businessApplicants = [];
+
+async loadApplicants() {
+    try {
+        const fetchedApplicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
+        
+        if (fetchedApplicants && fetchedApplicants.length > 0) {
+            this.businessApplicants = [];
+            this.individualApplicants = [];
+
+            fetchedApplicants.forEach(applicant => {
+                if (applicant.ApplicantType === 'Business') {
+                    // Business Applicant Processing
+                    const businessApplicant = { ...applicant };
+                    this.businessApplicants.push({
+                        ...businessApplicant,
+                        label: (applicant.Company_Name__c || '') + (applicant.Company_Name__c && app.Role ? ' - ' : '') + (applicant.Role || ''),
+                        isReadOnly: true,
+                        editData: { ...businessApplicant }
+                    });
+                } else if (applicant.ApplicantType === 'Individual') {
+                    // Individual Applicant Processing
+                    const individualApplicant = { ...applicant };
+                    this.individualApplicants.push({
+                        ...individualApplicant,
+                        label: (applicant.FirstName || '') + ' ' + (applicant.LastName || '') + (applicant.Role ? ' - ' + applicant.Role : ''),
+                        isReadOnly: true,
+                        editData: { ...individualApplicant }
+                    });
+                }
+            });
+
+            console.log('Loaded Business applicants:', this.businessApplicants);
+            console.log('Loaded Individual applicants:', this.individualApplicants);
+        } else {
+            this.businessApplicants = [];
+            this.individualApplicants = [];
+        }
+    } catch (error) {
+        console.error('Error fetching and initializing applicants', error);
+        this.businessApplicants = [];
+        this.individualApplicants = [];
+    }
+}
+
+
+
+<!-- Display Individual Applicants -->
+<template if:true={individualApplicants.length}>
+    <h3 class="slds-text-heading_medium slds-m-top_large slds-m-bottom_small">Individual Applicants</h3>
+    <lightning-accordion allow-multiple-sections-open>
+        <template for:each={individualApplicants} for:item="applicant" for:index="index">
+            <lightning-accordion-section key={applicant.Id} label={applicant.label} name={applicant.Id}>
+                <template if:true={applicant.isReadOnly}>
+                    <div class="slds-m-around_medium slds-clearfix">
+                        <div class="slds-float_right">
+                            <lightning-button variant="base" label="Edit" onclick={handleEditApplicant} data-id={applicant.Id}></lightning-button>
+                        </div>
+                    </div>
+                    <div class="slds-grid slds-wrap slds-m-around_medium">
+                        <lightning-input class="slds-size_1-of-2" label="First Name" value={applicant.FirstName} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Last Name" value={applicant.LastName} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Phone" value={applicant.Phone} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Role" value={applicant.Role} readonly></lightning-input>
+                        <lightning-input class="slds-size_1-of-2" label="Email" value={applicant.Email} readonly></lightning-input>
+                    </div>
+                </template>
+
+                <template if:false={applicant.isReadOnly}>
+                    <lightning-card title="Edit Individual Applicant">
+                        <!-- Editable Form -->
+                        <div class="slds-grid slds-wrap slds-m-around_medium">
+                            <lightning-input class="slds-size_1-of-2" label="First Name" value={applicant.editData.FirstName} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="FirstName"></lightning-input>
+                            <lightning-input class="slds-size_1-of-2" label="Last Name" value={applicant.editData.LastName} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="LastName"></lightning-input>
+                            <lightning-input class="slds-size_1-of-2" label="Phone" value={applicant.editData.Phone} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Phone"></lightning-input>
+                            <lightning-input class="slds-size_1-of-2" label="Email" value={applicant.editData.Email} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Email"></lightning-input>
+                            <lightning-combobox class="slds-size_1-of-2" label="Role" value={applicant.editData.Role} options={roleAppOptions} onchange={handleApplicantInputChange} data-id={applicant.Id} data-field="Role"></lightning-combobox>
+                        </div>
+
+                        <!-- Footer Buttons -->
+                        <div class="slds-m-around_medium slds-grid slds-grid_align-end">
+                            <lightning-button label="Cancel" variant="neutral" onclick={handleCancelApplicant} data-id={applicant.Id} class="slds-m-right_small"></lightning-button>
+                            <lightning-button label="Save" variant="brand" onclick={handleSaveApplicant} data-id={applicant.Id}></lightning-button>
+                        </div>
+                    </lightning-card>
+                </template>
+            </lightning-accordion-section>
+        </template>
+    </lightning-accordion>
+</template>
+
+
+
+
+
 async loadApplicants() {
     try {
         const fetchedApplicants = await getApplicantsFromAppForm({ appFormId: this.recordId });
