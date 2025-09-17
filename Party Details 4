@@ -1,3 +1,47 @@
+<template if:true={businessApplicants.length}>
+    <h3 class="slds-text-heading_medium slds-m-bottom_small">Business Applicants</h3>
+    <lightning-accordion allow-multiple-sections-open>
+        <template for:each={businessApplicants} for:item="applicant">
+            <lightning-accordion-section key={applicant.Id} label={applicant.label} name={applicant.Id}>
+                <!-- Business Applicant Display -->
+                <template if:true={applicant.isReadOnly}>
+                    <lightning-input label="Company Name" value={applicant.Company_Name__c} readonly></lightning-input>
+                    <!-- Add other fields here -->
+                </template>
+                <template if:false={applicant.isReadOnly}>
+                    <lightning-card title="Edit Business Applicant">
+                        <!-- Editable fields for Business applicant -->
+                    </lightning-card>
+                </template>
+            </lightning-accordion-section>
+        </template>
+    </lightning-accordion>
+</template>
+
+<template if:true={individualApplicants.length}>
+    <h3 class="slds-text-heading_medium slds-m-top_large slds-m-bottom_small">Individual Applicants</h3>
+    <lightning-accordion allow-multiple-sections-open>
+        <template for:each={individualApplicants} for:item="applicant">
+            <lightning-accordion-section key={applicant.Id} label={applicant.label} name={applicant.Id}>
+                <!-- Individual Applicant Display -->
+                <template if:true={applicant.isReadOnly}>
+                    <lightning-input label="First Name" value={applicant.FirstName} readonly></lightning-input>
+                    <lightning-input label="Last Name" value={applicant.LastName} readonly></lightning-input>
+                    <!-- Add other fields here -->
+                </template>
+                <template if:false={applicant.isReadOnly}>
+                    <lightning-card title="Edit Individual Applicant">
+                        <!-- Editable fields for Individual applicant -->
+                    </lightning-card>
+                </template>
+            </lightning-accordion-section>
+        </template>
+    </lightning-accordion>
+</template>
+
+
+
+
 @track businessApplicants = [];
 @track individualApplicants = [];
 
