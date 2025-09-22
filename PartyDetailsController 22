@@ -1,0 +1,205 @@
+public class PartyDetailsController {
+
+    // Account search
+   /* @AuraEnabled(cacheable=true)
+    public static List<Account> searchAccounts(String searchKey) {
+        String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
+        return [
+            SELECT Id, Name, nSBA__DBA__c, Industry, Legal_Entity__c,
+                   NumberOfEmployees, AnnualRevenue, Net_Profit__c, Comments__c, role__c
+            FROM Account
+            WHERE Name LIKE :key 
+            LIMIT 10
+        ];
+    } */
+
+@AuraEnabled(cacheable=true)
+public static List<Account> searchAccounts(String searchKey) {
+    String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
+    return [
+        SELECT Id, Name, nSBA__DBA__c, Industry, Legal_Entity__c,
+               NumberOfEmployees, AnnualRevenue, Net_Profit__c, Comments__c, Role__c
+        FROM Account
+        WHERE Name LIKE :key 
+        AND RecordType.Name = 'Business'
+        LIMIT 10
+    ];
+}
+
+    // Account details wrapper
+    public class AccountDetails {
+        @AuraEnabled public Id id;
+        @AuraEnabled public String companyName;
+        @AuraEnabled public String role;
+        @AuraEnabled public String dba;
+        @AuraEnabled public String industry;
+        @AuraEnabled public Integer employees;
+        @AuraEnabled public String annualRevenue;
+        @AuraEnabled public String netProfit;
+        @AuraEnabled public String legalEntity;
+        @AuraEnabled public String comment;
+    }
+
+    // Get account details
+    @AuraEnabled(cacheable=true)
+    public static AccountDetails getAccountDetails(Id accountId) {
+        if (accountId == null) return new AccountDetails();
+        Account acc = [
+            SELECT Id, Name, nSBA__DBA__c, Industry, Legal_Entity__c,
+                   NumberOfEmployees, AnnualRevenue, Net_Profit__c, Comments__c, Role__c
+            FROM Account
+            WHERE Id = :accountId
+            LIMIT 1
+        ];
+        return mapToWrapper(acc);
+    }
+
+    // Prefill from ApplicationForm
+    @AuraEnabled(cacheable=true)
+    public static AccountDetails getAccountDetailsFromAppForm(Id appFormId) {
+        if(appFormId == null) return new AccountDetails();
+        ApplicationForm app = [
+            SELECT Id, AccountId 
+            FROM ApplicationForm
+            WHERE Id = :appFormId
+            LIMIT 1
+        ];
+        if(app.AccountId == null) return new AccountDetails();
+        return getAccountDetails(app.AccountId);
+    }
+
+    // Get existing Applicants
+    @AuraEnabled(cacheable=true)
+    public static List<Applicant> getApplicantsFromAppForm(Id appFormId) {
+        return [
+            SELECT Id, Name,Applicant_Type__C, Company_Name__c,Role,DBA__c,Legal_Entity__c,Industry__c,Employees__c,Annual_Revenue__c, Net_Profit__c,Comments__c,FirstName, LastName, Phone from Applicant
+            WHERE ApplicationFormId = :appFormId
+        ];
+    }
+
+    // Create new Applicant
+  /*  @AuraEnabled
+    public static Id createApplicant(Id appFormId, AccountDetails accDetails) {
+        Applicant app = new Applicant();
+        app.ApplicationFormId = appFormId;
+        app.Company_Name__c = accDetails.companyName;
+        app.DBA__c = accDetails.dba;
+        app.Industry__c = accDetails.industry;
+        app.Employees__c = accDetails.employees;
+        app.Annual_Revenue__c = accDetails.annualRevenue != null ? Decimal.valueOf(accDetails.annualRevenue) : null;
+        app.Net_Profit__c = accDetails.netProfit != null ? Decimal.valueOf(accDetails.netProfit) : null;
+        app.Legal_Entity__c = accDetails.legalEntity;
+        app.Comments__c = accDetails.comment;
+        insert app;
+        return app.Id;
+    } */
+
+    // Utility
+    private static AccountDetails mapToWrapper(Account acc) {
+        AccountDetails d = new AccountDetails();
+        d.id            = acc.Id;
+        d.companyName   = acc.Name;
+        d.dba           = acc.nSBA__DBA__c;
+        d.industry      = acc.Industry;
+        d.employees     = acc.NumberOfEmployees;
+        d.annualRevenue = acc.AnnualRevenue != null ? String.valueOf(acc.AnnualRevenue) : null;
+        d.netProfit     = acc.Net_Profit__c != null ? String.valueOf(acc.Net_Profit__c) : null;
+        d.legalEntity   = acc.Legal_Entity__c;
+        d.comment       = acc.Comments__c;
+        return d;
+    }
+
+ @AuraEnabled
+    public static void updateApplicant(Id applicantId, Map<String, Object> fields) {
+        Applicant app = new Applicant(Id = applicantId);
+        for (String key : fields.keySet()) {
+            SObjectField sf = Applicant.SObjectType.getDescribe().fields.getMap().get(key);
+            if (sf != null) {
+                app.put(sf, fields.get(key));
+            }
+        }
+        update app;
+    }
+
+    @AuraEnabled
+public static Applicant saveApplicant(Applicant applicant) {
+    if (applicant.ApplicationFormId == null) {
+        throw new AuraHandledException('ApplicationFormId is required.');
+    }
+
+    upsert applicant;
+
+    // Always return record with Id after upsert
+    return [
+        SELECT Id, ApplicationFormId, Company_Name__c, Role, DBA__c,
+               Industry__c, Employees__c, Annual_Revenue__c, Net_Profit__c,
+               Legal_Entity__c, Comments__c
+        FROM Applicant
+        WHERE Id = :applicant.Id
+        LIMIT 1
+    ];
+}
+
+//Add
+
+
+@AuraEnabled
+    public static Id saveApplicant1(Applicant applicantRecord, Id applicationFormId) {
+        // Make sure lookup is populated
+        applicantRecord.ApplicationFormId = applicationFormId;
+        insert applicantRecord;
+        return applicantRecord.Id;
+    }
+
+    // Search only Business accounts
+    @AuraEnabled(cacheable=true)
+    public static List<Account> searchBusinessAccounts(String keyword) {
+        String searchKey = '%' + String.escapeSingleQuotes(keyword) + '%';
+        return [
+            SELECT Id, Name, Industry, nSBA__DBA__c, NumberOfEmployees, AnnualRevenue, 
+                   Net_Profit__c, Legal_Entity__c, Comments__c
+            FROM Account
+            WHERE RecordType.Name = 'Business' 
+              AND Name LIKE :searchKey
+            LIMIT 20
+        ];
+    }
+
+    // Fetch selected account details
+    @AuraEnabled(cacheable=true)
+    public static Account fetchAccountDetails(Id accountId) {
+        return [
+            SELECT Id, Name, Industry, nSBA__DBA__c, NumberOfEmployees, AnnualRevenue, 
+                   Net_Profit__c, Legal_Entity__c, Comments__c
+            FROM Account
+            WHERE Id = :accountId
+            LIMIT 1
+        ];
+    }
+
+@AuraEnabled(cacheable=true)
+public static List<Account> searchIndividuals(String searchKey) {
+    String key = '%' + String.escapeSingleQuotes(searchKey) + '%';
+    return [
+        SELECT Id, FirstName, LastName, Phone,  role__c
+        FROM Account
+        WHERE RecordType.Name = 'Individual'
+        AND (FirstName LIKE :key OR LastName LIKE :key)
+        LIMIT 10
+    ];
+}
+
+@AuraEnabled(cacheable=true)
+public static Account getIndividualDetails(Id accountId) {
+    if (accountId == null) {
+        throw new AuraHandledException('Account Id cannot be null');
+    }
+    return [
+        SELECT Id, FirstName, LastName, Phone, role__c
+        FROM Account
+        WHERE Id = :accountId
+        LIMIT 1
+    ];
+}
+
+}
