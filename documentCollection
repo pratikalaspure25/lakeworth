@@ -1,3 +1,5 @@
+I’ve changed their profiles to System Admin and logged in as both users. It’s working fine. Please validate on your end, and let me know if you notice anything not working.
+
 // Pseudocode for dynamic mapping
 connectedCallback() {
     if (this.objectApiName === 'Opportunity') {
