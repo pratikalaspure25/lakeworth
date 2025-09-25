@@ -1,0 +1,12 @@
+// Pseudocode for dynamic mapping
+connectedCallback() {
+    if (this.objectApiName === 'Opportunity') {
+        // Fetch related ApplicationFormId from custom field or via Apex
+        this.parentId = this.getLoanRequestIdFromOpportunity(this.recordId);
+    } else if (this.objectApiName === 'Account') {
+        this.parentId = this.getLatestLoanRequestIdForAccount(this.recordId);
+    } else {
+        this.parentId = this.recordId; // Already on ApplicationForm/Loan Request
+    }
+    // Now use this.parentId everywhere for document logic
+}
