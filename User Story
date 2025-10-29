@@ -1,3 +1,28 @@
 Solution:
 Create a custom Apex Trigger or Flow to restrict reassignment if the user's role is lower than the current owner’s role.
 Flow can be used to create a validation that prevents users from reassigning cases where the role hierarchy is violated.
+
+Create a Public Group for SSM Users
+Go to Setup → Public Groups → New.
+Label: SSM Group
+
+Add all members listed:
+Christopher Godfrey
+Edgar Casiano
+Janna Chinnery
+JoAnn Robinson
+Kristine Landini
+Lenuta Uzun
+Rosemary Hoadley
+This allows you to use this group in sharing rules and Apex logic.
+
+2. Case Object Sharing Settings
+Navigate to Setup → Sharing Settings.
+Set Case object to Private.
+This ensures only owners and users with explicit sharing can view/edit.
+Then create a Sharing Rule:
+Type: Based on Criteria or Owner
+Share with: Public Group → SSM Group
+Access: Read/Write
+
+✅ This ensures all SSM users can view and edit each other’s Cases.
