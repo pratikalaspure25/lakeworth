@@ -1,3 +1,6 @@
+LEFT((!$Api.Enterprise_Server_URL_510),FIND('/services, (!$Api.Enterprise_Server_URL_510)))&(!Contactid)
+
+
 Solution:
 Create a custom Apex Trigger or Flow to restrict reassignment if the user's role is lower than the current owner’s role.
 Flow can be used to create a validation that prevents users from reassigning cases where the role hierarchy is violated.
