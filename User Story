@@ -1,5 +1,10 @@
 LEFT((!$Api.Enterprise_Server_URL_510),FIND('/services, (!$Api.Enterprise_Server_URL_510)))&(!Contactid)
 
+Hi @Mariela,
+While updating the Global Search Layout for AC1, I noticed that there are already 7 fields configured.
+Since Salesforce allows a maximum of 10 fields in a search layout, we can only add 3 out of the 4 new fields mentioned in the story.
+Could you please confirm which of the 4 new fields are the most important to include?
+Alternatively, we can remove one of the existing fields to accommodate all four, if that’s preferred.
 
 Solution:
 Create a custom Apex Trigger or Flow to restrict reassignment if the user's role is lower than the current owner’s role.
