@@ -1,4 +1,11 @@
 LEFT((!$Api.Enterprise_Server_URL_510),FIND('/services, (!$Api.Enterprise_Server_URL_510)))&(!Contactid)
+Hi @Mariela Munoz Bolano,
+
+Attached the screenshot for AC3 validation.
+
+Verified that the four fields — Relationship, Status, Stage, and Primary Officer — are displaying correctly in Global Search for Product Packages.
+
+Behavior aligns with the acceptance criteria. Moving the story to INT.
 
 Hi @Mariela,
 While updating the Global Search Layout for AC1, I noticed that there are already 7 fields configured.
