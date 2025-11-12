@@ -1,4 +1,6 @@
 LEFT((!$Api.Enterprise_Server_URL_510),FIND('/services, (!$Api.Enterprise_Server_URL_510)))&(!Contactid)
+
+Hi VK - I’m having an issue logging into the Copado org. I enter my username and password, and then the "Verify Your Identity" window shows up. But when I click the "Verify" button, nothing happens, and I can't proceed. Any idea what might be causing this?
 Hi @Mariela Munoz Bolano,
 
 Attached the screenshot for AC3 validation.
