@@ -1,3 +1,15 @@
+Thanks, Mariela, for sharing the full list of 13 permission sets related to the TS_COA_ACH_Originations__c field.
+
+I reviewed all 13 permission sets in the Dev FSC org, and I found that only 10 of them exist in this environment.
+The following permission sets are not available in Dev FSC:
+
+[Add the missing permission set names here]
+
+Please advise if these 3 permission sets are expected to be available in Dev FSC, or if they exist only in other environments (INT/UAT/PROD).
+
+Once confirmed, I will proceed with aligning permissions for the new field accordingly.
+
+
 Hi Mariela,
 As requested, I’ve attached the screenshot showing the reference field’s permissions.
 Please let me know if you need additional details or if you’d like me to capture any other views.
