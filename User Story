@@ -1,3 +1,13 @@
+Hi @Mariyala,
+I analyzed this defect and found that the list view label has reached the maximum character limit allowed by Salesforce.
+If we add a space before the “–”, the label will exceed the limit and cannot be saved.
+
+To apply the requested change, we would need to shorten the list view name.
+Please let me know if you approve updating it to:
+“My Closed Loan – OPX Package Review Case” (removing the “s” from Cases).
+
+Happy to proceed once I get your confirmation.
+
 LEFT((!$Api.Enterprise_Server_URL_510),FIND('/services, (!$Api.Enterprise_Server_URL_510)))&(!Contactid)
 
 Hi VK - I’m having an issue logging into the Copado org. I enter my username and password, and then the "Verify Your Identity" window shows up. But when I click the "Verify" button, nothing happens, and I can't proceed. Any idea what might be causing this?
