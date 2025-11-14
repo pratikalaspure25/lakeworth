@@ -1,3 +1,7 @@
+Hi Mariela,
+As requested, I’ve attached the screenshot showing the reference field’s permissions.
+Please let me know if you need additional details or if you’d like me to capture any other views.
+
 Hi @Mariyala,
 I analyzed this defect and found that the list view label has reached the maximum character limit allowed by Salesforce.
 If we add a space before the “–”, the label will exceed the limit and cannot be saved.
