@@ -1,0 +1,248 @@
+public without sharing class BatchUpdateInactiveHHOwner implements Schedulable, Database.Batchable<sObject>, Database.Stateful {
+    private List<String> errorMessages = new List<String>();
+    private Map<Id, User> inactiveUserMap = new Map<Id, User>();
+    private Map<Id, Id> transferMap = new Map<Id, Id>();
+    Map<Id, InactiveUserWrapper> accountsByManager = new Map<Id, InactiveUserWrapper>();
+    Map<Id,String> accountsForSupportAdmin = new Map<Id, String>();
+    
+    public Database.QueryLocator start(Database.BatchableContext bc){
+       
+        // Get inactive users that have Household or Group accounts & Exclude System Administrator profile users        
+        Set<Id> systemAdminProfileIds = new Set<Id>();
+        for(Profile p : [SELECT Id FROM Profile WHERE Name = 'System Administrator' LIMIT 1]) {
+            systemAdminProfileIds.add(p.Id);
+        }
+        system.debug('systemAdminProfileIds--'+systemAdminProfileIds);
+        inactiveUserMap = new Map<Id, User>([
+            SELECT Id, Name, Email, ManagerId, Manager.IsActive, Manager.Email,
+            ProfileId,Manager.Name FROM User 
+            WHERE IsActive = false 
+            AND ProfileId NOT IN :systemAdminProfileIds
+            AND LastModifiedDate = LAST_N_DAYS:7
+        ]);
+        system.debug('inactiveUserMap--'+inactiveUserMap);
+        
+        // Query Household and Group accounts owned by inactive users
+        return Database.getQueryLocator([
+            SELECT Id, Name, OwnerId, Owner.Name, Owner.Email, Owner.ManagerId, 
+            Owner.Manager.IsActive, Owner.Manager.Email,Owner.Manager.Name
+            FROM Account 
+            WHERE OwnerId IN :inactiveUserMap.keySet() 
+            AND (RecordType.DeveloperName = 'IndustriesHousehold' OR RecordType.DeveloperName = 'CRM_Group')     
+        ]);
+    }
+    
+    public void execute(Database.BatchableContext bc, List<Account> scope){
+        try { 
+            system.debug('scope--'+scope);
+            // Maps to track accounts by manager and by support admin
+            for(Account acc : scope) {
+                User inactiveOwner = inactiveUserMap.get(acc.OwnerId);
+                if(inactiveOwner == null) continue;               
+                if(inactiveOwner.ManagerId != null && inactiveOwner.Manager.IsActive) 
+                {  system.debug(' inactiveOwner.Manager--'+ inactiveOwner.Manager);
+                 transferMap.put(acc.OwnerId, inactiveOwner.ManagerId);                
+                 InactiveUserWrapper managerRecord= new InactiveUserWrapper(acc.Owner.Name,inactiveOwner.Manager.Email,inactiveOwner.Manager.Name);
+                 if(!accountsByManager.containsKey(acc.OwnerId)) {
+                     accountsByManager.put(acc.OwnerId, managerRecord);
+                 }
+                 // Update owner to manager
+                 acc.OwnerId = inactiveOwner.ManagerId;
+                 system.debug(' acc.OwnerId--'+ acc.OwnerId);
+                } else {                                    
+                    if(!accountsForSupportAdmin.containsKey(acc.OwnerId)) {
+                        accountsForSupportAdmin.put(acc.OwnerId, acc.Owner.Name);
+                    }
+                    
+                }
+                
+            }
+            // Update accounts with valid managers           
+            if(!scope.isEmpty()) { system.debug('(scope-123-'+scope);                  
+                                  List<Database.SaveResult> results = Database.update(scope, False);                                  
+                                  for(Integer i = 0; i < results.size(); i++) {
+                                      if(!results[i].isSuccess()) {
+                                          errorMessages.add('Error updating account ' + scope[i].Name + ': ' 
+                                                            + results[i].getErrors()[0].getMessage());
+                                      }
+                                  }
+                                 }
+            
+        } 
+        catch(Exception e) {            
+            errorMessages.add('Batch execution error: ' + e.getMessage() + ' Stack trace: ' + e.getStackTraceString());
+            System.debug(LoggingLevel.ERROR, 'BatchUpdateInactiveHHOwner error: ' + e.getMessage());
+            System.debug(LoggingLevel.ERROR, 'Stack trace: ' + e.getStackTraceString());           
+        } 
+    }
+    
+    private void sendManagerNotifications(Map<Id, InactiveUserWrapper> accountsByManager) {
+        List<Messaging.SingleEmailMessage> emails = new List<Messaging.SingleEmailMessage>();
+        System.debug('DEBUG: sendManagerNotifications called');
+        System.debug('DEBUG: accountsByManager size: ' + accountsByManager.size());
+        String managerEmail ='';
+        String ownerName ='';
+        String managerName = '';                                                                                    
+        for(Id ownerId : accountsByManager.keySet()) {
+            InactiveUserWrapper managerAccounts = accountsByManager.get(ownerId);
+            managerEmail = managerAccounts.ManagerEmail;
+            ownerName= managerAccounts.inActiveUserName;
+            managerName = managerAccounts.ManagerName;
+            if(String.isBlank(managerEmail)) {
+                System.debug('DEBUG: No accounts for manager ' + managerEmail);
+                continue;
+            }
+            
+            System.debug('DEBUG: Processing manager notification for managerEmail: ' + managerEmail);
+            Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+            OrgWideEmailAddress[] orgWideEmails = [SELECT Id,Address from OrgWideEmailAddress where Address = 'CRM360Helpdesk@BankUnited.Com'  LIMIT 1];
+            if (orgWideEmails.isEmpty()){
+                (system.debug('Org-Wide Email Address not found'));
+                    return;
+            }
+            String OrgwideEmailId = orgWideEmails[0].Id;
+            email.setToAddresses(new List<String>{managerEmail});
+            email.setOrgWideEmailAddressId(OrgwideEmailId);
+            email.setSubject(' Household Relationships Reassigned from Former Team Member ');
+            String reportLink = getReportLink(managerEmail); // Method to get report URL
+            String emailBody = '<html>' +
+                'Hi ' + managerName + ',<br/><br/>' +
+                'Household Relationships previously owned by a former team member (' + ownerName + 
+                ') in Salesforce CRM 360 have now been temporarily reassigned to you.<br/><br/>' +
+                'You can view the full list of these records here: ' + reportLink + '.<br/><br/>' +
+                'Please remember to transfer ownership to the incoming Relationship Manager once they are assigned.<br/><br/>' +
+                'If you have any questions or need assistance, feel free to reach out to the CRM 360 Helpdesk at ' +
+                '<a href="mailto:crm360helpdesk@bankunited.com">crm360helpdesk@bankunited.com</a>.<br/><br/>' +
+                'Thank you,<br/>CRM360 Team' +
+                '</html>';
+            email.setHtmlBody(emailBody);
+            emails.add(email);    
+        }       
+        if(!emails.isEmpty()) {
+            try {
+                System.debug('DEBUG: Attempting to send ' + emails.size() + ' manager notification emails');
+                Messaging.SendEmailResult[] results = Messaging.sendEmail(emails, false);
+                // Log results of email sending
+                for(Messaging.SendEmailResult result : results) {
+                    if(!result.isSuccess()) {
+                        System.debug('DEBUG: Manager email send failed: ' + result.getErrors()[0].getMessage());
+                        errorMessages.add('Email send failed: ' + result.getErrors()[0].getMessage());
+                    } else {
+                        System.debug('DEBUG: Manager email sent successfully');
+                    }
+                }
+                
+            } catch(Exception e) {
+                System.debug('DEBUG: Exception during manager email sending: ' + e.getMessage());
+                errorMessages.add('Error sending manager notification emails: ' + e.getMessage());
+            }
+            
+        } else {
+            System.debug('DEBUG: No manager notification emails to send');
+        }
+    }
+    private void sendSupportAdminNotifications(Map<Id, String> accountsForSupportAdmin) {
+        List<Messaging.SingleEmailMessage> emails = new List<Messaging.SingleEmailMessage>();
+        OrgWideEmailAddress[] orgWideEmails = [SELECT Id,Address from OrgWideEmailAddress where Address = 'CRM360Helpdesk@BankUnited.Com'  LIMIT 1];
+        if (orgWideEmails.isEmpty()){
+            (system.debug('Org-Wide Email Address not found'));
+                return;
+        }
+        String OrgwideEmailId = orgWideEmails[0].Id;
+        String ownerName='';
+        for(Id ownerId : accountsForSupportAdmin.keySet()) {
+            ownerName = accountsForSupportAdmin.get(ownerId);
+            Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+            email.setToAddresses(new List<String>{'CRM360Helpdesk@BankUnited.Com'});
+            email.setOrgWideEmailAddressId(OrgwideEmailId);
+            email.setSubject('Household Relationships Previously Owned by Former Team Member ');
+            String reportLink = getReportLink('CRM360Helpdesk@BankUnited.Com');
+            String emailBody = '<html>' +
+                'Hi CRM360 Helpdesk,<br/><br/>' +
+                'Household Relationships previously owned by ' + ownerName +
+                '—who is no longer active in Salesforce CRM 360—could not be transferred to their manager.<br/><br/>' +
+                'Please refer to this report to view all Household and Group records currently owned by inactive users: ' +
+                reportLink + '.<br/><br/>' +
+                'Kindly coordinate with the appropriate teams to ensure these records are reassigned to the incoming Relationship Manager.<br/><br/>' +
+                'Regards,<br/>CRM360 Team' +
+                '</html>';
+            email.setHtmlBody(emailBody);
+            emails.add(email);
+            
+        }
+        
+        if(!emails.isEmpty()) {
+            try {
+                System.debug('DEBUG: Attempting to send ' + emails.size() + ' support admin notification emails');
+                Messaging.SendEmailResult[] results = Messaging.sendEmail(emails, false);
+                // Log results of email sending
+                for(Messaging.SendEmailResult result : results) {
+                    if(!result.isSuccess()) {
+                        System.debug('DEBUG: Support admin email send failed: ' + result.getErrors()[0].getMessage());
+                        errorMessages.add('Support admin email send failed: ' + result.getErrors()[0].getMessage());
+                    } else {
+                        System.debug('DEBUG: Support admin email sent successfully');  
+                    } 
+                }
+                
+            } catch(Exception e) {
+                System.debug('DEBUG: Exception during support admin email sending: ' + e.getMessage());
+                errorMessages.add('Error sending support admin notification emails: ' + e.getMessage());
+            }
+            
+        } else {
+            System.debug('DEBUG: No support admin notification emails to send'); 
+        }
+        
+    }
+    @TestVisible
+    private String getReportLink(String recipientEmail) {
+        String reportName;
+        if (recipientEmail != null && recipientEmail.toLowerCase() == 'crm360helpdesk@bankunited.com') {
+            reportName = 'Household & Groups Owned by Inactive RMs';
+        } else {
+            reportName = 'My Households and Groups';
+        }
+        
+        List<Report> reports = [SELECT Id FROM Report WHERE Name = :reportName LIMIT 1];
+        if (!reports.isEmpty()) {
+            String reportId = reports[0].Id;
+            String baseUrl = URL.getOrgDomainURL().toExternalForm();
+            String reportUrl = baseUrl + '/lightning/r/Report/' + reportId + '/view';
+            return '<a href="' + reportUrl + '" target="_blank">' + reportName + '</a>';
+        } else {
+            System.debug('Report not found: ' + reportName);
+            return '#';
+        }
+    }
+    
+    public void finish(Database.BatchableContext bc) {
+        // Log any errors that occurred during processing
+        if(!errorMessages.isEmpty()) {            
+            System.debug(LoggingLevel.ERROR, 'BatchUpdateInactiveHHOwner finished with errors: ' + String.join(errorMessages, '\n'));
+        }
+        // Send email notifications     
+        if(!accountsByManager.IsEmpty()){
+            sendManagerNotifications(accountsByManager);
+        }         
+        if(!accountsForSupportAdmin.IsEmpty()){
+            sendSupportAdminNotifications(accountsForSupportAdmin);  
+        }
+    }
+    
+    public void execute(SchedulableContext sc) {
+        BatchUpdateInactiveHHOwner batchJob = new BatchUpdateInactiveHHOwner();
+        Database.executeBatch(batchJob);   
+    }
+    
+    public class InactiveUserWrapper{
+        String inActiveUserName;
+        String ManagerEmail;
+        String  ManagerName;
+        public InactiveUserWrapper(String inActiveUserName, String ManagerEmail, String  ManagerName){
+            this.inActiveUserName = inActiveUserName;
+            this.ManagerEmail = ManagerEmail;
+            this.ManagerName = ManagerName ;
+        }
+    }
+}
