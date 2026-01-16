@@ -1,0 +1,31 @@
+Hi Jose — sharing details on Story: OOCRE Product Type (Loan – OPX) for your confirmation.
+
+What I have done so far:
+
+Added new Products under Product Type = OOCRE:
+
+Purchase
+
+Refinance
+
+O/O RE Promo Rate
+
+Created a Record-Triggered Flow (After Save on Opportunity)
+
+In the Flow, when Product Type = OOCRE, I update:
+
+LLC_BI_Product__c = {!$Record.CRM_Product__c}
+
+LLC_BI_Product_Reference__c = {!$Record.CRM_Product__c}
+
+Issue / Question for you:
+
+LLC_BI_Product_Reference__c does not seem to be used in any Flow or Record Type, and it is a Managed field.
+
+Even after mapping it in Flow, the value is not populating consistently.
+
+👉 Can you please confirm:
+
+Is it required to populate LLC_BI_Product_Reference__c, or should we only update LLC_BI_Product__c?
+
+If it must be populated, is there any restriction on this field?
