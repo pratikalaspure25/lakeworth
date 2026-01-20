@@ -1,0 +1,118 @@
+public without sharing class BatchUpdateInactiveOppOwner 
+implements Database.Batchable<SObject>, Database.Stateful, Schedulable {
+
+    private List<String> errorMessages = new List<String>();
+    private Map<Id, User> inactiveUserMap = new Map<Id, User>();
+    private Map<Id, InactiveUserWrapper> oppsByManager = new Map<Id, InactiveUserWrapper>();
+    private Map<Id,String> oppsForHelpdesk = new Map<Id, String>();
+
+    public Database.QueryLocator start(Database.BatchableContext bc){
+
+        Set<Id> sysAdminProfiles = new Set<Id>();
+        for(Profile p : [SELECT Id FROM Profile WHERE Name = 'System Administrator']){
+            sysAdminProfiles.add(p.Id);
+        }
+
+        inactiveUserMap = new Map<Id, User>([
+            SELECT Id, Name, Email, ManagerId, Manager.IsActive, Manager.Email, Manager.Name, ProfileId
+            FROM User
+            WHERE IsActive = false
+            AND ProfileId NOT IN :sysAdminProfiles
+            AND LastModifiedDate = LAST_N_DAYS:7
+        ]);
+
+        return Database.getQueryLocator([
+            SELECT Id, Name, OwnerId FROM Opportunity
+            WHERE OwnerId IN :inactiveUserMap.keySet()
+        ]);
+    }
+
+    public void execute(Database.BatchableContext bc, List<Opportunity> scope){
+        try{
+            for(Opportunity opp : scope){
+                User inactive = inactiveUserMap.get(opp.OwnerId);
+                if(inactive == null) continue;
+
+                if(inactive.ManagerId != null && inactive.Manager.IsActive){
+                    opp.OwnerId = inactive.ManagerId;
+                    oppsByManager.put(opp.OwnerId,
+                        new InactiveUserWrapper(inactive.Name, inactive.Manager.Email, inactive.Manager.Name)
+                    );
+                } else {
+                    oppsForHelpdesk.put(opp.OwnerId, inactive.Name);
+                }
+            }
+            if(!scope.isEmpty()){
+                Database.update(scope, false);
+            }
+        } catch(Exception e){
+            errorMessages.add(e.getMessage());
+        }
+    }
+
+    public void finish(Database.BatchableContext bc){
+        if(!oppsByManager.isEmpty()) sendManagerEmails(oppsByManager);
+        if(!oppsForHelpdesk.isEmpty()) sendHelpdeskEmails(oppsForHelpdesk);
+        if(!errorMessages.isEmpty()) System.debug('Batch errors: ' + String.join(errorMessages,' | '));
+    }
+
+    public void execute(SchedulableContext sc){
+        Database.executeBatch(new BatchUpdateInactiveOppOwner(), 200);
+    }
+
+    // ---------------- EMAILS ----------------
+
+    private void sendManagerEmails(Map<Id,InactiveUserWrapper> data){
+        List<Messaging.SingleEmailMessage> emails = new List<Messaging.SingleEmailMessage>();
+        Id orgWide = [SELECT Id FROM OrgWideEmailAddress WHERE Address='crm360helpdesk@bankunited.com' LIMIT 1].Id;
+
+        for(InactiveUserWrapper w : data.values()){
+            Messaging.SingleEmailMessage m = new Messaging.SingleEmailMessage();
+            m.setToAddresses(new String[]{w.ManagerEmail});
+            m.setOrgWideEmailAddressId(orgWide);
+            m.setSubject('Opportunity records Reassigned from Former Team Member');
+            m.setHtmlBody('Hi '+w.ManagerName+',<br/><br/>Opportunity records owned by '+w.InactiveUserName+
+                ' have been reassigned to you.<br/><br/>View: '+getReportLink(w.ManagerEmail));
+            emails.add(m);
+        }
+        Messaging.sendEmail(emails,false);
+    }
+
+    private void sendHelpdeskEmails(Map<Id,String> data){
+        List<Messaging.SingleEmailMessage> emails = new List<Messaging.SingleEmailMessage>();
+        Id orgWide = [SELECT Id FROM OrgWideEmailAddress WHERE Address='crm360helpdesk@bankunited.com' LIMIT 1].Id;
+
+        for(String owner : data.values()){
+            Messaging.SingleEmailMessage m = new Messaging.SingleEmailMessage();
+            m.setToAddresses(new String[]{'crm360helpdesk@bankunited.com'});
+            m.setOrgWideEmailAddressId(orgWide);
+            m.setSubject('Opportunity records previously Owned by Former Team Member');
+            m.setHtmlBody('Hi CRM360 Helpdesk,<br/><br/>Opportunities owned by '+owner+
+                ' could not be auto reassigned.<br/><br/>View: '+getReportLink('crm360helpdesk@bankunited.com'));
+            emails.add(m);
+        }
+        Messaging.sendEmail(emails,false);
+    }
+
+    private String getReportLink(String email){
+        String reportName = email=='crm360helpdesk@bankunited.com'
+            ? 'Opportunities Owned by Inactive RMs'
+            : 'My Opportunities';
+        Id rid = [SELECT Id FROM Report WHERE Name=:reportName LIMIT 1].Id;
+        return URL.getOrgDomainURL().toExternalForm()+'/lightning/r/Report/'+rid+'/view';
+    }
+
+    public class InactiveUserWrapper{
+        public String InactiveUserName, ManagerEmail, ManagerName;
+        public InactiveUserWrapper(String i,String e,String m){
+            InactiveUserName=i; ManagerEmail=e; ManagerName=m;
+        }
+    }
+}
+
+
+System.schedule(
+   'Inactive Opp Reassign Nightly',
+   '0 0 20 * * ?',
+   new BatchUpdateInactiveOppOwner()
+);
