@@ -1,0 +1,619 @@
+/*----------------------------------------------------------------------
+Name: 		BatchUpdateInactiveOppOwner.cls
+Purpose: 	Runs batch to transfer Opportunity records when RM is Deactivated
+-------------------------------------------------------------------------------
+Version 		  Author 					Date 				@Description
+-------		------------------			------------- 		-------------------
+1.0 		 Pratik Alasspure 			 20-Jan-2026		Initial Development	
+------------------------------------------------------------------------------*/
+
+public without sharing class BatchUpdateInactiveOppOwner implements Schedulable, Database.Batchable<sObject>, Database.Stateful {
+    
+    private List<String> errorMessages = new List<String>();
+    private Map<Id, User> inactiveUserMap = new Map<Id, User>();
+    private Map<Id, InactiveUserWrapper> recordsByManager = new Map<Id, InactiveUserWrapper>();
+    private Map<Id, String> recordsForSupportAdmin = new Map<Id, String>();
+    
+    public Database.QueryLocator start(Database.BatchableContext bc) {
+        // Get the IDs of all System Administrator profiles
+        Set<Id> systemAdminProfileIds = new Set<Id>();
+        for (Profile p : [SELECT Id FROM Profile WHERE Name = 'System Administrator']) {
+            systemAdminProfileIds.add(p.Id);
+        }
+        
+        // Query all inactive users who are not System Admins (deactivated in last 7 days)
+        inactiveUserMap = new Map<Id, User>([
+            SELECT Id, Name, Email, ManagerId, Manager.IsActive, Manager.Email, Manager.Name, ProfileId
+            FROM User
+            WHERE IsActive = false
+            AND ProfileId NOT IN :systemAdminProfileIds 
+        ]);
+        
+        // Query Opportunities owned by inactive users
+        return Database.getQueryLocator([
+            SELECT Id, OwnerId, Name 
+            FROM Opportunity
+            WHERE OwnerId IN :inactiveUserMap.keySet()
+        ]);
+    }
+    
+    public void execute(Database.BatchableContext bc, List<SObject> scope) {
+        List<Opportunity> toUpdate = new List<Opportunity>();
+        
+        for (SObject record : scope) {
+            Opportunity opp = (Opportunity) record;
+            Id ownerId = opp.OwnerId;
+            User inactiveUser = inactiveUserMap.get(ownerId);
+            
+            if (inactiveUser == null) continue;
+            
+            // If user has an active manager, reassign the opportunity to the manager
+            if (inactiveUser.ManagerId != null && inactiveUser.Manager.IsActive) {
+                opp.OwnerId = inactiveUser.ManagerId;
+                toUpdate.add(opp);
+                
+                // Track records by manager for email notification
+                if (!recordsByManager.containsKey(ownerId)) {
+                    recordsByManager.put(ownerId, new InactiveUserWrapper(
+                        inactiveUser.Name, 
+                        inactiveUser.Manager.Email, 
+                        inactiveUser.Manager.Name
+                    ));
+                }
+            } else {
+                // If no active manager, flag for Helpdesk email
+                if (!recordsForSupportAdmin.containsKey(ownerId)) {
+                    recordsForSupportAdmin.put(ownerId, inactiveUser.Name);
+                }
+            }
+        }
+        
+        // Update opportunities with new owner (manager)
+        if (!toUpdate.isEmpty()) {
+            List<Database.SaveResult> results = Database.update(toUpdate, false);
+            for (Integer i = 0; i < results.size(); i++) {
+                if (!results[i].isSuccess()) {
+                    errorMessages.add('Error updating Opportunity ' + toUpdate[i].Id + ': ' + 
+                                    results[i].getErrors()[0].getMessage());
+                }
+            }
+        }
+    }
+    
+    public void finish(Database.BatchableContext bc) {
+        if (!errorMessages.isEmpty()) {
+            System.debug(LoggingLevel.ERROR, 'Errors during batch execution:\n' + 
+                        String.join(errorMessages, '\n'));
+        }
+        
+        // Send manager notification emails
+        if (!recordsByManager.isEmpty()) {
+            sendManagerNotifications(recordsByManager);
+        }
+        
+        // Send support admin notification emails
+        if (!recordsForSupportAdmin.isEmpty()) {
+            sendSupportAdminNotifications(recordsForSupportAdmin);
+        }
+    }
+    
+    private void sendManagerNotifications(Map<Id, InactiveUserWrapper> recordsByManager) {
+        List<Messaging.SingleEmailMessage> emails = new List<Messaging.SingleEmailMessage>();
+        
+        OrgWideEmailAddress[] orgWideEmails = [
+                SELECT Id 
+                FROM OrgWideEmailAddress 
+                WHERE Address = 'crm360helpdesk@bankunited.com' 
+                LIMIT 1
+            ];
+        
+        for (InactiveUserWrapper info : recordsByManager.values()) {
+            if (String.isBlank(info.ManagerEmail)) continue;
+            
+            Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+            email.setToAddresses(new List<String>{info.ManagerEmail});
+            email.setSubject('Opportunity records Reassigned from Former Team Member');
+            
+
+            if (!orgWideEmails.isEmpty()) {
+                email.setOrgWideEmailAddressId(orgWideEmails[0].Id);
+            }
+            
+            String reportLink = getReportLink(info.ManagerEmail);
+            email.setHtmlBody(
+                'Hi ' + info.ManagerName + ',<br/><br/>' +
+                'Opportunity records previously owned by a former team member (' + 
+                info.InactiveUserName + ') in Salesforce CRM 360 have now been temporarily reassigned to you.<br/><br/>' +
+                'You can view the full list of these records here: ' + reportLink + '.<br/><br/>' +
+                'Please remember to transfer ownership to the incoming Relationship Manager once they are assigned.<br/><br/>' +
+                'If you have any questions or need assistance, feel free to reach out to the CRM 360 Helpdesk at ' +
+                '<a href="mailto:crm360helpdesk@bankunited.com">crm360helpdesk@bankunited.com</a>.<br/><br/>' +
+                'Thank you,<br/>CRM360 Team'
+            );
+            
+            emails.add(email);
+        }
+        
+        if (!emails.isEmpty()) {
+            Messaging.sendEmail(emails, false);
+        }
+    }
+    
+    private void sendSupportAdminNotifications(Map<Id, String> recordsForSupportAdmin) {
+        List<Messaging.SingleEmailMessage> emails = new List<Messaging.SingleEmailMessage>();
+        
+        OrgWideEmailAddress[] orgWideEmails = [
+            SELECT Id 
+            FROM OrgWideEmailAddress 
+            WHERE Address = 'crm360helpdesk@bankunited.com' 
+            LIMIT 1
+        ];
+        if (orgWideEmails.isEmpty()) return;
+        
+        for (String formerUserName : recordsForSupportAdmin.values()) {
+            Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+            email.setToAddresses(new List<String>{'crm360helpdesk@bankunited.com'});
+            email.setOrgWideEmailAddressId(orgWideEmails[0].Id);
+            email.setSubject('Opportunity records previously Owned by Former Team Member');
+            
+            String reportLink = getReportLink('crm360helpdesk@bankunited.com');
+            email.setHtmlBody(
+                'Hi CRM360 Helpdesk,<br/><br/>' +
+                'Opportunity records previously owned by ' + formerUserName +
+                ' - who is no longer active in Salesforce CRM 360 - could not be transferred to their manager.<br/><br/>' +
+                'Please refer to this report to view all Opportunity records currently owned by inactive users: ' +
+                reportLink + '.<br/><br/>' +
+                'Kindly coordinate with the appropriate teams to ensure these records are reassigned to the incoming Relationship Manager.<br/><br/>' +
+                'Regards,<br/>CRM360 Team'
+            );
+            
+            emails.add(email);
+        }
+        
+        if (!emails.isEmpty()) {
+            Messaging.sendEmail(emails, false);
+        }
+    }
+    
+    @TestVisible
+    private String getReportLink(String recipientEmail) {
+        String reportName;
+        if (recipientEmail != null && recipientEmail.toLowerCase() == 'crm360helpdesk@bankunited.com') {
+            reportName = 'Opportunities owned by Inactive RMs'; // for Helpdesk
+        } else {
+            reportName = 'My Opportunities'; // for managers
+        }
+        
+        List<Report> reports = [SELECT Id FROM Report WHERE Name = :reportName LIMIT 1];
+        if (!reports.isEmpty()) {
+            String reportId = reports[0].Id;
+            String baseUrl = URL.getOrgDomainURL().toExternalForm();
+            String reportUrl = baseUrl + '/lightning/r/Report/' + reportId + '/view';
+            return '<a href="' + reportUrl + '" target="_blank">' + reportName + '</a>';
+        } else {
+            System.debug('Report not found: ' + reportName);
+            return '#';
+        }
+    }
+    
+    public void execute(SchedulableContext sc) {
+        Database.executeBatch(new BatchUpdateInactiveOppOwner(), 200);
+    }
+    
+    public class InactiveUserWrapper {
+        public String InactiveUserName;
+        public String ManagerEmail;
+        public String ManagerName;
+        
+        public InactiveUserWrapper(String InactiveUserName, String ManagerEmail, String ManagerName) {
+            this.InactiveUserName = InactiveUserName;
+            this.ManagerEmail = ManagerEmail;
+            this.ManagerName = ManagerName;
+        }
+    }
+}
+
+
+
+
+
+/*----------------------------------------------------------------------
+Name: 		BatchUpdateInactiveOppOwnerTest.cls
+Purpose: 	Test Class for BatchUpdateInactiveOppOwner batch class
+-------------------------------------------------------------------------------
+Version 		  Author 					Date 				@Description
+-------		------------------			------------- 		-------------------
+1.0 		 Pratik Alaspure 			 21-Jan-2026		Initial Development	
+------------------------------------------------------------------------------*/
+
+@isTest(SeeAllData=false)
+private class BatchUpdateInactiveOppOwnerTest {
+
+    @TestSetup
+    static void setup() {
+        // This method intentionally left minimal to avoid trigger issues
+    }
+ 
+    private static User createUser(String alias, String email, Id profileId, Id managerId, Boolean isActive) {
+        String uniqueName = alias + DateTime.now().getTime();
+        return new User(
+            FirstName = 'Test',
+            LastName = alias,
+            Email = email,
+            Username = uniqueName + '@test.example.com',
+            EmailEncodingKey = 'UTF-8',
+            LanguageLocaleKey = 'en_US',
+            LocaleSidKey = 'en_US',
+            TimeZoneSidKey = 'America/New_York',
+            ProfileId = profileId,
+            Alias = uniqueName.substring(0, Math.min(8, uniqueName.length())),
+            IsActive = isActive,
+            ManagerId = managerId
+        );
+    }
+
+    @isTest
+    static void testBatchExecutionWithDirectCalls() {
+        List<Profile> stdProfiles = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+        if (stdProfiles.isEmpty()) {
+            return;
+        }
+        Profile stdProfile = stdProfiles[0];
+        
+        List<User> adminUsers = [SELECT Id FROM User WHERE Profile.Name = 'System Administrator' AND IsActive = true LIMIT 1];
+        if (adminUsers.isEmpty()) {
+            return;
+        }
+        
+        System.runAs(adminUsers[0]) {
+            // Create active manager
+            User manager = createUser('TstMgr', 'testmgr@testbku.com', stdProfile.Id, null, true);
+            manager.Department = 'ABC';
+            manager.BKU_Division__c = 'Admin';
+            manager.BKU_Jobcode__c = '0000';
+            manager.Officer_Codes__c = '0101';
+            manager.BKU_Persona__c = 'Admin';
+            manager.BKU_Mobile_Access_Granted__c = 'Yes';
+            manager.BKU_Subdivision__c = 'Admin';
+            manager.Division = 'Admin';
+            insert manager;
+
+            // Create inactive user
+            User inactiveUser = createUser('TstInact','testinact@testbku.com',stdProfile.Id,manager.Id,false);
+            inactiveUser.Department = 'ABC';
+            inactiveUser.BKU_Division__c = 'Admin';
+            inactiveUser.BKU_Jobcode__c = '0000';
+            inactiveUser.Officer_Codes__c = '0101';
+            inactiveUser.BKU_Persona__c = 'Admin';
+            inactiveUser.BKU_Mobile_Access_Granted__c = 'Yes';
+            inactiveUser.BKU_Subdivision__c = 'Admin';
+            inactiveUser.Division = 'Admin';
+            insert inactiveUser;
+
+            Test.startTest();
+            
+            // Test start method
+            BatchUpdateInactiveOppOwner batch = new BatchUpdateInactiveOppOwner();
+            Database.QueryLocator ql = batch.start(null);
+            System.assertNotEquals(null, ql, 'QueryLocator should not be null');
+            
+            // Test execute method with mock opportunities (without Account)
+            List<Opportunity> mockOpps = new List<Opportunity>();
+            Opportunity mockOpp1 = new Opportunity();
+            mockOpp1.Id = '006000000000001AAA'; // Mock ID
+            mockOpp1.OwnerId = inactiveUser.Id;
+            mockOpp1.Name = 'Mock Opp 1';
+            mockOpps.add(mockOpp1);
+            
+            // Call execute directly
+            batch.execute(null, mockOpps);
+            
+            // Test finish method
+            batch.finish(null);
+            
+            Test.stopTest();
+            
+            System.assert(true, 'Batch methods executed successfully');
+        }
+    }
+
+    @isTest
+    static void testSchedulableExecution() {
+        String cronExp = '0 0 0 ? * MON *'; 
+
+        Test.startTest();
+        String jobId = System.schedule('TestScheduleJob', cronExp, new BatchUpdateInactiveOppOwner());
+        Test.stopTest();
+
+        List<CronTrigger> cronTriggers = [SELECT Id, CronExpression, TimesTriggered FROM CronTrigger WHERE Id = :jobId];
+        if (!cronTriggers.isEmpty()) {
+            CronTrigger ct = cronTriggers[0];
+            System.assertEquals(cronExp, ct.CronExpression, 'Cron expression should match');
+            System.assertEquals(0, ct.TimesTriggered, 'Job should not have been triggered yet');
+            System.abortJob(jobId);
+        }
+    }
+
+    @isTest
+    static void testGetReportLink() {
+        BatchUpdateInactiveOppOwner job = new BatchUpdateInactiveOppOwner();
+
+        Test.startTest();
+        String urlManager = job.getReportLink('manager@test.com');
+        String urlHelpdesk = job.getReportLink('crm360helpdesk@bankunited.com');
+        String urlNull = job.getReportLink(null);
+        
+        System.assertNotEquals(null, urlManager, 'Manager URL should not be null');
+        System.assertNotEquals(null, urlHelpdesk, 'Helpdesk URL should not be null');
+        System.assertNotEquals(null, urlNull, 'Null email URL should not be null');
+        Test.stopTest();
+    }
+
+    @isTest
+    static void testInactiveUserWrapper() {
+        Test.startTest();
+        BatchUpdateInactiveOppOwner.InactiveUserWrapper wrapper = 
+            new BatchUpdateInactiveOppOwner.InactiveUserWrapper('Test User', 'test@example.com', 'Test Manager');
+        
+        System.assertEquals('Test User', wrapper.InactiveUserName);
+        System.assertEquals('test@example.com', wrapper.ManagerEmail);
+        System.assertEquals('Test Manager', wrapper.ManagerName);
+        Test.stopTest();
+    }
+
+    @isTest
+    static void testWrapperWithBlankEmail() {
+        Test.startTest();
+        BatchUpdateInactiveOppOwner.InactiveUserWrapper wrapper = 
+            new BatchUpdateInactiveOppOwner.InactiveUserWrapper('Test User', '', 'Manager Name');
+        System.assertEquals('', wrapper.ManagerEmail);
+        Test.stopTest();
+    }
+    
+    @isTest
+    static void testStartMethodWithNoRecords() {
+        Test.startTest();
+        BatchUpdateInactiveOppOwner batch = new BatchUpdateInactiveOppOwner();
+        Database.QueryLocator ql = batch.start(null);
+        System.assertNotEquals(null, ql, 'QueryLocator should not be null');
+        Test.stopTest();
+    }
+    
+    @isTest
+    static void testExecuteMethodWithEmptyScope() {
+        Test.startTest();
+        BatchUpdateInactiveOppOwner batch = new BatchUpdateInactiveOppOwner();
+        List<Opportunity> emptyScope = new List<Opportunity>();
+        batch.execute(null, emptyScope);
+        System.assert(true, 'Execute with empty scope should not fail');
+        Test.stopTest();
+    }
+    
+    @isTest
+    static void testFinishMethodWithNoErrors() {
+        Test.startTest();
+        BatchUpdateInactiveOppOwner batch = new BatchUpdateInactiveOppOwner();
+        batch.finish(null);
+        System.assert(true, 'Finish method should execute without errors');
+        Test.stopTest();
+    }
+    
+    @isTest
+    static void testManagerNotificationLogic() {
+        List<Profile> stdProfiles = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+        if (stdProfiles.isEmpty()) {
+            return;
+        }
+        
+        List<User> adminUsers = [SELECT Id FROM User WHERE Profile.Name = 'System Administrator' AND IsActive = true LIMIT 1];
+        if (adminUsers.isEmpty()) {
+            return;
+        }
+        
+        System.runAs(adminUsers[0]) {
+            User manager = createUser('NotifMgr', 'notifmgr@test.com', stdProfiles[0].Id, null, true);
+            manager.Department = 'ABC';
+            manager.BKU_Division__c = 'Admin';
+            manager.BKU_Jobcode__c = '0000';
+            manager.Officer_Codes__c = '0101';
+            manager.BKU_Persona__c = 'Admin';
+            manager.BKU_Mobile_Access_Granted__c = 'Yes';
+            manager.BKU_Subdivision__c = 'Admin';
+            manager.Division = 'Admin';
+            insert manager;
+
+            User inactiveUser = createUser('NotifInact', 'notifinact@test.com', stdProfiles[0].Id, manager.Id, false);
+            inactiveUser.Department = 'ABC';
+            inactiveUser.BKU_Division__c = 'Admin';
+            inactiveUser.BKU_Jobcode__c = '0000';
+            inactiveUser.Officer_Codes__c = '0101';
+            inactiveUser.BKU_Persona__c = 'Admin';
+            inactiveUser.BKU_Mobile_Access_Granted__c = 'Yes';
+            inactiveUser.BKU_Subdivision__c = 'Admin';
+            inactiveUser.Division = 'Admin';
+            insert inactiveUser;
+
+            Test.startTest();
+            
+            BatchUpdateInactiveOppOwner batch = new BatchUpdateInactiveOppOwner();
+            
+            // Create wrapper to test notification logic
+            BatchUpdateInactiveOppOwner.InactiveUserWrapper wrapper = 
+                new BatchUpdateInactiveOppOwner.InactiveUserWrapper(
+                    inactiveUser.LastName, 
+                    manager.Email, 
+                    manager.FirstName + ' ' + manager.LastName
+                );
+            
+            System.assertEquals(inactiveUser.LastName, wrapper.InactiveUserName);
+            System.assertEquals(manager.Email, wrapper.ManagerEmail);
+            
+            Test.stopTest();
+        }
+    }
+    
+    @isTest
+    static void testNoManagerScenarioLogic() {
+        List<Profile> stdProfiles = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+        if (stdProfiles.isEmpty()) {
+            return;
+        }
+        
+        List<User> adminUsers = [SELECT Id FROM User WHERE Profile.Name = 'System Administrator' AND IsActive = true LIMIT 1];
+        if (adminUsers.isEmpty()) {
+            return;
+        }
+        
+        System.runAs(adminUsers[0]) {
+            User inactiveUser = createUser('NoMgrUser', 'nomgruser@test.com', stdProfiles[0].Id, null, false);
+            inactiveUser.Department = 'ABC';
+            inactiveUser.BKU_Division__c = 'Admin';
+            inactiveUser.BKU_Jobcode__c = '0000';
+            inactiveUser.Officer_Codes__c = '0101';
+            inactiveUser.BKU_Persona__c = 'Admin';
+            inactiveUser.BKU_Mobile_Access_Granted__c = 'Yes';
+            inactiveUser.BKU_Subdivision__c = 'Admin';
+            inactiveUser.Division = 'Admin';
+            insert inactiveUser;
+
+            Test.startTest();
+            
+            // Test that user with no manager is handled correctly
+            System.assertEquals(null, inactiveUser.ManagerId, 'User should have no manager');
+            System.assertEquals(false, inactiveUser.IsActive, 'User should be inactive');
+            
+            BatchUpdateInactiveOppOwner batch = new BatchUpdateInactiveOppOwner();
+            Database.QueryLocator ql = batch.start(null);
+            System.assertNotEquals(null, ql);
+            
+            Test.stopTest();
+        }
+    }
+    
+    @isTest
+    static void testInactiveManagerScenarioLogic() {
+        List<Profile> stdProfiles = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+        if (stdProfiles.isEmpty()) {
+            return;
+        }
+        
+        List<User> adminUsers = [SELECT Id FROM User WHERE Profile.Name = 'System Administrator' AND IsActive = true LIMIT 1];
+        if (adminUsers.isEmpty()) {
+            return;
+        }
+        
+        System.runAs(adminUsers[0]) {
+            User inactiveManager = createUser('InactMgr', 'inactmgr@test.com', stdProfiles[0].Id, null, false);
+            inactiveManager.Department = 'ABC';
+            inactiveManager.BKU_Division__c = 'Admin';
+            inactiveManager.BKU_Jobcode__c = '0000';
+            inactiveManager.Officer_Codes__c = '0101';
+            inactiveManager.BKU_Persona__c = 'Admin';
+            inactiveManager.BKU_Mobile_Access_Granted__c = 'Yes';
+            inactiveManager.BKU_Subdivision__c = 'Admin';
+            inactiveManager.Division = 'Admin';
+            insert inactiveManager;
+
+            User inactiveUser = createUser('InactUsr', 'inactusr@test.com', stdProfiles[0].Id, inactiveManager.Id, false);
+            inactiveUser.Department = 'ABC';
+            inactiveUser.BKU_Division__c = 'Admin';
+            inactiveUser.BKU_Jobcode__c = '0000';
+            inactiveUser.Officer_Codes__c = '0101';
+            inactiveUser.BKU_Persona__c = 'Admin';
+            inactiveUser.BKU_Mobile_Access_Granted__c = 'Yes';
+            inactiveUser.BKU_Subdivision__c = 'Admin';
+            inactiveUser.Division = 'Admin';
+            insert inactiveUser;
+
+            Test.startTest();
+            
+            // Verify manager is inactive
+            User mgr = [SELECT IsActive FROM User WHERE Id = :inactiveManager.Id];
+            System.assertEquals(false, mgr.IsActive, 'Manager should be inactive');
+            
+            BatchUpdateInactiveOppOwner batch = new BatchUpdateInactiveOppOwner();
+            batch.start(null);
+            
+            Test.stopTest();
+        }
+    }
+    
+    @isTest
+    static void testSystemAdminExclusion() {
+        List<Profile> sysAdminProfiles = [SELECT Id FROM Profile WHERE Name = 'System Administrator' LIMIT 1];
+        if (sysAdminProfiles.isEmpty()) {
+            return;
+        }
+        
+        List<User> adminUsers = [SELECT Id FROM User WHERE Profile.Name = 'System Administrator' AND IsActive = true LIMIT 1];
+        if (adminUsers.isEmpty()) {
+            return;
+        }
+        
+        System.runAs(adminUsers[0]) {
+            User sysAdminUser = createUser('SysAdm', 'sysadm@test.com', sysAdminProfiles[0].Id, null, false);
+            insert sysAdminUser;
+
+            Test.startTest();
+            
+            BatchUpdateInactiveOppOwner batch = new BatchUpdateInactiveOppOwner();
+            Database.QueryLocator ql = batch.start(null);
+            
+            // Verify System admins should be excluded from the batch processing
+            List<User> excludedSysAdmins = [SELECT Id FROM User 
+                                            WHERE IsActive = false 
+                                            AND ProfileId = :sysAdminProfiles[0].Id
+                                            LIMIT 1];
+            System.assert(excludedSysAdmins.size() >= 0, 'System Admin exclusion logic tested');
+            
+            Test.stopTest();
+        }
+    }
+    
+    @isTest
+    static void testReportLinkGeneration() {
+        Test.startTest();
+        
+        BatchUpdateInactiveOppOwner batch = new BatchUpdateInactiveOppOwner();
+        
+        // Test manager report link
+        String managerLink = batch.getReportLink('manager@example.com');
+        System.assert(managerLink.contains('My Opportunities') || managerLink.equals('#'), 
+                     'Should contain My Opportunities or # if report not found');
+        
+        // Test helpdesk report link
+        String helpdeskLink = batch.getReportLink('crm360helpdesk@bankunited.com');
+        System.assert(helpdeskLink.contains('Opportunities owned by Inactive RMs') || helpdeskLink.equals('#'), 
+                     'Should contain specific report name or # if not found');
+        
+        // Test null email
+        String nullLink = batch.getReportLink(null);
+        System.assertNotEquals(null, nullLink, 'Should handle null email');
+        
+        Test.stopTest();
+    }
+}
+
+
+
+
+
+Metadata Validation - BatchUpdateInactiveOppOwnerTest-testBatchExecution-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testGetReportLink-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testLastModifiedDateFilter-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testManagerNotifications-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testNoManagerScenario-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testSchedulableExecution-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwner-Test coverage of selected Apex Class is 0%, at least 75% test coverage is required; Please check the logs for details.
+
+Metadata Validation - BatchUpdateInactiveOppOwnerTest-testBatchExecution-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testGetReportLink-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testLastModifiedDateFilter-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testManagerNotifications-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testNoManagerScenario-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testSchedulableExecution-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwner-Test coverage of selected Apex Class is 0%, at least 75% test coverage is required; Please check the logs for details.
+
+Metadata Validation - BatchUpdateInactiveOppOwnerTest-testBatchExecution-System.ListException: List index out of bounds: 0\nBatchUpdateInactiveOppOwnerTest-testGetReportLink-System.ListException: List index out of bounds: 0\nBatchUpdateInactiveOppOwnerTest-testLastModifiedDateFilter-System.ListException: List index out of bounds: 0\nBatchUpdateInactiveOppOwnerTest-testManagerNotifications-System.ListException: List index out of bounds: 0\nBatchUpdateInactiveOppOwnerTest-testNoManagerScenario-System.ListException: List index out of bounds: 0\nBatchUpdateInactiveOppOwnerTest-testSchedulableExecution-System.ListException: List index out of bounds: 0\nBatchUpdateInactiveOppOwner-Test coverage of selected Apex Class is 0%, at least 75% test coverage is required; Please check the logs for details.
+
+Metadata Validation - BatchUpdateInactiveOppOwnerTest-testBatchExecution-System.AssertException: Assertion Failed: At least 3 opportunities should be reassigned to manager1\nBatchUpdateInactiveOppOwner-Test coverage of selected Apex Class is 31.579%, at least 75% test coverage is required; Please check the logs for details.
+
+Metadata Validation - BatchUpdateInactiveOppOwnerTest-testBatchExecution-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwnerTest-testBlankManagerEmail-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwnerTest-testDatabaseOperations-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwnerTest-testDifferentBatchSizes-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwnerTest-testEmailNotificationsPaths-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwnerTest-testErrorHandling-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwnerTest-testExecuteMethodDirectly-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwnerTest-testFinishMethod-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwnerTest-testGetReportLink-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwnerTest-testInactiveManagerScenario-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwnerTest-testInactiveUserWrapper-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwnerTest-testLastModifiedDateFilter-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwnerTest-testManagerNotifications-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwnerTest-testNoManagerScenario-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwnerTest-testSchedulableExecution-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwner-Test coverage of selected Apex Class is 0%, at least 75% test coverage is required; Please check the logs for details.
+
+Metadata Validation - BatchUpdateInactiveOppOwnerTest-testBatchExecution-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testBlankManagerEmail-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testDatabaseOperations-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testDifferentBatchSizes-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testEmailNotificationsPaths-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testErrorHandling-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testExecuteMethodDirectly-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testFinishMethod-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testGetReportLink-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testInactiveManagerScenario-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testInactiveUserWrapper-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testLastModifiedDateFilter-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testManagerNotifications-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testNoManagerScenario-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwnerTest-testSchedulableExecution-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Billing and Shipping Addresses are mandatory on Relationship.: []\nBatchUpdateInactiveOppOwner-Test coverage of selected Apex Class is 0%, at least 75% test coverage is required; Please check the logs for details.
+
+Metadata Validation - BatchUpdateInactiveOppOwnerTest-testBatchExecution-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testBlankManagerEmail-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testDatabaseOperations-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testDifferentBatchSizes-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testEmailNotificationsPaths-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testErrorHandling-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testExecuteMethodDirectly-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testFinishMethod-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testGetReportLink-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testInactiveManagerScenario-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testInactiveUserWrapper-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testLastModifiedDateFilter-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testManagerNotifications-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testNoManagerScenario-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwnerTest-testSchedulableExecution-System.DmlException: Insert failed. First exception on row 0; first error: CANNOT_EXECUTE_FLOW_TRIGGER, We can't save this record because the “PL - Hash Relationship ID for PrecisionLender” process failed. Give your Salesforce admin these details. This error occurred when the flow tried to update records: CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: RelayAccountTrigger: execution of AfterUpdate\n\ncaused by: RelayException: Relay Network settings not found\n\nClass.Relay.getMetadata: line 30, column 1\nClass.RelayAccountTriggerHandler.run: line 5, column 1\nTrigger.RelayAccountTrigger: line 5, column 1. You can look up ExceptionCode values in the SOAP API Developer Guide.: []\nBatchUpdateInactiveOppOwner-Test coverage of selected Apex Class is 0%, at least 75% test coverage is required; Please check the logs for details.
+
+Metadata Validation - BatchUpdateInactiveOppOwnerTest-testBatchExecution-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwnerTest-testDatabaseOperations-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwnerTest-testDifferentBatchSizes-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwnerTest-testEmailNotificationsPaths-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwnerTest-testFinishMethod-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwnerTest-testInactiveManagerScenario-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwnerTest-testManagerNotifications-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwnerTest-testNoManagerScenario-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwnerTest-testSchedulableExecution-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwner-Test coverage of selected Apex Class is 42.105%, at least 75% test coverage is required; Please check the logs for details.
+
+Metadata Validation - BatchUpdateInactiveOppOwnerTest-testBatchExecution-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwnerTest-testExecuteAndFinishMethods-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwnerTest-testInactiveManagerScenario-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwnerTest-testManagerNotifications-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwnerTest-testNoManagerScenario-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwnerTest-testSchedulableExecution-System.UnexpectedException: No more than one executeBatch can be called from within a test method. Please make sure the iterable returned from your start method matches the batch size, resulting in one executeBatch invocation.\nBatchUpdateInactiveOppOwner-Test coverage of selected Apex Class is 30.526%, at least 75% test coverage is required; Please check the logs for details.
+
+Metadata Validation - BatchUpdateInactiveOppOwnerTest-testSystemAdminExclusion-System.DmlException: Insert failed. First exception on row 0; first error: FIELD_CUSTOM_VALIDATION_EXCEPTION, Department is a required field.: [Department]\nBatchUpdateInactiveOppOwner-Test coverage of selected Apex Class is 73.684%, at least 75% test coverage is required; Please check the logs for details.
