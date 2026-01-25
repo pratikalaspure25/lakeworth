@@ -1,0 +1,183 @@
+@isTest(SeeAllData=false)
+private class BatchUpdateInactiveOppOwnerTest {
+
+    @TestSetup
+    static void setup() {
+        // Create necessary Profile for standard user
+        Profile stdProfile = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+        if (stdProfile == null) return;
+
+        // Create a manager user
+        User manager = new User(
+            FirstName = 'Test Manager',
+            LastName = 'Manager',
+            Email = 'manager@test.com',
+            Username = 'manager' + DateTime.now().getTime() + '@test.com',
+            ProfileId = stdProfile.Id,
+            Alias = 'mgr',
+            IsActive = true,
+            Department = 'Admin'  // Ensure this field is filled
+        );
+        insert manager;
+
+        // Create an inactive user with the manager as the manager
+        User inactiveUser = new User(
+            FirstName = 'Test Inactive',
+            LastName = 'Inactive',
+            Email = 'inactive@test.com',
+            Username = 'inactive' + DateTime.now().getTime() + '@test.com',
+            ProfileId = stdProfile.Id,
+            Alias = 'inact',
+            IsActive = false,
+            ManagerId = manager.Id,
+            Department = 'Admin'  // Ensure this field is filled
+        );
+        insert inactiveUser;
+    }
+
+    @isTest
+    static void testBatchExecutionWithDirectCalls() {
+        Test.startTest();
+        
+        // Create an instance of the batch class
+        BatchUpdateInactiveOppOwner batch = new BatchUpdateInactiveOppOwner();
+        
+        // Create a mock Opportunity that the batch class should process
+        List<Opportunity> mockOpps = new List<Opportunity>();
+        Opportunity opp = new Opportunity(
+            Name = 'Mock Opportunity',
+            CloseDate = Date.today().addDays(30),
+            StageName = 'Prospecting',
+            OwnerId = [SELECT Id FROM User WHERE IsActive = false LIMIT 1].Id
+        );
+        mockOpps.add(opp);
+        
+        // Execute the batch
+        batch.execute(null, mockOpps);  // Test the execution method directly
+        
+        Test.stopTest();
+    }
+
+    @isTest
+    static void testSchedulableExecution() {
+        String cronExp = '0 0 0 ? * MON *'; // Schedule the job for every Monday
+        Test.startTest();
+        
+        // Schedule the batch job
+        String jobId = System.schedule('TestScheduleJob', cronExp, new BatchUpdateInactiveOppOwner());
+        Test.stopTest();
+
+        // Verify the scheduled job exists
+        List<CronTrigger> cronTriggers = [SELECT Id, CronExpression FROM CronTrigger WHERE Id = :jobId];
+        System.assert(!cronTriggers.isEmpty(), 'CronTrigger should exist');
+        System.assertEquals(cronExp, cronTriggers[0].CronExpression, 'Cron expression should match');
+    }
+
+    @isTest
+    static void testGetReportLink() {
+        // Create instance of the batch class
+        BatchUpdateInactiveOppOwner job = new BatchUpdateInactiveOppOwner();
+
+        Test.startTest();
+        
+        // Test report link generation for different scenarios
+        String reportLinkManager = job.getReportLink('manager@test.com');
+        String reportLinkHelpdesk = job.getReportLink('crm360helpdesk@bankunited.com');
+        String reportLinkNull = job.getReportLink(null);
+        
+        System.assert(reportLinkManager.contains('My Opportunities'), 'Manager report link should contain "My Opportunities"');
+        System.assert(reportLinkHelpdesk.contains('Opportunities owned by Inactive RMs'), 'Helpdesk report link should contain "Opportunities owned by Inactive RMs"');
+        System.assertNotEquals(null, reportLinkNull, 'Null email link should be generated correctly');
+        
+        Test.stopTest();
+    }
+
+    @isTest
+    static void testManagerNotificationLogic() {
+        Test.startTest();
+
+        // Set up the data (Manager and Inactive User)
+        User manager = [SELECT Id, Email FROM User WHERE IsActive = true LIMIT 1];
+        User inactiveUser = [SELECT Id, ManagerId, Name FROM User WHERE IsActive = false LIMIT 1];
+
+        // Create InactiveUserWrapper instance
+        BatchUpdateInactiveOppOwner.InactiveUserWrapper wrapper = 
+            new BatchUpdateInactiveOppOwner.InactiveUserWrapper(
+                inactiveUser.Name, 
+                manager.Email, 
+                manager.Name
+            );
+        
+        System.assertEquals(inactiveUser.Name, wrapper.InactiveUserName);
+        System.assertEquals(manager.Email, wrapper.ManagerEmail);
+        System.assertEquals(manager.Name, wrapper.ManagerName);
+
+        Test.stopTest();
+    }
+
+    @isTest
+    static void testNoManagerScenarioLogic() {
+        Test.startTest();
+
+        // Set up the data (Inactive User without Manager)
+        User inactiveUser = new User(
+            FirstName = 'No Manager',
+            LastName = 'User',
+            Email = 'nomanager@test.com',
+            Username = 'nomanager' + DateTime.now().getTime() + '@test.com',
+            ProfileId = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1].Id,
+            IsActive = false,
+            Department = 'Admin'
+        );
+        insert inactiveUser;
+
+        // Execute the batch with the inactive user
+        BatchUpdateInactiveOppOwner batch = new BatchUpdateInactiveOppOwner();
+        List<Opportunity> mockOpps = new List<Opportunity>();
+        Opportunity opp = new Opportunity(
+            Name = 'Mock Opportunity No Manager',
+            CloseDate = Date.today().addDays(30),
+            StageName = 'Prospecting',
+            OwnerId = inactiveUser.Id
+        );
+        mockOpps.add(opp);
+
+        batch.execute(null, mockOpps);
+
+        Test.stopTest();
+    }
+
+    @isTest
+    static void testBatchFinish() {
+        Test.startTest();
+
+        // Create and run the batch job
+        BatchUpdateInactiveOppOwner batch = new BatchUpdateInactiveOppOwner();
+        batch.finish(null);  // Test the finish method directly
+        
+        Test.stopTest();
+    }
+
+    @isTest
+    static void testInvalidDataHandling() {
+        Test.startTest();
+        
+        // Test for invalid data handling (e.g., missing required fields)
+        try {
+            User invalidUser = new User(
+                FirstName = 'Invalid',
+                LastName = 'User',
+                Email = 'invaliduser@test.com',
+                Username = 'invaliduser' + DateTime.now().getTime() + '@test.com',
+                ProfileId = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1].Id,
+                IsActive = false
+            );
+            insert invalidUser;
+            System.assert(false, 'Expected exception when trying to insert user without required fields');
+        } catch (DmlException e) {
+            System.assert(e.getMessage().contains('Department is a required field'), 'Expected DML exception due to missing Department field');
+        }
+
+        Test.stopTest();
+    }
+}
