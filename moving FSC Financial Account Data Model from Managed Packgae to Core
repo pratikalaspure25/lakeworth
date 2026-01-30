@@ -1,3 +1,144 @@
+FSC Core vs Managed Package – BankUnited Assessment Document
+1. Background
+BankUnited is currently using the Financial Services Cloud (FSC) Managed Package for managing Financial Accounts, householding, and related reporting. Over the past few years, significant effort has been invested in data cleanup, household model stabilization, and business adoption.
+With Salesforce introducing Standard Financial Account objects (FSC Core model) from Summer ’24 onwards, there is interest in evaluating whether migrating from the Managed Package to Core provides meaningful business and technical benefits.
+This document provides an initial assessment of the feasibility, benefits, risks, and effort involved in such a migration.
+________________________________________
+2. Current State Overview (BankUnited)
+2.1 Data Model
+•	Financial data managed using FSC Managed Package objects (FinServ__ namespace).
+•	Established householding model with stable relationships.
+•	Multiple ownership and account relationships already configured.
+2.2 Data Quality
+•	Extensive data cleanup completed over ~6 months.
+•	Business teams actively maintain household and account data.
+•	High trust in existing data structure.
+2.3 Customizations
+•	Custom fields on Financial Accounts and related objects.
+•	Custom Flows, Apex, and validation rules.
+•	Business-specific logic built on managed package objects.
+2.4 Reporting & Analytics
+•	Household-level reports.
+•	Segmentation and portfolio analysis.
+•	Dashboards used by business users.
+2.5 Integrations
+•	Integrations with external systems using FinServ__ objects.
+•	Middleware and reporting tools dependent on current API names.
+________________________________________
+3. FSC Core (Standard Objects) Overview
+3.1 Core Data Model
+•	Standard FinancialAccount object.
+•	FinancialAccountParty for ownership relationships.
+•	FinancialAccountBalance for historical balances.
+•	Improved alignment with Salesforce Customer 360.
+3.2 Key Characteristics
+•	No managed package namespace.
+•	Native Salesforce objects.
+•	Part of standard Salesforce release cycle.
+•	Better long-term platform alignment.
+________________________________________
+4. Comparison: Managed Package vs Core
+Area	Managed Package	FSC Core
+Feature	Managed Package (FinServ__ objects)	Core / Standard Objects
+Ownership	Fixed/Lookup-based, Lookups: Primary Owner & Joint Owner	Party-based model, Junction: FinancialAccountParty (More flexible)
+Balances	Single balance fields , Single field (overwrites on update)	Historical balance object, FinancialAccountBalance (Tracks history)
+Integrations	Namespace-dependent	Cleaner APIs
+Upgrades	Package-driven	Platform-driven
+Flexibility	Limited by package, Rigid, dependent on package updates	More configurable, Native platform features (Dynamic Forms, etc.)
+________________________________________
+5. Potential Benefits of Migration
+5.1 Strategic Benefits
+•	Alignment with Salesforce long-term roadmap.
+•	Reduced dependency on managed packages.
+•	Better future support and innovation.
+5.2 Technical Benefits
+•	Improved integration capabilities.
+•	Better compatibility with Data Cloud and Analytics.
+•	More flexible ownership modeling.
+•	Enhanced balance history tracking.
+5.3 Operational Benefits
+•	Simplified metadata management.
+•	Easier future enhancements.
+•	Improved scalability.
+________________________________________
+6. Risks and Challenges
+6.1 Data Migration Risk
+•	High complexity in mapping objects and fields.
+•	Risk of data loss or relationship breaks.
+•	Re-validation of cleaned data.
+6.2 Reporting Impact
+•	Existing reports and dashboards will break.
+•	Rebuild and validation required.
+•	Risk of business disruption.
+6.3 Integration Rework
+•	Modification of existing APIs and middleware.
+•	Retesting of downstream systems.
+•	Additional cost and timeline impact.
+6.4 Business Adoption Risk
+•	User retraining required.
+•	Change resistance.
+•	Temporary productivity loss.
+6.5 Feature Parity Gaps
+•	Some managed package features may not be fully replicated.
+•	Potential need for custom development.
+________________________________________
+7. Migration Effort Assessment (High-Level)
+Area	Effort Level	Comments
+Data Migration	High	Complex relationships and volumes
+Customization Rebuild	High	Apex, Flows, validations
+Reporting	High	Rebuild and revalidation
+Integrations	Medium–High	API and middleware updates
+Testing	High	Regression + UAT
+Training	Medium	User enablement
+Overall Effort Estimate: High (Mini Project / Multi-Month Initiative)
+________________________________________
+8. Impact on Householding
+•	Current household model is stable and trusted.
+•	Significant historical investment in data quality.
+•	Core model uses different relationship constructs.
+•	Migration may require remapping households.
+•	High risk of temporary loss in reporting accuracy.
+Impact Level: High
+________________________________________
+9. Business Value Assessment
+Current State Value
+•	Reliable household reporting.
+•	Effective segmentation.
+•	Trusted analytics.
+•	Stable operations.
+Post-Migration Value
+•	Limited short-term gains.
+•	Mostly long-term strategic benefits.
+•	No immediate revenue or productivity improvement.
+Return on Investment (ROI): Low in short term, Moderate in long term
+________________________________________
+10. Recommendation
+Based on the current assessment:
+•	Migration effort is high.
+•	Immediate business benefits are limited.
+•	Existing model is stable and valuable.
+•	Business disruption risk is significant.
+Recommendation:
+Do not proceed with full migration at this stage.
+Instead: - Continue with Managed Package in the short to medium term. - Monitor Salesforce roadmap. - Prepare long-term transition strategy. - Re-evaluate if Salesforce announces major changes or deprecations.
+________________________________________
+11. Suggested Next Steps
+1.	Conduct detailed object and field inventory.
+2.	Identify all reports and integrations.
+3.	Validate feature parity with business teams.
+4.	Create sandbox proof-of-concept (POC).
+5.	Reassess in 12–18 months.
+________________________________________
+12. Appendix (References)
+•	Salesforce FSC Release Notes (Summer ’24)
+•	Salesforce Financial Services Cloud Admin Guide
+•	ShellBlack – FSC Core vs Managed Package Article
+•	Internal BankUnited Architecture Documents
+________________________________________
+Prepared as an initial assessment document to support strategic and technical decision-making.
+
+
+
 wanted to talk about this LARGE topic of assessing the pros and cons of moving FSC Financial Account Data Model from Managed Packgae to Core. Something FSC introduced in Summer '24
  
 https://help.salesforce.com/s/articleView?id=release-notes.rn_fsc_financial_account_standard_objects.htm&release=250&type=5
