@@ -1,0 +1,156 @@
+/**
+ * @description  Batch class that identifies and deletes inactive Financial
+ *               Account Role (FAR) records for Loan and Deposit Financial
+ *               Accounts.
+ *
+ *               A FAR record is considered inactive when its
+ *               CRM_As_of__c (Data Extract as of Date) is strictly older
+ *               than STALE_THRESHOLD_DAYS. This field is stamped by the
+ *               ETL on every run. If the ETL did not update a FAR within
+ *               the last 7 days it means that role no longer exists in
+ *               the source system and must be removed from Salesforce.
+ *
+ *               Execution flow:
+ *               ScheduleRemoveInactiveFARole
+ *                 └─► BatchRemoveInactiveFARole.start()   → builds SOQL cursor
+ *                       └─► BatchRemoveInactiveFARole.execute() → deletes chunks
+ *                             └─► BatchRemoveInactiveFARole.finish() → logs summary
+ *
+ *               Exclusions (confirmed in standup - 2025-04-13):
+ *               - Records with Role = 'Primary Owner' are excluded from deletion.
+ *                 FSC system validation prevents deletion of Primary Owner roles.
+ *                 Decision: skip at query level to avoid unnecessary DML failures.
+ *               - No email notification required per business confirmation.
+ *               - End Date field is NOT used. CRM_As_of__c is the only source of truth.
+ *
+ * @author       Pratik Alaspure
+ * @date         2026-04-13
+ * @group        Financial Account Role
+ * @see          ScheduleRemoveInactiveFARole
+ *
+ * PICKLIST STORED VALUES (verified via SOQL — do NOT use UI display labels):
+ *   UI label "Loan Account"    → stored as 'LoanAccount'
+ *   UI label "Deposit Account" → stored as 'BankAccount'
+ */
+public without sharing class BatchRemoveInactiveFARole
+    implements Database.Batchable<SObject>, Database.Stateful {
+
+    // Constants
+
+    @TestVisible
+    private static final Integer STALE_THRESHOLD_DAYS = 7;
+
+    @TestVisible
+    private static final Set<String> IN_SCOPE_FA_TYPES = new Set<String>{
+        'LoanAccount',
+        'BankAccount'
+    };
+
+    @TestVisible
+    private static final String EXCLUDED_ROLE_PRIMARY_OWNER = 'Primary Owner';
+
+    @TestVisible
+    private static final Integer BATCH_CHUNK_SIZE = 200;
+
+    // Stateful Accumulators
+
+    @TestVisible private Integer      totalRecordsDeleted  = 0;
+    @TestVisible private Integer      totalRecordsFailed   = 0;
+    @TestVisible private Integer      totalRecordsSkipped  = 0;
+    @TestVisible private List<String> deleteErrorLog       = new List<String>();
+
+    // Batchable Interface — start()
+
+    public Database.QueryLocator start(Database.BatchableContext bc) {
+        Date cutoffDate = Date.today().addDays(-STALE_THRESHOLD_DAYS);
+
+        return Database.getQueryLocator([
+            SELECT Id,
+                   Name,
+                   CRM_As_of__c,
+                   FinServ__Role__c,
+                   FinServ__FinancialAccount__c,
+                   FinServ__FinancialAccount__r.Name,
+                   FinServ__FinancialAccount__r.FinServ__FinancialAccountType__c
+            FROM   FinServ__FinancialAccountRole__c
+            WHERE  CRM_As_of__c != NULL
+            AND    CRM_As_of__c < :cutoffDate
+            AND    FinServ__FinancialAccount__r.FinServ__FinancialAccountType__c
+                   IN :IN_SCOPE_FA_TYPES
+            AND    FinServ__Role__c != :EXCLUDED_ROLE_PRIMARY_OWNER
+            ORDER BY CRM_As_of__c ASC
+        ]);
+    }
+
+    // Batchable Interface — execute()
+
+    public void execute(
+        Database.BatchableContext bc,
+        List<FinServ__FinancialAccountRole__c> scope
+    ) {
+
+        if (scope == null || scope.isEmpty()) {
+            return;
+        }
+
+        // Log every FAR record about to be deleted
+        for (FinServ__FinancialAccountRole__c far : scope) {
+        }
+
+        List<Database.DeleteResult> deleteResults = Database.delete(scope, false);
+
+        Integer chunkDeleted = 0;
+        Integer chunkFailed  = 0;
+
+        for (Integer i = 0; i < deleteResults.size(); i++) {
+            Database.DeleteResult result = deleteResults[i];
+
+            if (result.isSuccess()) {
+                totalRecordsDeleted++;
+                chunkDeleted++;
+            } else {
+                totalRecordsFailed++;
+                chunkFailed++;
+                String errorEntry = buildErrorLogEntry(scope[i], result.getErrors());
+                deleteErrorLog.add(errorEntry);
+            }
+        }
+    }
+
+    // Batchable Interface — finish()
+
+    public void finish(Database.BatchableContext bc) {
+        String jobStatus = (totalRecordsFailed > 0)
+            ? 'Completed with errors'
+            : 'Completed successfully';
+
+        if (!deleteErrorLog.isEmpty()) {
+            for (String errorEntry : deleteErrorLog) {
+            }
+        } else {
+        }
+
+    }
+
+    // Private Helper Methods
+    private String buildErrorLogEntry(
+        FinServ__FinancialAccountRole__c record,
+        List<Database.Error> errors
+    ) {
+        List<String> errorMessages = new List<String>();
+
+        for (Database.Error err : errors) {
+            errorMessages.add(err.getStatusCode() + ': ' + err.getMessage());
+        }
+
+        return String.format(
+            'FAR Id: {0} | Name: {1} | Financial Account: {2} | Error(s): {3}',
+            new List<Object>{
+                record.Id,
+                record.Name,
+                record.FinServ__FinancialAccount__r.Name,
+                String.join(errorMessages, '; ')
+            }
+        );
+    }
+}
