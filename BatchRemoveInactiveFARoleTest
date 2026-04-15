@@ -62,3 +62,548 @@ public class BatchRemoveInactiveFARoleTest {
         System.assert(true);
     }
 }
+
+
+
+
+
+@isTest
+private class FinancialAccountRoleQueueableTest {
+    
+    // ── Constants ─────────────────────────────────────────────────────────────
+    private static final String INDIVIDUAL_RECORDTYPE  = 'Individual';
+    private static final String BUSINESS_RECORDTYPE    = 'Business';
+    private static final String BANKING_ACCOUNT_RT     = 'BankingAccount';
+    private static final String AUTHORIZED_SIGNER_ROLE = 'Other - Authorized Signer';
+    
+    // ── Test Setup ────────────────────────────────────────────────────────────
+    @TestSetup
+    static void makeData() {
+        RecordType individualRT = [
+            SELECT Id
+            FROM RecordType
+            WHERE SObjectType = 'Account'
+            AND DeveloperName = :INDIVIDUAL_RECORDTYPE
+            AND NamespacePrefix = NULL
+            LIMIT 1
+        ];
+        RecordType businessRT = [
+            SELECT Id
+            FROM RecordType
+            WHERE SObjectType = 'Account'
+            AND DeveloperName = :BUSINESS_RECORDTYPE
+            LIMIT 1
+        ];
+        
+        Account indvPO = new Account(
+            LastName                = 'Individual PO',
+            RecordTypeId            = individualRT.Id,
+            BKU_CIF_Number__c       = '1234567891',
+            PersonMailingCity       = 'San Francisco',
+            PersonMailingCountry    = 'United States',
+            PersonMailingPostalCode = '94109',
+            PersonMailingState      = 'California',
+            PersonMailingStreet     = 'Franklin',
+            PersonOtherCity         = 'San Francisco',
+            PersonOtherCountry      = 'United States',
+            PersonOtherPostalCode   = '94109',
+            PersonOtherState        = 'California',
+            PersonOtherStreet       = 'Franklin',
+            PersonEmail             = '12341@345.com'
+        );
+        Account indvRA = new Account(
+            LastName                = 'Individual RA',
+            RecordTypeId            = individualRT.Id,
+            BKU_CIF_Number__c       = '1234567892',
+            PersonMailingCity       = 'San Francisco',
+            PersonMailingCountry    = 'United States',
+            PersonMailingPostalCode = '94109',
+            PersonMailingState      = 'California',
+            PersonMailingStreet     = 'Franklin',
+            PersonOtherCity         = 'San Francisco',
+            PersonOtherCountry      = 'United States',
+            PersonOtherPostalCode   = '94109',
+            PersonOtherState        = 'California',
+            PersonOtherStreet       = 'Franklin',
+            PersonEmail             = '12342@345.com'
+        );
+        Account bizPO = new Account(
+            Name                   = 'Business PO',
+            RecordTypeId           = businessRT.Id,
+            BKU_CIF_Number__c      = '9876543211',
+            Phone                  = '555-555-5551',
+            Email__c               = 'bizpo@test.com',
+            BKU_TaxID_Encrypted__c = '123456781',
+            BillingCity            = 'Business City',
+            BillingCountry         = 'United States',
+            BillingPostalCode      = '54321',
+            BillingState           = 'Florida',
+            BillingStreet          = '1 Business Street',
+            ShippingCity           = 'Business City',
+            ShippingCountry        = 'United States',
+            ShippingPostalCode     = '54321',
+            ShippingState          = 'Florida',
+            ShippingStreet         = '1 Business Street'
+        );
+        Account bizRA = new Account(
+            Name                   = 'Business RA',
+            RecordTypeId           = businessRT.Id,
+            BKU_CIF_Number__c      = '9876543212',
+            Phone                  = '555-555-5552',
+            Email__c               = 'bizra@test.com',
+            BKU_TaxID_Encrypted__c = '123456782',
+            BillingCity            = 'Business City',
+            BillingCountry         = 'United States',
+            BillingPostalCode      = '54321',
+            BillingState           = 'Florida',
+            BillingStreet          = '1 Business Street',
+            ShippingCity           = 'Business City',
+            ShippingCountry        = 'United States',
+            ShippingPostalCode     = '54321',
+            ShippingState          = 'Florida',
+            ShippingStreet         = '1 Business Street'
+        );
+        insert new List<Account>{ indvPO, indvRA, bizPO, bizRA };
+            
+            Id accountRoleRTId = Schema.SObjectType.FinServ__ReciprocalRole__c
+            .getRecordTypeInfosByDeveloperName()
+            .get('AccountRole')
+            .getRecordTypeId();
+        Id contactRoleRTId = Schema.SObjectType.FinServ__ReciprocalRole__c
+            .getRecordTypeInfosByDeveloperName()
+            .get('ContactRole')
+            .getRecordTypeId();
+        
+        insert new List<FinServ__ReciprocalRole__c>{
+            new FinServ__ReciprocalRole__c(
+                Name                          = 'Authorized Signer',
+                FinServ__InverseRole__c       = 'Has Authorized Signer',
+                FinServ__CreateInverseRole__c = true,
+                RecordTypeId                  = accountRoleRTId
+            ),
+                new FinServ__ReciprocalRole__c(
+                    Name                          = 'Authorized Signer',
+                    FinServ__InverseRole__c       = 'Has Authorized Signer',
+                    FinServ__CreateInverseRole__c = true,
+                    RecordTypeId                  = contactRoleRTId
+                )
+                };
+                    }
+    
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    private static RecordType getFinAccRT() {
+        return [
+            SELECT Id
+            FROM RecordType
+            WHERE SObjectType = 'FinServ__FinancialAccount__c'
+            AND DeveloperName = :BANKING_ACCOUNT_RT
+            LIMIT 1
+        ];
+    }
+    
+    private static Map<String, Account> getAccounts() {
+        Map<String, Account> result = new Map<String, Account>();
+        for (Account a : [
+            SELECT Id, Name, LastName, RecordType.DeveloperName, PersonContactId
+            FROM Account
+            WHERE Name IN ('Business PO', 'Business RA')
+            OR LastName IN ('Individual PO', 'Individual RA')
+        ]) {
+            String key = String.isBlank(a.Name) ? a.LastName : a.Name;
+            result.put(key, a);
+        }
+        return result;
+    }
+    
+    private static FinServ__FinancialAccount__c buildFA(String name, Id primaryOwnerId, Id rtId) {
+        return new FinServ__FinancialAccount__c(
+            Name                     = name,
+            RecordTypeId             = rtId,
+            FinServ__PrimaryOwner__c = primaryOwnerId,
+            FinServ__Status__c       = 'Open'
+        );
+    }
+    
+    // ── Insert: Business Primary Owner + Individual Authorized Signer → ACR ───
+    @isTest
+    static void testInsert_BusinessPrimaryOwner_IndividualAuthorizedSigner_CreatesACR() {
+        Map<String, Account> accounts = getAccounts();
+        Account bizPO  = accounts.get('Business PO');
+        Account indvRA = accounts.get('Individual RA');
+        RecordType faRT = getFinAccRT();
+        
+        insert buildFA('TEST FA Biz PO Indv RA', bizPO.Id, faRT.Id);
+        FinServ__FinancialAccount__c fa = [SELECT Id FROM FinServ__FinancialAccount__c WHERE Name = 'TEST FA Biz PO Indv RA' LIMIT 1];
+        
+        Test.startTest();
+        insert new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c   = indvRA.Id,
+            FinServ__Role__c             = AUTHORIZED_SIGNER_ROLE
+        );
+        Test.stopTest();
+        
+        List<AccountContactRelation> acrs = [
+            SELECT Id, Roles
+            FROM AccountContactRelation
+            WHERE AccountId = :bizPO.Id
+            AND   ContactId = :indvRA.PersonContactId
+        ];
+        System.assertEquals(1, acrs.size(), 'Expected 1 ACR for business PO and individual authorized signer');
+        System.assert(acrs[0].Roles.contains('Authorized Signer'), 'Authorized Signer role not set on ACR');
+    }
+    
+    // ── Insert: Individual Primary Owner + Individual Authorized Signer → CCR ─
+    @isTest
+    static void testInsert_IndividualPrimaryOwner_IndividualAuthorizedSigner_CreatesCCR() {
+        Map<String, Account> accounts = getAccounts();
+        Account indvPO = accounts.get('Individual PO');
+        Account indvRA = accounts.get('Individual RA');
+        RecordType faRT = getFinAccRT();
+        
+        insert buildFA('TEST FA Indv PO Indv RA', indvPO.Id, faRT.Id);
+        FinServ__FinancialAccount__c fa = [SELECT Id FROM FinServ__FinancialAccount__c WHERE Name = 'TEST FA Indv PO Indv RA' LIMIT 1];
+        
+        Test.startTest();
+        insert new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c   = indvRA.Id,
+            FinServ__Role__c             = AUTHORIZED_SIGNER_ROLE
+        );
+        Test.stopTest();
+        
+        List<FinServ__ContactContactRelation__c> ccrs = [
+            SELECT Id
+            FROM FinServ__ContactContactRelation__c
+            WHERE FinServ__Contact__c        = :indvRA.PersonContactId
+            AND   FinServ__RelatedContact__c = :indvPO.PersonContactId
+        ];
+        System.assertEquals(1, ccrs.size(), 'Expected 1 CCR for individual PO and individual authorized signer');
+    }
+    
+    // ── Insert: Individual Primary Owner + Business Authorized Signer → ACR ───
+    @isTest
+    static void testInsert_IndividualPrimaryOwner_BusinessAuthorizedSigner_CreatesACR() {
+        Map<String, Account> accounts = getAccounts();
+        Account indvPO = accounts.get('Individual PO');
+        Account bizRA  = accounts.get('Business RA');
+        RecordType faRT = getFinAccRT();
+        
+        insert buildFA('TEST FA Indv PO Biz RA', indvPO.Id, faRT.Id);
+        FinServ__FinancialAccount__c fa = [SELECT Id FROM FinServ__FinancialAccount__c WHERE Name = 'TEST FA Indv PO Biz RA' LIMIT 1];
+        
+        Test.startTest();
+        insert new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c   = bizRA.Id,
+            FinServ__Role__c             = AUTHORIZED_SIGNER_ROLE
+        );
+        Test.stopTest();
+        
+        List<AccountContactRelation> acrs = [
+            SELECT Id, Roles
+            FROM AccountContactRelation
+            WHERE AccountId = :bizRA.Id
+            AND   ContactId = :indvPO.PersonContactId
+        ];
+        System.assertEquals(1, acrs.size(), 'Expected 1 ACR for individual PO and business authorized signer');
+        System.assert(acrs[0].Roles.contains('Authorized Signer'), 'Authorized Signer role not set on ACR');
+    }
+    
+    // ── Insert: Business Primary Owner + Business Authorized Signer → AAR ─────
+    @isTest
+    static void testInsert_BusinessPrimaryOwner_BusinessAuthorizedSigner_CreatesAAR() {
+        Map<String, Account> accounts = getAccounts();
+        Account bizPO = accounts.get('Business PO');
+        Account bizRA = accounts.get('Business RA');
+        RecordType faRT = getFinAccRT();
+        
+        insert buildFA('TEST FA Biz PO Biz RA', bizPO.Id, faRT.Id);
+        FinServ__FinancialAccount__c fa = [SELECT Id FROM FinServ__FinancialAccount__c WHERE Name = 'TEST FA Biz PO Biz RA' LIMIT 1];
+        
+        Test.startTest();
+        insert new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c   = bizRA.Id,
+            FinServ__Role__c             = AUTHORIZED_SIGNER_ROLE
+        );
+        Test.stopTest();
+        
+        List<FinServ__AccountAccountRelation__c> aars = [
+            SELECT Id, FinServ__AssociationType__c
+            FROM FinServ__AccountAccountRelation__c
+            WHERE FinServ__Account__c        = :bizPO.Id
+            AND   FinServ__RelatedAccount__c = :bizRA.Id
+        ];
+        System.assertEquals(1, aars.size(), 'Expected 1 AAR for business PO and business authorized signer');
+        System.assertEquals('Peer', aars[0].FinServ__AssociationType__c, 'AssociationType should be Peer');
+    }
+    
+    // ── Delete: Removing the FAR removes the relationship record ──────────────
+    @isTest
+    static void testDelete_RemovingFAR_RemovesRelationship() {
+        Map<String, Account> accounts = getAccounts();
+        Account bizPO  = accounts.get('Business PO');
+        Account indvRA = accounts.get('Individual RA');
+        RecordType faRT = getFinAccRT();
+        
+        insert buildFA('TEST FA Delete', bizPO.Id, faRT.Id);
+        FinServ__FinancialAccount__c fa = [SELECT Id FROM FinServ__FinancialAccount__c WHERE Name = 'TEST FA Delete' LIMIT 1];
+        
+        FinServ__FinancialAccountRole__c far = new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c   = indvRA.Id,
+            FinServ__Role__c             = AUTHORIZED_SIGNER_ROLE
+        );
+        insert far;
+        
+        Test.startTest();
+        delete far;
+        Test.stopTest();
+        
+        List<AccountContactRelation> acrs = [
+            SELECT Id
+            FROM AccountContactRelation
+            WHERE AccountId = :bizPO.Id
+            AND   ContactId = :indvRA.PersonContactId
+        ];
+        System.assertEquals(0, acrs.size(), 'ACR should be removed when the only FAR is deleted');
+    }
+    
+    // ── Delete: Second FAR on same PO/RA pair keeps relationship alive ─────────
+    @isTest
+    static void testDelete_SecondFARExists_RelationshipIsPreserved() {
+        Map<String, Account> accounts = getAccounts();
+        Account bizPO  = accounts.get('Business PO');
+        Account indvRA = accounts.get('Individual RA');
+        RecordType faRT = getFinAccRT();
+        
+        FinServ__FinancialAccount__c fa1 = buildFA('TEST FA Guard 1', bizPO.Id, faRT.Id);
+        FinServ__FinancialAccount__c fa2 = buildFA('TEST FA Guard 2', bizPO.Id, faRT.Id);
+        insert new List<FinServ__FinancialAccount__c>{ fa1, fa2 };
+            
+            FinServ__FinancialAccountRole__c far1 = new FinServ__FinancialAccountRole__c(
+                FinServ__FinancialAccount__c = fa1.Id,
+                FinServ__RelatedAccount__c   = indvRA.Id,
+                FinServ__Role__c             = AUTHORIZED_SIGNER_ROLE
+            );
+        FinServ__FinancialAccountRole__c far2 = new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa2.Id,
+            FinServ__RelatedAccount__c   = indvRA.Id,
+            FinServ__Role__c             = AUTHORIZED_SIGNER_ROLE
+        );
+        insert new List<FinServ__FinancialAccountRole__c>{ far1, far2 };
+            
+            Test.startTest();
+        delete far1;
+        Test.stopTest();
+        
+        List<AccountContactRelation> acrs = [
+            SELECT Id
+            FROM AccountContactRelation
+            WHERE AccountId = :bizPO.Id
+            AND   ContactId = :indvRA.PersonContactId
+        ];
+        System.assertEquals(1, acrs.size(), 'ACR should remain because a second FAR still links the same PO and RA');
+    }
+    
+    // ── Non-authorized-signer role is ignored entirely ────────────────────────
+    @isTest
+    static void testInsert_NonAuthSignerRole_NoRelationshipCreated() {
+        Map<String, Account> accounts = getAccounts();
+        Account bizPO  = accounts.get('Business PO');
+        Account indvRA = accounts.get('Individual RA');
+        RecordType faRT = getFinAccRT();
+        
+        insert buildFA('TEST FA Ignored Role', bizPO.Id, faRT.Id);
+        FinServ__FinancialAccount__c fa = [SELECT Id FROM FinServ__FinancialAccount__c WHERE Name = 'TEST FA Ignored Role' LIMIT 1];
+        
+        Test.startTest();
+        insert new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c   = indvRA.Id,
+            FinServ__Role__c             = 'Other - Owner'
+        );
+        Test.stopTest();
+        
+        List<AccountContactRelation> acrs = [
+            SELECT Id
+            FROM AccountContactRelation
+            WHERE AccountId = :bizPO.Id
+            AND   ContactId = :indvRA.PersonContactId
+        ];
+        System.assertEquals(0, acrs.size(), 'No relationship should be created for a non-authorized-signer role');
+    }
+    
+    // ── Delete: Individual PO + Individual RA removes CCR ─────────────────────
+    @isTest
+    static void testDelete_IndividualPrimaryOwner_IndividualAuthorizedSigner_RemovesCCR() {
+        Map<String, Account> accounts = getAccounts();
+        Account indvPO = accounts.get('Individual PO');
+        Account indvRA = accounts.get('Individual RA');
+        RecordType faRT = getFinAccRT();
+        
+        insert buildFA('TEST FA Delete CCR', indvPO.Id, faRT.Id);
+        FinServ__FinancialAccount__c fa = [SELECT Id FROM FinServ__FinancialAccount__c WHERE Name = 'TEST FA Delete CCR' LIMIT 1];
+        
+        FinServ__FinancialAccountRole__c far = new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c   = indvRA.Id,
+            FinServ__Role__c             = AUTHORIZED_SIGNER_ROLE
+        );
+        insert far;
+        
+        Test.startTest();
+        delete far;
+        Test.stopTest();
+        
+        List<FinServ__ContactContactRelation__c> ccrs = [
+            SELECT Id
+            FROM FinServ__ContactContactRelation__c
+            WHERE FinServ__Contact__c        = :indvRA.PersonContactId
+            AND   FinServ__RelatedContact__c = :indvPO.PersonContactId
+        ];
+        System.assertEquals(0, ccrs.size(), 'CCR should be removed when the FAR is deleted');
+    }
+    
+    // ── Delete: Individual PO + Business RA removes ACR ───────────────────────
+    @isTest
+    static void testDelete_IndividualPrimaryOwner_BusinessAuthorizedSigner_RemovesACR() {
+        Map<String, Account> accounts = getAccounts();
+        Account indvPO = accounts.get('Individual PO');
+        Account bizRA  = accounts.get('Business RA');
+        RecordType faRT = getFinAccRT();
+        
+        insert buildFA('TEST FA Delete ACR Indv Biz', indvPO.Id, faRT.Id);
+        FinServ__FinancialAccount__c fa = [SELECT Id FROM FinServ__FinancialAccount__c WHERE Name = 'TEST FA Delete ACR Indv Biz' LIMIT 1];
+        
+        FinServ__FinancialAccountRole__c far = new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c   = bizRA.Id,
+            FinServ__Role__c             = AUTHORIZED_SIGNER_ROLE
+        );
+        insert far;
+        
+        Test.startTest();
+        delete far;
+        Test.stopTest();
+        
+        List<AccountContactRelation> acrs = [
+            SELECT Id
+            FROM AccountContactRelation
+            WHERE AccountId = :bizRA.Id
+            AND   ContactId = :indvPO.PersonContactId
+        ];
+        System.assertEquals(0, acrs.size(), 'ACR should be removed when the FAR is deleted');
+    }
+    
+    // ── Delete: Business PO + Business RA removes AAR ─────────────────────────
+    @isTest
+    static void testDelete_BusinessPrimaryOwner_BusinessAuthorizedSigner_RemovesAAR() {
+        Map<String, Account> accounts = getAccounts();
+        Account bizPO = accounts.get('Business PO');
+        Account bizRA = accounts.get('Business RA');
+        RecordType faRT = getFinAccRT();
+        
+        insert buildFA('TEST FA Delete AAR', bizPO.Id, faRT.Id);
+        FinServ__FinancialAccount__c fa = [SELECT Id FROM FinServ__FinancialAccount__c WHERE Name = 'TEST FA Delete AAR' LIMIT 1];
+        
+        FinServ__FinancialAccountRole__c far = new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c   = bizRA.Id,
+            FinServ__Role__c             = AUTHORIZED_SIGNER_ROLE
+        );
+        insert far;
+        
+        Test.startTest();
+        delete far;
+        Test.stopTest();
+        
+        List<FinServ__AccountAccountRelation__c> aars = [
+            SELECT Id
+            FROM FinServ__AccountAccountRelation__c
+            WHERE FinServ__Account__c        = :bizPO.Id
+            AND   FinServ__RelatedAccount__c = :bizRA.Id
+        ];
+        System.assertEquals(0, aars.size(), 'AAR should be removed when the FAR is deleted');
+    }
+    
+    // ── Insert: ACR already exists with another role, Authorized Signer is appended
+    @isTest
+    static void testInsert_ExistingACRWithOtherRole_AuthorizedSignerRoleAppended() {
+        Map<String, Account> accounts = getAccounts();
+        Account bizPO  = accounts.get('Business PO');
+        Account indvRA = accounts.get('Individual RA');
+        RecordType faRT = getFinAccRT();
+        
+        // Pre-create the ACR with a different role so the insert path hits roleContains + appendRole
+        AccountContactRelation existingACR = new AccountContactRelation(
+            AccountId = bizPO.Id,
+            ContactId = indvRA.PersonContactId,
+            Roles     = 'Power of Attorney'
+        );
+        insert existingACR;
+        
+        insert buildFA('TEST FA Append Role', bizPO.Id, faRT.Id);
+        FinServ__FinancialAccount__c fa = [SELECT Id FROM FinServ__FinancialAccount__c WHERE Name = 'TEST FA Append Role' LIMIT 1];
+        
+        Test.startTest();
+        insert new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c   = indvRA.Id,
+            FinServ__Role__c             = AUTHORIZED_SIGNER_ROLE
+        );
+        Test.stopTest();
+        
+        AccountContactRelation updatedACR = [
+            SELECT Roles
+            FROM AccountContactRelation
+            WHERE AccountId = :bizPO.Id
+            AND   ContactId = :indvRA.PersonContactId
+            LIMIT 1
+        ];
+        System.assert(updatedACR.Roles.contains('Authorized Signer'), 'Authorized Signer should be appended to existing roles');
+        System.assert(updatedACR.Roles.contains('Power of Attorney'), 'Existing role should be preserved');
+    }
+    
+    // ── Delete: ACR has multiple roles, only Authorized Signer is stripped ─────
+    @isTest
+    static void testDelete_ACRHasMultipleRoles_OnlyAuthorizedSignerStripped() {
+        Map<String, Account> accounts = getAccounts();
+        Account bizPO  = accounts.get('Business PO');
+        Account indvRA = accounts.get('Individual RA');
+        RecordType faRT = getFinAccRT();
+        
+        // Pre-create ACR with two roles so delete hits the removeRole/update path instead of full delete
+        AccountContactRelation existingACR = new AccountContactRelation(
+            AccountId = bizPO.Id,
+            ContactId = indvRA.PersonContactId,
+            Roles     = 'Power of Attorney;Authorized Signer'
+        );
+        insert existingACR;
+        
+        insert buildFA('TEST FA Strip Role', bizPO.Id, faRT.Id);
+        FinServ__FinancialAccount__c fa = [SELECT Id FROM FinServ__FinancialAccount__c WHERE Name = 'TEST FA Strip Role' LIMIT 1];
+        
+        FinServ__FinancialAccountRole__c far = new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c   = indvRA.Id,
+            FinServ__Role__c             = AUTHORIZED_SIGNER_ROLE
+        );
+        insert far;
+        
+        Test.startTest();
+        delete far;
+        Test.stopTest();
+        
+        AccountContactRelation updatedACR = [
+            SELECT Roles
+            FROM AccountContactRelation
+            WHERE AccountId = :bizPO.Id
+            AND   ContactId = :indvRA.PersonContactId
+            LIMIT 1
+        ];
+        System.assert(!updatedACR.Roles.contains('Authorized Signer'), 'Authorized Signer role should be removed');
+        System.assert(updatedACR.Roles.contains('Power of Attorney'), 'Other roles should remain intact');
+    }
+}
