@@ -6,62 +6,109 @@ public class BatchRemoveInactiveFARoleTest {
         Account acc = new Account(Name = 'Test Customer');
         insert acc;
 
-        Id loanRtId = [SELECT Id 
-                       FROM RecordType 
-                       WHERE SObjectType = 'FinServ__FinancialAccount__c'
-                       AND DeveloperName = 'LoanAccount'
-                       LIMIT 1].Id;
+        Id rtId = [SELECT Id 
+                   FROM RecordType 
+                   WHERE SObjectType = 'FinServ__FinancialAccount__c'
+                   AND DeveloperName = 'LoanAccount'
+                   LIMIT 1].Id;
 
         FinServ__FinancialAccount__c fa = new FinServ__FinancialAccount__c(
-            Name = 'Test Loan FA',
-            RecordTypeId = loanRtId,
+            Name = 'Test FA',
+            RecordTypeId = rtId,
             FinServ__PrimaryOwner__c = acc.Id
         );
         insert fa;
 
-        FinServ__FinancialAccountRole__c oldRole = new FinServ__FinancialAccountRole__c(
+        List<FinServ__FinancialAccountRole__c> fars = new List<FinServ__FinancialAccountRole__c>();
+
+        fars.add(new FinServ__FinancialAccountRole__c(
             FinServ__FinancialAccount__c = fa.Id,
             FinServ__RelatedAccount__c = acc.Id,
             FinServ__Role__c = 'Authorized Signer',
             CRM_As_of__c = Date.today().addDays(-10)
-        );
+        ));
 
-        FinServ__FinancialAccountRole__c newRole = new FinServ__FinancialAccountRole__c(
+        fars.add(new FinServ__FinancialAccountRole__c(
             FinServ__FinancialAccount__c = fa.Id,
             FinServ__RelatedAccount__c = acc.Id,
             FinServ__Role__c = 'Authorized Signer',
             CRM_As_of__c = Date.today()
-        );
+        ));
 
-        insert new List<FinServ__FinancialAccountRole__c>{ oldRole, newRole };
+        fars.add(new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c = acc.Id,
+            FinServ__Role__c = 'Primary Owner',
+            CRM_As_of__c = Date.today().addDays(-10)
+        ));
+
+        insert fars;
     }
 
     @isTest
-    static void testBatchDeletesOldRecords() {
+    static void testBatchDeletesOnlyOldNonPrimaryRecords() {
 
         Test.startTest();
         Database.executeBatch(new BatchRemoveInactiveFARole(), 200);
         Test.stopTest();
 
         List<FinServ__FinancialAccountRole__c> remaining = [
-            SELECT Id, CRM_As_of__c 
+            SELECT Id, CRM_As_of__c, FinServ__Role__c
             FROM FinServ__FinancialAccountRole__c
         ];
 
-        System.assertEquals(1, remaining.size());
-        System.assert(remaining[0].CRM_As_of__c >= Date.today().addDays(-7));
+        System.assertEquals(2, remaining.size());
+
+        for (FinServ__FinancialAccountRole__c rec : remaining) {
+            System.assert(
+                rec.CRM_As_of__c >= Date.today().addDays(-7)
+                || rec.FinServ__Role__c == 'Primary Owner'
+            );
+        }
     }
 
     @isTest
-    static void testBatchWithNoRecords() {
+    static void testBatchNoMatchingRecords() {
+
+        Account acc = new Account(Name = 'Another Customer');
+        insert acc;
+
+        Id rtId = [SELECT Id 
+                   FROM RecordType 
+                   WHERE SObjectType = 'FinServ__FinancialAccount__c'
+                   AND DeveloperName = 'LoanAccount'
+                   LIMIT 1].Id;
+
+        FinServ__FinancialAccount__c fa = new FinServ__FinancialAccount__c(
+            Name = 'No Delete FA',
+            RecordTypeId = rtId,
+            FinServ__PrimaryOwner__c = acc.Id
+        );
+        insert fa;
+
+        FinServ__FinancialAccountRole__c recentRole = new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c = acc.Id,
+            FinServ__Role__c = 'Authorized Signer',
+            CRM_As_of__c = Date.today()
+        );
+        insert recentRole;
 
         Test.startTest();
         Database.executeBatch(new BatchRemoveInactiveFARole(), 200);
         Test.stopTest();
 
-        System.assert(true);
+        List<FinServ__FinancialAccountRole__c> result = [
+            SELECT Id FROM FinServ__FinancialAccountRole__c
+            WHERE Id = :recentRole.Id
+        ];
+
+        System.assertEquals(1, result.size());
     }
 }
+
+
+////////////////////////////////////////////////////////
 
 
 
