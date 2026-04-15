@@ -1,0 +1,181 @@
+/**
+ * @description  Batch class that identifies and deletes inactive Financial
+ *               Account Role (FAR) records for Loan and Deposit Financial
+ *               Accounts.
+ *
+ *               A FAR record is considered inactive when its
+ *               CRM_As_of__c (Data Extract as of Date) is strictly older
+ *               than STALE_THRESHOLD_DAYS. This field is stamped by the
+ *               ETL on every run. If the ETL did not update a FAR within
+ *               the last 7 days it means that role no longer exists in
+ *               the source system and must be removed from Salesforce.
+ *
+ *               Execution flow:
+ *               ScheduleRemoveInactiveFARole
+ *                 └─► BatchRemoveInactiveFARole.start()   → builds SOQL cursor
+ *                       └─► BatchRemoveInactiveFARole.execute() → deletes chunks
+ *                             └─► BatchRemoveInactiveFARole.finish() → email summary
+ *
+ * @author       Pratik Alaspure
+ * @date         2006-04-13
+ * @group        Financial Account Role
+ * @see          ScheduleRemoveInactiveFARole
+ *
+ * PICKLIST STORED VALUES (verified via SOQL — do NOT use UI display labels):
+ *   UI label "Loan Account"    → stored as 'LoanAccount'
+ *   UI label "Deposit Account" → stored as 'BankAccount'
+ */
+public without sharing class BatchRemoveInactiveFARole
+    implements Database.Batchable<SObject>, Database.Stateful {
+
+    // Constants
+     
+    @TestVisible
+    private static final Integer STALE_THRESHOLD_DAYS = 7;
+
+    @TestVisible
+    private static final Set<String> IN_SCOPE_FA_TYPES = new Set<String>{
+        'LoanAccount',
+        'BankAccount'
+    };
+
+    @TestVisible
+    private static final Integer BATCH_CHUNK_SIZE = 200;
+
+    @TestVisible private Integer totalRecordsDeleted = 0;
+    @TestVisible private Integer totalRecordsFailed  = 0;
+    @TestVisible private List<String> deleteErrorLog = new List<String>();
+
+    // Batchable Interface — start()
+ 
+    public Database.QueryLocator start(Database.BatchableContext bc) {
+        Date cutoffDate = Date.today().addDays(-STALE_THRESHOLD_DAYS);
+
+         System.debug('Debug: Batch start - Cutoff Date: ' + cutoffDate);
+        
+        return Database.getQueryLocator([
+            SELECT Id,
+                   Name,
+                   CRM_As_of__c,
+                   FinServ__Role__c,
+                   FinServ__FinancialAccount__c,
+                   FinServ__FinancialAccount__r.Name
+            FROM   FinServ__FinancialAccountRole__c
+            WHERE  CRM_As_of__c != NULL
+			AND CRM_As_of__c < :cutoffDate
+            AND    FinServ__FinancialAccount__r.RecordType.DeveloperName
+                   IN ('LoanAccount', 'BankAccount')
+            ORDER BY CRM_As_of__c ASC
+        ]);
+    }
+
+    // Batchable Interface — execute()
+
+  
+    public void execute(
+        Database.BatchableContext bc,
+        List<FinServ__FinancialAccountRole__c> scope
+    ) {
+        if (scope == null || scope.isEmpty()) {
+            return;
+        }
+
+        List<Database.DeleteResult> deleteResults = Database.delete(scope, false);
+
+        for (Integer i = 0; i < deleteResults.size(); i++) {
+            Database.DeleteResult result = deleteResults[i];
+
+            if (result.isSuccess()) {
+                totalRecordsDeleted++;
+            } else {
+                totalRecordsFailed++;
+                deleteErrorLog.add(
+                    buildErrorLogEntry(scope[i], result.getErrors())
+                );
+            }
+        }
+    }
+
+    // Batchable Interface — finish()
+ 
+    public void finish(Database.BatchableContext bc) {
+        String jobStatus = (totalRecordsFailed > 0)
+            ? 'Completed with errors'
+            : 'Completed successfully';
+
+        try {
+            Messaging.SingleEmailMessage summaryEmail = buildSummaryEmail(jobStatus);
+
+            if (!Test.isRunningTest()) {
+                Messaging.sendEmail(
+                    new List<Messaging.SingleEmailMessage>{ summaryEmail }
+                );
+            }
+        } catch (Exception ex) {
+            System.debug(
+                LoggingLevel.ERROR,
+                'BatchRemoveInactiveFARole.finish() — email send failed: '
+                    + ex.getMessage()
+            );
+        }
+    }
+
+    // Private Helper Methods
+   
+    private Messaging.SingleEmailMessage buildSummaryEmail(String jobStatus) {
+        Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
+
+        mail.setToAddresses(new List<String>{ UserInfo.getUserEmail() });
+        mail.setSubject(
+            'FAR Inactive Role Cleanup — ' + jobStatus +
+            ' (' + System.now().format('yyyy-MM-dd') + ')'
+        );
+        mail.setPlainTextBody(buildEmailBody(jobStatus));
+
+        return mail;
+    }
+
+    private String buildEmailBody(String jobStatus) {
+        String body = String.join(
+            new List<String>{
+                'Job       : Remove Inactive Financial Account Roles',
+                'Run Date  : ' + System.now().format('yyyy-MM-dd HH:mm:ss') + ' (org time)',
+                'Status    : ' + jobStatus,
+                'Deleted   : ' + totalRecordsDeleted + ' record(s)',
+                'Failed    : ' + totalRecordsFailed  + ' record(s)',
+                'Threshold : CRM_As_of__c older than ' + STALE_THRESHOLD_DAYS + ' days',
+                'FA Types  : ' + String.join(new List<String>(IN_SCOPE_FA_TYPES), ', ')
+            },
+            '\n'
+        );
+
+        if (!deleteErrorLog.isEmpty()) {
+            body += '\n\n--- Error Details ---\n'
+                  + String.join(deleteErrorLog, '\n');
+        }
+
+        return body;
+    }
+
+    
+    private String buildErrorLogEntry(
+        FinServ__FinancialAccountRole__c record,
+        List<Database.Error> errors
+    ) {
+        List<String> errorMessages = new List<String>();
+
+        for (Database.Error err : errors) {
+            errorMessages.add(err.getStatusCode() + ': ' + err.getMessage());
+        }
+
+        return String.format(
+            'FAR Id: {0} | Name: {1} | Financial Account: {2} | Error(s): {3}',
+            new List<Object>{
+                record.Id,
+                record.Name,
+                record.FinServ__FinancialAccount__r.Name,
+                String.join(errorMessages, '; ')
+            }
+        );
+    }
+}
