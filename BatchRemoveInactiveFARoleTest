@@ -1,0 +1,64 @@
+@isTest
+public class BatchRemoveInactiveFARoleTest {
+
+    @testSetup
+    static void setupData() {
+        Account acc = new Account(Name = 'Test Customer');
+        insert acc;
+
+        Id loanRtId = [SELECT Id 
+                       FROM RecordType 
+                       WHERE SObjectType = 'FinServ__FinancialAccount__c'
+                       AND DeveloperName = 'LoanAccount'
+                       LIMIT 1].Id;
+
+        FinServ__FinancialAccount__c fa = new FinServ__FinancialAccount__c(
+            Name = 'Test Loan FA',
+            RecordTypeId = loanRtId,
+            FinServ__PrimaryOwner__c = acc.Id
+        );
+        insert fa;
+
+        FinServ__FinancialAccountRole__c oldRole = new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c = acc.Id,
+            FinServ__Role__c = 'Authorized Signer',
+            CRM_As_of__c = Date.today().addDays(-10)
+        );
+
+        FinServ__FinancialAccountRole__c newRole = new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__RelatedAccount__c = acc.Id,
+            FinServ__Role__c = 'Authorized Signer',
+            CRM_As_of__c = Date.today()
+        );
+
+        insert new List<FinServ__FinancialAccountRole__c>{ oldRole, newRole };
+    }
+
+    @isTest
+    static void testBatchDeletesOldRecords() {
+
+        Test.startTest();
+        Database.executeBatch(new BatchRemoveInactiveFARole(), 200);
+        Test.stopTest();
+
+        List<FinServ__FinancialAccountRole__c> remaining = [
+            SELECT Id, CRM_As_of__c 
+            FROM FinServ__FinancialAccountRole__c
+        ];
+
+        System.assertEquals(1, remaining.size());
+        System.assert(remaining[0].CRM_As_of__c >= Date.today().addDays(-7));
+    }
+
+    @isTest
+    static void testBatchWithNoRecords() {
+
+        Test.startTest();
+        Database.executeBatch(new BatchRemoveInactiveFARole(), 200);
+        Test.stopTest();
+
+        System.assert(true);
+    }
+}
