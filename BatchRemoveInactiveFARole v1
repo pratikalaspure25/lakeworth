@@ -56,7 +56,6 @@ public without sharing class BatchRemoveInactiveFARole
 
     @TestVisible private Integer      totalRecordsDeleted  = 0;
     @TestVisible private Integer      totalRecordsFailed   = 0;
-    @TestVisible private Integer      totalRecordsSkipped  = 0;
     @TestVisible private List<String> deleteErrorLog       = new List<String>();
 
     // Batchable Interface — start()
@@ -73,8 +72,7 @@ public without sharing class BatchRemoveInactiveFARole
                    FinServ__FinancialAccount__r.Name,
                    FinServ__FinancialAccount__r.FinServ__FinancialAccountType__c
             FROM   FinServ__FinancialAccountRole__c
-            WHERE  CRM_As_of__c != NULL
-            AND    CRM_As_of__c < :cutoffDate
+            WHERE  CRM_As_of__c < :cutoffDate
             AND    FinServ__FinancialAccount__r.FinServ__FinancialAccountType__c
                    IN :IN_SCOPE_FA_TYPES
             AND    FinServ__Role__c != :EXCLUDED_ROLE_PRIMARY_OWNER
@@ -91,10 +89,6 @@ public without sharing class BatchRemoveInactiveFARole
 
         if (scope == null || scope.isEmpty()) {
             return;
-        }
-
-        // Log every FAR record about to be deleted
-        for (FinServ__FinancialAccountRole__c far : scope) {
         }
 
         List<Database.DeleteResult> deleteResults = Database.delete(scope, false);
@@ -123,13 +117,6 @@ public without sharing class BatchRemoveInactiveFARole
         String jobStatus = (totalRecordsFailed > 0)
             ? 'Completed with errors'
             : 'Completed successfully';
-
-        if (!deleteErrorLog.isEmpty()) {
-            for (String errorEntry : deleteErrorLog) {
-            }
-        } else {
-        }
-
     }
 
     // Private Helper Methods
