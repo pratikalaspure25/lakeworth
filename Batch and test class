@@ -6,103 +6,95 @@ private class BatchRemoveInactiveFARoleTest {
     @TestSetup
     static void setupData() {
 
-        /* ── Business Account (your same structure) ── */
-        Account businessAcct = new Account(
-            Name = 'Batch Test Business',
-            BKU_CIF_Number__c      = '9876543211',
-            Phone                  = '555-555-5551',
-            Email__c               = 'bizpo@test.com',
-            BKU_TaxID_Encrypted__c = '123456781',
-            BillingCity            = 'Business City',
-            BillingCountry         = 'United States',
-            BillingPostalCode      = '54321',
-            BillingState           = 'Florida',
-            BillingStreet          = '1 Business Street',
-            ShippingCity           = 'Business City',
-            ShippingCountry        = 'United States',
-            ShippingPostalCode     = '54321',
-            ShippingState          = 'Florida',
-            ShippingStreet         = '1 Business Street'
+        Account acc = new Account(
+            Name = 'Test Account',
+            BillingCity = 'City',
+            BillingCountry = 'United States',
+            BillingPostalCode = '12345',
+            BillingState = 'State',
+            BillingStreet = 'Street'
         );
-        insert businessAcct;
+        insert acc;
 
-        /* ── Financial Accounts (NO RecordType needed now) ── */
-        FinServ__FinancialAccount__c fa1 = new FinServ__FinancialAccount__c(
-            Name                     = 'Batch Loan FA',
-            FinServ__PrimaryOwner__c = businessAcct.Id,
-            FinServ__Status__c       = 'Open'
+        FinServ__FinancialAccount__c fa = new FinServ__FinancialAccount__c(
+            Name = 'Test FA',
+            FinServ__PrimaryOwner__c = acc.Id,
+            FinServ__Status__c = 'Open'
         );
+        insert fa;
 
-        FinServ__FinancialAccount__c fa2 = new FinServ__FinancialAccount__c(
-            Name                     = 'Batch Bank FA',
-            FinServ__PrimaryOwner__c = businessAcct.Id,
-            FinServ__Status__c       = 'Open'
-        );
+        List<FinServ__FinancialAccountRole__c> fars = new List<FinServ__FinancialAccountRole__c>();
 
-        insert new List<FinServ__FinancialAccount__c>{ fa1, fa2 };
+        // ✅ STALE (should delete)
+        fars.add(new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__Role__c = 'Authorized Signer',
+            CRM_As_of__c = Date.today().addDays(-10)
+        ));
 
-        /* ── Financial Account Roles ── */
-        insert new List<FinServ__FinancialAccountRole__c>{
+        // ✅ STALE (should delete)
+        fars.add(new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__Role__c = 'Authorized Signer',
+            CRM_As_of__c = Date.today().addDays(-20)
+        ));
 
-            // STALE → should be deleted
-            new FinServ__FinancialAccountRole__c(
-                FinServ__FinancialAccount__c = fa1.Id,
-                FinServ__Role__c             = 'Authorized Signer',
-                CRM_As_of__c                 = Date.today().addDays(-(STALE_DAYS + 1))
-            ),
+        // ❌ PRIMARY OWNER (should NOT delete)
+        fars.add(new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__Role__c = 'Primary Owner',
+            CRM_As_of__c = Date.today().addDays(-20)
+        ));
 
-            new FinServ__FinancialAccountRole__c(
-                FinServ__FinancialAccount__c = fa2.Id,
-                FinServ__Role__c             = 'Authorized Signer',
-                CRM_As_of__c                 = Date.today().addDays(-30)
-            ),
+        // ❌ FRESH (should NOT delete)
+        fars.add(new FinServ__FinancialAccountRole__c(
+            FinServ__FinancialAccount__c = fa.Id,
+            FinServ__Role__c = 'Authorized Signer',
+            CRM_As_of__c = Date.today()
+        ));
 
-            // FRESH → should remain
-            new FinServ__FinancialAccountRole__c(
-                FinServ__FinancialAccount__c = fa2.Id,
-                FinServ__Role__c             = 'Authorized Signer',
-                CRM_As_of__c                 = Date.today()
-            )
-        };
+        insert fars;
     }
 
-    /* ─────────────────────────────────────────────
-       Test 1: Deletes only stale FARs
-       ───────────────────────────────────────────── */
+    // ✅ MAIN TEST (COVERS EVERYTHING)
     @IsTest
-    static void testBatchDeletesOnlyStaleFARs() {
+    static void testBatchExecution() {
 
         Test.startTest();
-        Database.executeBatch(new BatchRemoveInactiveFARole(), 200);
+        Database.executeBatch(new BatchRemoveInactiveFARole(), 1); // small batch for better coverage
         Test.stopTest();
 
         List<FinServ__FinancialAccountRole__c> remaining = [
-            SELECT CRM_As_of__c
+            SELECT FinServ__Role__c, CRM_As_of__c
             FROM FinServ__FinancialAccountRole__c
         ];
 
-        // ✅ FIX: Proper assertion added
-        System.assertEquals(
-            1,
-            remaining.size(),
-            'Only one fresh FAR should remain'
-        );
+        // Only 2 should remain:
+        // 1 Primary Owner + 1 Fresh
+        System.assertEquals(2, remaining.size());
 
-        System.assert(
-            remaining[0].CRM_As_of__c >= Date.today().addDays(-STALE_DAYS),
-            'Remaining FAR must be fresh'
-        );
+        Boolean foundPrimaryOwner = false;
+        Boolean foundFresh = false;
+
+        for (FinServ__FinancialAccountRole__c far : remaining) {
+            if (far.FinServ__Role__c == 'Primary Owner') {
+                foundPrimaryOwner = true;
+            }
+            if (far.CRM_As_of__c == Date.today()) {
+                foundFresh = true;
+            }
+        }
+
+        System.assert(foundPrimaryOwner, 'Primary Owner should NOT be deleted');
+        System.assert(foundFresh, 'Fresh record should remain');
     }
 
-    /* ─────────────────────────────────────────────
-       Test 2: Batch does nothing when no records qualify
-       ───────────────────────────────────────────── */
+    // ✅ NO RECORDS CASE
     @IsTest
-    static void testBatchWithNoEligibleRecords() {
+    static void testNoEligibleRecords() {
 
         List<FinServ__FinancialAccountRole__c> fars = [
-            SELECT Id
-            FROM FinServ__FinancialAccountRole__c
+            SELECT Id FROM FinServ__FinancialAccountRole__c
         ];
 
         for (FinServ__FinancialAccountRole__c far : fars) {
@@ -111,26 +103,23 @@ private class BatchRemoveInactiveFARoleTest {
         update fars;
 
         Test.startTest();
-        Database.executeBatch(new BatchRemoveInactiveFARole(), 200);
+        Database.executeBatch(new BatchRemoveInactiveFARole(), 1);
         Test.stopTest();
 
         System.assertEquals(
             fars.size(),
-            [SELECT COUNT() FROM FinServ__FinancialAccountRole__c],
-            'No FARs should be deleted when all are fresh'
+            [SELECT COUNT() FROM FinServ__FinancialAccountRole__c]
         );
     }
 
-    /* ─────────────────────────────────────────────
-       Test 3: Finish method executes safely
-       ───────────────────────────────────────────── */
+    // ✅ FINISH METHOD
     @IsTest
-    static void testFinishRunsWithoutException() {
+    static void testFinish() {
 
         Test.startTest();
-        Database.executeBatch(new BatchRemoveInactiveFARole());
+        Database.executeBatch(new BatchRemoveInactiveFARole(), 1);
         Test.stopTest();
 
-        System.assert(true, 'Batch finish executed successfully');
+        System.assert(true);
     }
 }
