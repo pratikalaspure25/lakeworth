@@ -1,136 +1,23 @@
-Batch class 
-
-public without sharing class BatchRemoveInactiveFARole
-    implements Database.Batchable<SObject>, Database.Stateful {
-
-    // Constants
-
-    @TestVisible
-    private static final Integer STALE_THRESHOLD_DAYS = 7;
-
-    @TestVisible
-    private static final Set<String> IN_SCOPE_FA_TYPES = new Set<String>{
-        'LoanAccount',
-        'BankAccount'
-    };
-
-    @TestVisible
-    private static final String EXCLUDED_ROLE_PRIMARY_OWNER = 'Primary Owner';
-
-    @TestVisible
-    private static final Integer BATCH_CHUNK_SIZE = 200;
-
-    // Stateful Accumulators
-
-    @TestVisible private Integer      totalRecordsDeleted  = 0;
-    @TestVisible private Integer      totalRecordsFailed   = 0;
-    @TestVisible private List<String> deleteErrorLog       = new List<String>();
-
-    // Batchable Interface — start()
-
-    public Database.QueryLocator start(Database.BatchableContext bc) {
-        Date cutoffDate = Date.today().addDays(-STALE_THRESHOLD_DAYS);
-
-        return Database.getQueryLocator([
-            SELECT Id,
-                   Name,
-                   CRM_As_of__c,
-                   FinServ__Role__c,
-                   FinServ__FinancialAccount__c,
-                   FinServ__FinancialAccount__r.Name
-            FROM   FinServ__FinancialAccountRole__c
-            WHERE  CRM_As_of__c < :cutoffDate
-            AND    FinServ__FinancialAccount__r.RecordType.DeveloperName
-                   IN :IN_SCOPE_FA_TYPES
-		/*  AND    FinServ__FinancialAccount__r.RecordType.DeveloperName
-                   IN ('LoanAccount', 'BankAccount') */
-            AND    FinServ__Role__c != :EXCLUDED_ROLE_PRIMARY_OWNER
-            ORDER BY CRM_As_of__c ASC
-        ]);
-    }
-
-    // Batchable Interface — execute()
-
-    public void execute(
-        Database.BatchableContext bc,
-        List<FinServ__FinancialAccountRole__c> scope
-    ) {
-
-        if (scope == null || scope.isEmpty()) {
-            return;
-        }
-
-        List<Database.DeleteResult> deleteResults = Database.delete(scope, false);
-
-        Integer chunkDeleted = 0;
-        Integer chunkFailed  = 0;
-
-        for (Integer i = 0; i < deleteResults.size(); i++) {
-            Database.DeleteResult result = deleteResults[i];
-
-            if (result.isSuccess()) {
-                totalRecordsDeleted++;
-                chunkDeleted++;
-            } else {
-                totalRecordsFailed++;
-                chunkFailed++;
-                String errorEntry = buildErrorLogEntry(scope[i], result.getErrors());
-                deleteErrorLog.add(errorEntry);
-            }
-        }
-    }
-
-    // Batchable Interface — finish()
-
-    public void finish(Database.BatchableContext bc) {
-        String jobStatus = (totalRecordsFailed > 0)
-            ? 'Completed with errors'
-            : 'Completed successfully';
-    }
-
-    // Private Helper Methods
-    private String buildErrorLogEntry(
-        FinServ__FinancialAccountRole__c record,
-        List<Database.Error> errors
-    ) {
-        List<String> errorMessages = new List<String>();
-
-        for (Database.Error err : errors) {
-            errorMessages.add(err.getStatusCode() + ': ' + err.getMessage());
-        }
-
-        return String.format(
-            'FAR Id: {0} | Name: {1} | Financial Account: {2} | Error(s): {3}',
-            new List<Object>{
-                record.Id,
-                record.Name,
-                record.FinServ__FinancialAccount__r.Name,
-                String.join(errorMessages, '; ')
-            }
-        );
-    }
-}
-
-
-
-
-
-Test class
-
 @IsTest
 private class BatchRemoveInactiveFARoleTest {
 
-    // Must match batch logic
     private static final Integer STALE_DAYS = 7;
 
-    /* ────────────────────────────────────────────────────────────
-       Test Setup
-       Creates valid FSC data that passes org validations
-       ──────────────────────────────────────────────────────────── */
     @TestSetup
     static void setupData() {
 
-        /* ── Business Account (addresses REQUIRED by validation) ── */
+        /* ── Get Record Types (IMPORTANT FIX) ── */
+        Map<String, Id> rtMap = new Map<String, Id>();
+        for (RecordType rt : [
+            SELECT Id, DeveloperName
+            FROM RecordType
+            WHERE SObjectType = 'FinServ__FinancialAccount__c'
+            AND DeveloperName IN ('LoanAccount', 'BankAccount')
+        ]) {
+            rtMap.put(rt.DeveloperName, rt.Id);
+        }
+
+        /* ── Business Account ── */
         Account businessAcct = new Account(
             Name = 'Batch Test Business',
             BKU_CIF_Number__c      = '9876543211',
@@ -150,28 +37,27 @@ private class BatchRemoveInactiveFARoleTest {
         );
         insert businessAcct;
 
-        /* ── Financial Accounts (no RecordTypeId = SAFE) ─────────── */
+        /* ── Financial Accounts (WITH RecordType FIX) ── */
         FinServ__FinancialAccount__c fa1 = new FinServ__FinancialAccount__c(
             Name                     = 'Batch Loan FA',
             FinServ__PrimaryOwner__c = businessAcct.Id,
-            FinServ__Status__c       = 'Open'
+            FinServ__Status__c       = 'Open',
+            RecordTypeId             = rtMap.get('LoanAccount')
         );
 
         FinServ__FinancialAccount__c fa2 = new FinServ__FinancialAccount__c(
             Name                     = 'Batch Bank FA',
             FinServ__PrimaryOwner__c = businessAcct.Id,
-            FinServ__Status__c       = 'Open'
+            FinServ__Status__c       = 'Open',
+            RecordTypeId             = rtMap.get('BankAccount')
         );
 
         insert new List<FinServ__FinancialAccount__c>{ fa1, fa2 };
 
-        /* ── Financial Account Roles ───────────────────────────────
-           2 stale  → should be deleted
-           1 fresh  → should remain
-           ───────────────────────────────────────────────────────── */
+        /* ── Financial Account Roles ── */
         insert new List<FinServ__FinancialAccountRole__c>{
 
-            // STALE (older than threshold)
+            // STALE → should be deleted
             new FinServ__FinancialAccountRole__c(
                 FinServ__FinancialAccount__c = fa1.Id,
                 FinServ__Role__c             = 'Authorized Signer',
@@ -184,7 +70,7 @@ private class BatchRemoveInactiveFARoleTest {
                 CRM_As_of__c                 = Date.today().addDays(-30)
             ),
 
-            // FRESH (should NOT be deleted)
+            // FRESH → should remain
             new FinServ__FinancialAccountRole__c(
                 FinServ__FinancialAccount__c = fa2.Id,
                 FinServ__Role__c             = 'Authorized Signer',
@@ -193,17 +79,14 @@ private class BatchRemoveInactiveFARoleTest {
         };
     }
 
-    /* ────────────────────────────────────────────────────────────
+    /* ─────────────────────────────────────────────
        Test 1: Deletes only stale FARs
-       ──────────────────────────────────────────────────────────── */
+       ───────────────────────────────────────────── */
     @IsTest
     static void testBatchDeletesOnlyStaleFARs() {
 
         Test.startTest();
-        Database.executeBatch(
-            new BatchRemoveInactiveFARole(),
-            200
-        );
+        Database.executeBatch(new BatchRemoveInactiveFARole(), 200);
         Test.stopTest();
 
         List<FinServ__FinancialAccountRole__c> remaining = [
@@ -211,24 +94,29 @@ private class BatchRemoveInactiveFARoleTest {
             FROM FinServ__FinancialAccountRole__c
         ];
 
-      
-       /* System.assert(
+        System.assertEquals(
+            1,
+            remaining.size(),
+            'Only one fresh FAR should remain'
+        );
+
+        System.assert(
             remaining[0].CRM_As_of__c >= Date.today().addDays(-STALE_DAYS),
             'Remaining FAR must be fresh'
-        ); */
+        );
     }
 
-    /* ────────────────────────────────────────────────────────────
-       Test 2: Batch does nothing when no records qualify
-       ──────────────────────────────────────────────────────────── */
+    /* ─────────────────────────────────────────────
+       Test 2: No records eligible
+       ───────────────────────────────────────────── */
     @IsTest
     static void testBatchWithNoEligibleRecords() {
 
-        // Make all FARs fresh
         List<FinServ__FinancialAccountRole__c> fars = [
             SELECT Id
             FROM FinServ__FinancialAccountRole__c
         ];
+
         for (FinServ__FinancialAccountRole__c far : fars) {
             far.CRM_As_of__c = Date.today();
         }
@@ -241,13 +129,13 @@ private class BatchRemoveInactiveFARoleTest {
         System.assertEquals(
             fars.size(),
             [SELECT COUNT() FROM FinServ__FinancialAccountRole__c],
-            'No FARs should be deleted when all are fresh'
+            'No FARs should be deleted'
         );
     }
 
-    /* ────────────────────────────────────────────────────────────
-       Test 3: Finish method executes safely
-       ──────────────────────────────────────────────────────────── */
+    /* ─────────────────────────────────────────────
+       Test 3: Finish method execution
+       ───────────────────────────────────────────── */
     @IsTest
     static void testFinishRunsWithoutException() {
 
@@ -255,8 +143,6 @@ private class BatchRemoveInactiveFARoleTest {
         Database.executeBatch(new BatchRemoveInactiveFARole());
         Test.stopTest();
 
-        // If we reached here, finish() completed successfully
-        System.assert(true, 'Batch finish executed successfully');
+        System.assert(true, 'Finish executed successfully');
     }
 }
-
