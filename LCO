@@ -1,0 +1,65 @@
+Activate LCO Persona & Fix Users 
+1.	Activate LCO Persona Picklist Value - Done
+2.	Change Profile & Activate All 7 LCO Users - Done
+3.	Verify User Setup is Correct - Done
+
+Custom Setting for Persona
+1.	Create Custom Setting: LCO Configuration
+2.	Add Field to Custom Setting
+3.	Set the Default Persona Value
+
+Permission Set
+1.	Create Permission Set: BKU - LCO User - Done
+2.	Copy Object Permissions from BKU - CPM Users - Done
+3.	Set Opportunity Field Level Security — CRITICAL - Done
+4.	Set App Visibility - Done
+5.	Assign Permission Set to All 7 LCO Users - Done
+
+Public Group
+1.	Create Public Group: LCO Group - Done
+
+Custom Field: Approval Documents Received
+2.	Create Picklist Field on Opportunity - Done
+3.	Set Field Level Security by Profile - Done
+4.	Go Back to Permission Set — Add Edit FLS for New Field - Done
+
+Page Layout
+1.	Add LCO Information Section to Layout
+2.	Set All Fields to Read Only Except Stage & Approval Docs
+3.	Remove New Button from List View
+Helper Checkbox + Sharing Flow + Sharing Rule
+1.	Create Helper Checkbox Field: Loan OnePATHE Opportunity - Done
+2.	Create Record-Triggered Flow: Set Sharing Checkbox - Done
+3.	Create Criteria-Based Sharing Rule - Done
+4.	Run Flow on Existing Records 
+
+Validation Rules
+1.	VR1 — LCO Cannot Move to Early Stages (AC9)
+2.	VR2 — LCO Must Have LCO in Opportunity Team (AC10)
+3.	VR3 — Approval Docs Must Be Yes (AC11)
+4.	VR4 — Update Existing CPM Rule Message (AC20)
+5.	VR5 — Update Existing RM Rule Message (AC21)
+
+ Email Alerts
+1.	Create 3 Email Templates
+2.	Find & Clone Josh's Existing Email Flow
+3.	Modify Cloned Flow for LCO Email Logic
+
+Find & Clone the CPM Homepage
+1.	Homepage in Lightning App Builder
+2.	Create List View for LCO Opportunities
+3.	Find & Clone the CPM Homepage
+4.	Modify Homepage for LCO
+5.	Set Activation Filter for LCO Users
+
+ Final Testing Checklist
+Test AC1 — Public Group Exists
+Test AC2 — LCO Sees All Loan-OnePATHE Opps
+Test AC3 — LCO Can Only Edit Stage & Approval Docs
+Test AC4 — No New Button
+Test AC5 & AC6 — LCO Information Section
+Test AC9 — Stage Restriction for LCO
+Test AC10 & AC11 — Team Member + Approval Docs
+Test AC7 — Email on Opportunity Create
+Test AC12 & AC13 — Stage Change Emails
+Test Homepage — LCO App Builder Page
