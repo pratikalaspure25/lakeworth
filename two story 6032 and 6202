@@ -1,0 +1,246 @@
+6032
+FND: Change CRM 360 Home Page for Senior and Manager CPM
+
+
+Description
+
+Description
+As a CPM user (CPM, Senior CPM or Managing Director), I want to see in the CRM 360 Home Page Opportunities that have been worked by my team members, so that we can track their progress. 
+For developing and testing, please refer to below naming conventions use to simplify the acceptance criteria: 
+
+CPM user (CPM, Senior CPM or Managing Director)
+
+“Loan – OnePATHE” = “Loan - OnePATHE (New, Renewal, Mod or Extension)” Opportunity
+
+Note: In the Role hierarchy section of this story is provided a list of the CPMs and their hierarchy
+Acceptance Criteria
+AC1: As a CPM user, when in CRM 360 Home page, then I see the following tabs:
+
+Current Loan - OnePATHE Opportunities
+
+Upcoming Loan - OnePATHE Opportunities
+
+Past Due Loan - OnePATHE Opportunities
+
+CENTER PAGE
+
+RIGHT SIDE COLUMN
+
+Three Tabs
+
+Current Loan - OnePATHE Opportunities
+
+Upcoming Loan - OnePATHE Opportunities
+
+Past Due Loan - OnePATHE Opportunities
+
+Guides & References (Section)
+
+Today’s Events (Section)
+
+Recent Records (Section)
+
+Open Tasks (Section)
+
+ 
+
+AC2: As a CPM user, when I’m viewing the “Current Loan - OnePATHE Opportunities” Tab, then I see the following List View: “My Team & I Current Loan - OnePATHE Opportunities“ with columns, and records that meet the following criteria:
+
+Opportunities: All Opportunities where my subordinates in the Role hierarchy are Opportunity team members or I’m a team member
+
+Record Type:  “Loan - OnePATHE (New, Renewal, Mod or Extension)”
+
+Stage:  Equal to → Proposal Accepted, Submitted for Underwriting, Submitted for Approval and In Closing
+
+COLUMNS:
+
+Opportunity Name (link)
+
+Relationship Name (Link)
+
+Stage
+
+Amount
+
+Close Date
+
+Opportunity Owner (Link)
+
+AC3: As a CPM user, when I’m viewing the “Upcoming Loan - OnePATHE Opportunities” Tab, then I see the following List View: “My Team & I Upcoming Loan - OnePATHE Opportunities“ with columns, and records that meet the following criteria:
+
+Opportunities: All Opportunities where my subordinates in the Role hierarchy are Opportunity team members or I’m a team member
+
+Record Type:  Loan - OnePATHE (New, Renewal, Mod or Extension)”
+
+Stage:  Not equal to → Opportunity Identify, Closed Won or Closed Lost
+
+COLUMNS:
+
+Opportunity Name  (link)
+
+Relationship Name  (link)
+
+Stage
+
+CPO Name
+
+Amount
+
+Close Date
+
+Opportunity Owner  (link)
+
+AC4: As a CPM user, when I’m viewing the “Past Due - OnePATHE Opportunities” Tab, then I see the following List View: “My Team & I Past Due Opportunities“ with columns, and records that meet the following criteria:
+
+Opportunities: All Opportunities where my subordinates in the Role hierarchy are Opportunity team members or I’m a team member
+
+Record Type:  “Loan - OnePATHE (New, Renewal, Mod or Extension)”
+
+Close Date: in the Past
+
+Stage:  Not equal to → Opportunity Identify, Closed Won or Closed Lost
+
+COLUMNS:
+
+Opportunity Name  (link)
+
+Relationship Name  (link)
+
+Stage
+
+CPO Name
+
+Amount
+
+Close Date
+
+Opportunity Owner (link)
+
+
+
+6202 
+FND: Create New Home Page for LCOs
+
+
+Description
+
+Description
+As an LCO Group user, I want to view on my Home page information related to Loan – OnePATHE (New/Initial Funding) and Loan – OnePATHE (Renewal, Modification, or Extension) Opportunities based on their current stages, so that I can easily identify my current, upcoming, and past‑due work.
+For developing and testing, please refer to below naming conventions use to simplify the acceptance criteria: 
+
+“Loan – OnePATHE” = “Loan - OnePATHE (New/Initial Funding)” and “Loan - OnePATHE (Renewal, Mod or Extension)” Opportunity
+
+Acceptance Criteria
+LCO Group User are users with persona equals:
+
+LCO
+
+LCO - OPX
+
+AC1: As an LCO Group user, when I access CRM 360 APP, then I am able to see the following navigation tabs: Home, Relationships, Opportunities, Calendar, Tasks, Dashboards, Reports, Analytics, Chatter, and Financial Accounts.
+
+AC2: As an LCO Group user, when I click on the Home Tab from CRM 360 app, then I see the following structure in the Home Page:
+
+CENTER PAGE
+
+RIGHT SIDE COLUMN
+
+Three Tabs
+
+Current Loan - OnePATHE Opportunities
+
+Upcoming Loan - OnePATHE Opportunities
+
+Past Due Loan - OnePATHE Opportunities
+
+Guides & References (Section)
+
+Today’s Events (Section)
+
+Recent Records (Section)
+
+Open Tasks (Section)
+
+ 
+
+AC3: As an LCO Group user, when I’m viewing the “Current Loan - OnePATHE Opportunities” Tab, then I see the following List: “Current Loan - OnePATHE Opportunities“ with columns, and records that meet the following criteria:
+
+Record Type: “Loan - OnePATHE (New/Initial Funding)” and “Loan - OnePATHE (Renewal, Mod or Extension)”
+
+Stage:  
+
+For: “Loan - OnePATHE (New/Initial Funding)” Stages Equal to → Submitted for Underwtriting, Submitted for Approval and In Closing
+
+For: “Loan - OnePATHE (Renewal, Mod or Extension)” Stages Equal to → Submitted for Underwtriting, Submitted for Approval and In Closing
+
+COLUMNS:
+
+Opportunity Name (link)
+
+Relationship Name (Link)
+
+Stage
+
+Transaction Type
+
+CPO Name
+
+Amount 
+
+Close Date
+
+Opportunity Owner (Link)
+
+AC4: As an LCO Group user, when I’m viewing the “Upcoming Loan - OnePATHE Opportunities” Tab, then I see the following List: “Upcoming Loan - OnePATHE Opportunities“ with columns, and records that meet the following criteria:
+
+Record Type: “Loan - OnePATHE (New/Initial Funding)” and “Loan - OnePATHE (Renewal, Mod or Extension)”
+
+Stage:  
+
+For: “Loan - OnePATHE (New/Initial Funding)” Stages Equal to → Opportunity Identified, Opportunity Submitted,  Proposal  Issued, Proposal Accepted
+
+For: “Loan - OnePATHE (Renewal, Mod or Extension)” Stages Equal to → Opportunity Identified, Opportunity Submitted
+
+COLUMNS:
+
+Opportunity Name  (link)
+
+Relationship Name  (link)
+
+Stage
+
+Transaction Type
+
+CPO Name
+
+Amount 
+
+Close Date
+
+Opportunity Owner  (link)
+
+AC4: As an LCO Group user, when I’m viewing the “Past Due - OnePATHE Opportunities” Tab, then I see the following List: “Past Due - OnePATHE Opportunities“ with columns, and records that meet the following criteria:
+
+Record Type: “Loan - OnePATHE (New/Initial Funding)” and “Loan - OnePATHE (Renewal, Mod or Extension)”
+
+Close Date: in the Past
+
+Stage:  Not equal to → Closed Won or Closed Lost
+
+COLUMNS:
+
+Opportunity Name  (link)
+
+Relationship Name  (link)
+
+Stage
+
+Transaction Type
+
+CPO Name
+
+Amount
+
+Close Date 
+
+Opportunity Owner  (link)
