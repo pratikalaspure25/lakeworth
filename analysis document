@@ -1,0 +1,84 @@
+# PLIG-6922 – Mobile Access for CPM and LCO Home Page
+
+## Technical Analysis & Limitation
+
+### Requirement
+
+The story requires CPM and LCO users to see the following three Opportunity sections at the top of the Salesforce Mobile Home page:
+
+* Current Loan – OnePATHE Opportunities
+* Upcoming Loan – OnePATHE Opportunities
+* Past Due Loan – OnePATHE Opportunities
+
+These sections should display the same opportunities currently available on the CRM 360 desktop Home Page.
+
+### Current Implementation
+
+The existing desktop Home Page implementation uses custom Screen Flows to display:
+
+* Current Loan Opportunities
+* Upcoming Loan Opportunities
+* Past Due Loan Opportunities
+
+This solution works correctly on the desktop Home Page.
+
+### Technical Limitation
+
+After reviewing Salesforce Mobile Home capabilities, I found that Salesforce Mobile Home supports only standard card types such as:
+
+* Pinned Reports
+* Recent
+* My Calendar
+* Salesforce Events
+* Tasks
+* Favorites
+* Pinned Lists
+
+Salesforce Mobile Home does not support adding custom Screen Flow components directly as Mobile Home cards.
+
+Because of this platform limitation, the current desktop Screen Flow solution cannot be replicated on the Mobile Home page using standard Salesforce configuration.
+
+### Possible Approaches
+
+#### Option 1 – Standard Salesforce Approach
+
+* Create separate reports for:
+
+  * Current Loan Opportunities
+  * Upcoming Loan Opportunities
+  * Past Due Loan Opportunities
+* Make the reports available to CPM and LCO users.
+* Configure or pin these reports for mobile access where supported.
+
+Pros:
+
+* Uses standard Salesforce functionality.
+* Lower development effort.
+* Easier maintenance.
+
+Cons:
+
+* User experience differs from the desktop Home Page.
+* May require user interaction to access reports.
+
+#### Option 2 – Custom Development Approach
+
+* Design and develop a custom mobile solution to display the opportunity sections within the Salesforce mobile experience.
+
+Pros:
+
+* Closer to the desktop experience.
+* More automated user experience.
+
+Cons:
+
+* Additional development effort.
+* Requires further design and technical evaluation.
+
+### Recommendation
+
+Before starting development, I recommend discussing this Salesforce Mobile limitation and confirming the preferred approach with the business team to ensure the solution aligns with expectations.
+
+
+
+Hi Mariela and Jose, while analyzing PLIG-6922, I identified a Salesforce Mobile platform limitation related to displaying the existing Screen Flow-based Home Page components. I have attached a short analysis with possible approaches. Could we review and confirm the preferred solution before development begins?
