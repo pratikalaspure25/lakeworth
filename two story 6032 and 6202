@@ -5,7 +5,7 @@ I reviewed PLIG-6202 and PLIG-6032 and created all six reports for the mobile so
 The LCO reports are straightforward and align with the requirements based on Record Type, Stage, and Close Date filters.
 
 For the CPM reports, I used the Opportunities with Opportunity Teams report type. There is one area I would like to validate further around the role hierarchy and Opportunity Team Member requirements to ensure the report results match the existing Screen Flow behavior.
-
+For the CPM reports, I used the "Opportunities with Opportunity Teams" report type and the "My Team's Opportunities" scope. There is one area I would like to validate further around the role hierarchy and Opportunity Team Member requirements to ensure the report results match the existing Screen Flow behavior.
 I'll review the results and follow up if I identify any discrepancies or questions.
 
 Thank you,
