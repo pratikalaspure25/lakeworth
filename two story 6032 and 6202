@@ -1,3 +1,6 @@
+
+
+
 Hi,
 
 After reviewing the Mobile Home story, I found an alternative approach that avoids the report limitations.
@@ -14,6 +17,57 @@ Benefits:
 The only limitation is that I currently do not have access to test the solution in the Salesforce Mobile App, although I can verify the mobile layout through Lightning App Builder.
 
 If this approach is approved, I can build the App Page and we can validate it in INT/mobile testing.
+
+
+I believe that was Pratik’s main concern unless I read it wrong
+ 
+Jose Lopez - would that alternative I posted above be a good one to pursue?
+ 
+So for the home page those 3 flows could be cloned but I don’t think they can be on the standard mobile layout (unless flows can be shown on mobile now)
+ 
+Venkatesh Kamat
+Jose Lopez - would that alternative I posted above be a good one to pursue?
+
+I think so yeah
+ 
+Ok, great. 
+How can we give the right access for to test those once he build it?
+ 
+Velavan can test in mobile. I think Juan can set up Pratik to be a mobile user but I’m not sure he’d be able to log in anyway now that I think about it
+ 
+Because to log in you need the mobile certificate installed on your phone and I don’t know if contractors can do that? Maybe they can
+ 
+I just don’t know
+ 
+Definitely a Juan question there
+ 
+Ok, lets check with Juan on the 10am call (I will join as well)
+For some reason if it's not easy to give Pratik Alaspure mobile access, once he builds the App Page and we can have Velavan validate it in INT/mobile testing.
+ 
+Pratik Alaspure - go ahead with the Mobile App Page alternative.
+Thanks Jose Lopez for giving the thumbs up.
+ 
+Mariela Munoz Bolano - you will of course reserve the right to weigh-in once you see the demo of it..
+ 
+Yeah worse case scenario Pratik will have to push mobile stuff without testing and ask velavan to prioritize testing it
+ 
+Hi Everyone before proceeding with a solution. How much effort is all of this?
+ 
+FYI, Velavan does have access to mobile app to test 
+ 
+Claudia Cuadra
+Hi Everyone before proceeding with a solution. How much effort is all of this?
+
+Shouldn’t be too much more. It’s just a slightly different design than originally thought
+ 
+Should still be done this sprint
+ 
+I agree with Jose's assessment on the effort
+ 
+Flight is boarding now though so I have to go. Good luck!
+ 
+Noted, just asking since this might be worth discussing further to weigh the benefits vs. the effort. The mobile app access is definitely a nice-to-have, but we probably don’t want to overcomplicate things.
+ 
 
 
 Hi Mariela,
