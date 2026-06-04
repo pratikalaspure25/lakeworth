@@ -1,3 +1,21 @@
+Hi,
+
+After reviewing the Mobile Home story, I found an alternative approach that avoids the report limitations.
+
+Instead of recreating the logic in reports, we can create a Mobile App Page and add the existing Screen Flows used by the CRM 360 Home Page.
+
+Benefits:
+• Reuses the existing LCO flow logic
+• Reuses the CPM role hierarchy and Opportunity Team Member logic
+• No need to recreate filters in reports
+• Mobile users would see the same data as desktop users
+• App Pages can be added as tabs in the CRM 360 App and activated for mobile
+
+The only limitation is that I currently do not have access to test the solution in the Salesforce Mobile App, although I can verify the mobile layout through Lightning App Builder.
+
+If this approach is approved, I can build the App Page and we can validate it in INT/mobile testing.
+
+
 Hi Mariela,
 
 I reviewed PLIG-6202 and PLIG-6032 and created all six reports for the mobile solution.
