@@ -1,4 +1,4 @@
-
+The only issue I found is around navigation. To expose the App Page, I need to add a custom tab to the CRM 360 App. The page itself is intended only for CPM and LCO mobile users, but the tab becomes visible in desktop navigation as well. The functionality works correctly, but I wanted to discuss whether we should accept the tab visibility on desktop or look for another approach.
 
 
 Hi,
