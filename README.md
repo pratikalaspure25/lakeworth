@@ -1,3 +1,5 @@
+As a Relationship Manager (RM) I want newly created Loan-OnePATHE, Loan-LenderAi, Loan-NLP, and Loan-OPX Opportunities to always default to the "Opportunity Identified" stage, So that I can create the Opportunity without being prompted for information needed only in later stages
+
 import { OmniscriptBaseMixin } from "omnistudio/omniscriptBaseMixin";
 
 
