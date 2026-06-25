@@ -1,0 +1,40 @@
+public without sharing class FinancialAccountRoleTriggerHandler {
+
+    // Class Variables
+    public static Boolean suppressTrigger = false;
+    private static final String AUTHORIZED_SIGNER_ROLE = 'Other - Authorized Signer';
+
+    //Context Methods
+    public static void afterInsert(List<FinServ__FinancialAccountRole__c> newRecords) {
+        updateFinancialAccountAuthorizedSigners(newRecords, true);
+    }
+
+    public static void afterDelete(List<FinServ__FinancialAccountRole__c> oldRecords) {
+        updateFinancialAccountAuthorizedSigners(oldRecords, false);
+    }
+
+    //Logic Methods
+    private static void updateFinancialAccountAuthorizedSigners(List<FinServ__FinancialAccountRole__c> newOrOldRecords, Boolean isInsert) { 
+        List<FinServ__FinancialAccountRole__c> authSigners = filterAuthSigners(newOrOldRecords);
+        if (!authSigners.isEmpty() && !suppressTrigger) {
+            if(isInsert){
+            System.enqueueJob(new FinancialAccountRoleQueueable(authSigners, null));
+            } else { 
+            System.enqueueJob(new FinancialAccountRoleQueueable(null, authSigners));
+            }
+        }
+    }
+
+    //Helper Methods
+    private static List<FinServ__FinancialAccountRole__c> filterAuthSigners(
+        List<FinServ__FinancialAccountRole__c> records
+    ) {
+        List<FinServ__FinancialAccountRole__c> filtered = new List<FinServ__FinancialAccountRole__c>();
+        for (FinServ__FinancialAccountRole__c far : records) {
+            if (far.FinServ__Role__c == AUTHORIZED_SIGNER_ROLE) {
+                filtered.add(far);
+            }
+        }
+        return filtered;
+    }
+}
