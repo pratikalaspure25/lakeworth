@@ -1,0 +1,11 @@
+trigger FinancialAccountRoleTrigger on FinServ__FinancialAccountRole__c (after insert, after delete) {
+    String triggerContext = Trigger.operationType.name();
+    switch on triggerContext {
+        when 'AFTER_INSERT' {
+            FinancialAccountRoleTriggerHandler.afterInsert(Trigger.new);
+        }
+        when 'AFTER_DELETE' {
+            FinancialAccountRoleTriggerHandler.afterDelete(Trigger.old);
+        }
+    }
+}
