@@ -142,11 +142,61 @@ If business confirms that these stages are expected to be automatically generate
 
 ---
 
-## Recommendation
 
-My recommendation is to first reproduce the issue in a lower environment and review the existing stage transition controls. Once business confirms the expected behavior, implement either:
+## Business Clarification Received
 
-1. A Salesforce Validation Rule to enforce the required stage sequence, or
-2. A fix to the automation/integration responsible for generating the Proposal Issued and Proposal Accepted stages.
+The Business Analyst confirmed the following:
 
-This will ensure Loan-OnePATHE Opportunities consistently follow the required business process and prevent mandatory stages from being skipped.
+1. For **Loan-OnePATHE (New/Initial Funding)**, a CPM user **must not** move an Opportunity directly from **Opportunity Submitted** to **Submitted for Underwriting**. The Opportunity must first progress through **Proposal Issued** and **Proposal Accepted**.
+
+2. For **Loan-OnePATHE (Renewal, Mod or Extension)**, the current behavior is correct. A CPM user is allowed to move directly from **Opportunity Submitted** to **Submitted for Underwriting**.
+
+---
+
+## Updated Analysis
+
+During investigation, I reviewed the existing validation rule **BKU_PreventOveridePAStage**.
+
+The rule currently excludes CPM users, which allows them to move directly to **Submitted for Underwriting** without validating the previous stage. This explains why the defect occurs for the **Loan-OnePATHE (New/Initial Funding)** record type.
+
+---
+
+## Recommended Solution
+
+To minimize regression risk, I recommend leaving the existing validation rule unchanged and implementing a **new validation rule** specific to **Loan-OnePATHE (New/Initial Funding)**.
+
+The new validation rule will:
+
+* Apply only to the **Loan-OnePATHE (New/Initial Funding)** record type.
+* Apply only to **CPM** users.
+* Prevent the stage from changing to **Submitted for Underwriting** unless the previous stage is **Proposal Accepted**.
+
+This approach preserves the existing behavior for **Renewal, Mod or Extension** opportunities while enforcing the required business process for **New/Initial Funding**.
+
+---
+
+## Next Steps
+
+1. Review the proposed validation rule approach with the technical lead/architect.
+2. Implement the new validation rule after approval.
+3. Unit test the following scenarios:
+
+   * CPM cannot move directly from Opportunity Submitted to Submitted for Underwriting for New/Initial Funding.
+   * CPM can move from Proposal Accepted to Submitted for Underwriting for New/Initial Funding.
+   * Renewal/Mod/Extension behavior remains unchanged.
+4. Perform regression testing and prepare the fix for deployment based on the agreed release schedule.
+
+
+Hi Mariela,
+
+Thank you for the clarification on PLIG-7191.
+
+Based on your feedback and my analysis, my proposed approach is to implement a new validation rule specific to the **Loan-OnePATHE (New/Initial Funding)** record type to prevent a CPM user from moving directly to **Submitted for Underwriting** unless the Opportunity has reached **Proposal Accepted**. This would not impact the **Renewal/Mod/Extension** process.
+
+Before I start the implementation, I'd like to review the analysis and proposed approach with Josh and Jose to make sure we're aligned.
+
+Also, could you please confirm whether this defect is expected to be included in the current release or planned for a future release?
+
+Thanks,
+Pratik
+
