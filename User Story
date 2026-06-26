@@ -1,3 +1,24 @@
+This request extends the existing Salesforce Flow CRM_Loan-OnePATHE_Always_Create_Oppty_Identified (built in PLIG-6915) to cover all remaining Loan Opportunity record types, ensuring they are always created at the correct default stage.
+
+Changes Made
+1. Flow — Save As New Version
+Renamed the existing flow to reflect all Loan opportunity types:
+
+Flow Label: CRM All Loan Opportunities Always Create Oppty Identified
+Description: As a Relationship Manager (RM) I want newly created Loan-OnePATHE, Loan-LenderAi, Loan-NLP, and Loan-OPX Opportunities to always default to the "Opportunity Identified" stage, So that I can create the Opportunity without being prompted for information needed only in later stages.
+
+Added 3 new OR conditions to the Start node (existing OnePATHE conditions remain untouched):
+FieldOperatorValueRecord Type Dev NameEqualsBKU_Loan_LenderAiRecord Type Dev NameEqualsBKU_Loan_NLPRecord Type Dev NameEqualsBKU_Loan_OPX
+Stage Update step remains unchanged — Stage = "Opportunity Identified" applies to all Loan types.
+
+2. Deposit Opportunity — No Flow Changes
+The existing process already defaults the Deposit Opportunity Stage to "Initial Conversation". No new flow was created for Deposit. Only the page layout change is required (see below).
+
+3. Page Layout Changes — Remove Stage Field
+Removed the Stage field from the Opportunity creation screen for the following record types:
+Record TypeLayout ChangeDepositStage field removedLoan - LenderAiStage field removedLoan - NLPStage field removedLoan - OPX (New, Renewal, Mod)Stage field removedLoan - OnePATHE (Pay-Down, Pay-Off, Advance)Already completed in PLIG-6915
+
+
 Thanks, Mariela, for sharing the full list of 13 permission sets related to the TS_COA_ACH_Originations__c field.
 
 I reviewed all 13 permission sets in the Dev FSC org, and I found that only 10 of them exist in this environment.
