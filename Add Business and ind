@@ -1,3 +1,65 @@
+// ── Step 1: Get RecordTypes ──────────────────────────────────────
+RecordType businessRT = [SELECT Id FROM RecordType 
+                          WHERE SObjectType = 'Account' AND DeveloperName = 'Business' LIMIT 1];
+RecordType individualRT = [SELECT Id FROM RecordType 
+                            WHERE SObjectType = 'Account' AND DeveloperName = 'Individual' LIMIT 1];
+RecordType depositRT = [SELECT Id FROM RecordType 
+                         WHERE SObjectType = 'FinServ__FinancialAccount__c' 
+                         AND DeveloperName = 'BankingAccount' LIMIT 1];
+
+// ── Step 2: Create Business Account (Primary Owner) ──────────────
+Account bizPO = new Account(
+    Name = 'Test Biz Smoke',
+    RecordTypeId = businessRT.Id,
+    BillingCity = 'Miami',
+    BillingCountry = 'United States',
+    BillingPostalCode = '33101',
+    BillingState = 'Florida',
+    BillingStreet = '1 Biz Ave',
+    Phone = '555-000-0001'
+);
+insert bizPO;
+
+// ── Step 3: Create Individual/Person Account (Related Account) ───
+Account indvRA = new Account(
+    LastName = 'Test Indv Smoke',
+    RecordTypeId = individualRT.Id,
+    PersonMailingCity = 'Miami',
+    PersonMailingCountry = 'United States',
+    PersonMailingPostalCode = '33101',
+    PersonMailingState = 'Florida',
+    PersonMailingStreet = '1 Main St'
+);
+insert indvRA;
+
+// Re-query to get PersonContactId (only populated after insert)
+indvRA = [SELECT Id, PersonContactId FROM Account WHERE Id = :indvRA.Id];
+System.debug('PersonContactId: ' + indvRA.PersonContactId);
+
+// ── Step 4: Create Deposit Financial Account ──────────────────────
+FinServ__FinancialAccount__c fa = new FinServ__FinancialAccount__c(
+    Name = 'Test Deposit FA Smoke',
+    RecordTypeId = depositRT.Id,
+    FinServ__PrimaryOwner__c = bizPO.Id,
+    BKU_Special_Case__c = 'FIDUCIARY',
+    FinServ__Status__c = 'Open'
+);
+insert fa;
+
+System.debug('Business PO Id: ' + bizPO.Id);
+System.debug('Individual RA Id: ' + indvRA.Id);
+System.debug('FA Id: ' + fa.Id);
+
+// ── Step 5: Insert Financial Account Role (the actual AC1 trigger) ─
+insert new FinServ__FinancialAccountRole__c(
+    FinServ__FinancialAccount__c = fa.Id,
+    FinServ__RelatedAccount__c = indvRA.Id,
+    FinServ__Role__c = 'Escrow Agent'
+);
+
+// ── Step 6: Check Result ──────────────────────────────────────────
+System.debug([SELECT Id, Roles FROM AccountContactRelation WHERE AccountId = :bizPO.Id]);
+
 RecordType depositRT = [SELECT Id FROM RecordType 
                          WHERE SObjectType = 'FinServ__FinancialAccount__c' 
                          AND DeveloperName = 'BankingAccount' LIMIT 1]; // confirm correct RT first
