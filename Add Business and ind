@@ -1,3 +1,14 @@
+System.debug('--- Reciprocal Roles for Escrow Agent / Joint Owner ---');
+System.debug([SELECT Id, Name, RecordType.DeveloperName, FinServ__InverseRole__c
+              FROM FinServ__ReciprocalRole__c
+              WHERE Name IN ('Escrow Agent', 'Joint Owner')]);
+
+System.debug('--- Special Case picklist values ---');
+Schema.DescribeFieldResult specialCaseField = FinServ__FinancialAccount__c.FinServ__SpecialCase__c.getDescribe();
+for (Schema.PicklistEntry entry : specialCaseField.getPicklistValues()) {
+    System.debug(entry.getValue());
+}
+
 System.debug('--- Accounts ---');
 System.debug([SELECT Id, Name, LastName, RecordType.DeveloperName FROM Account 
               WHERE Name IN ('Test Biz') OR LastName IN ('Test Indv')]);
