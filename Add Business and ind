@@ -1,3 +1,8 @@
+System.debug([SELECT BKU_Special_Case__c, COUNT(Id) cnt 
+              FROM FinServ__FinancialAccount__c 
+              WHERE BKU_Special_Case__c != null 
+              GROUP BY BKU_Special_Case__c]);
+
 // Confirm FinServ__Role__c is actually a picklist with these exact values
 Schema.DescribeFieldResult roleField = FinServ__FinancialAccountRole__c.FinServ__Role__c.getDescribe();
 System.debug('Field Type: ' + roleField.getType());
