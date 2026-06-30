@@ -1,3 +1,9 @@
+FinServ__FinancialAccount__c fa = [SELECT Id, BKU_Special_Case__c 
+                                     FROM FinServ__FinancialAccount__c 
+                                     WHERE Name = 'Test Deposit FA' LIMIT 1];
+fa.BKU_Special_Case__c = 'FIDUCIARY';
+update fa;
+
 System.debug([SELECT BKU_Special_Case__c, COUNT(Id) cnt 
               FROM FinServ__FinancialAccount__c 
               WHERE BKU_Special_Case__c != null 
