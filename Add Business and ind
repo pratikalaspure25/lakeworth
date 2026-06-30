@@ -1,3 +1,21 @@
+System.debug('--- Accounts ---');
+System.debug([SELECT Id, Name, LastName, RecordType.DeveloperName FROM Account 
+              WHERE Name IN ('Test Biz') OR LastName IN ('Test Indv')]);
+
+System.debug('--- Financial Accounts ---');
+System.debug([SELECT Id, Name, RecordType.DeveloperName, FinServ__SpecialCase__c 
+              FROM FinServ__FinancialAccount__c WHERE Name = 'Test Deposit FA']);
+
+System.debug('--- Reciprocal Roles ---');
+System.debug([SELECT Id, Name, RecordType.DeveloperName FROM FinServ__ReciprocalRole__c 
+              WHERE Name IN ('Escrow Agent', 'Joint Owner')]);
+
+System.debug('--- Account RecordTypes ---');
+System.debug([SELECT Id, DeveloperName FROM RecordType WHERE SObjectType = 'Account']);
+
+System.debug('--- Financial Account RecordTypes ---');
+System.debug([SELECT Id, DeveloperName FROM RecordType WHERE SObjectType = 'FinServ__FinancialAccount__c']);
+
 <template>
     <!-- Add Business Button -->
     <lightning-button 
