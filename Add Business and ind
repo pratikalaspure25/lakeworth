@@ -1,3 +1,17 @@
+// Check if the trigger is active
+List<ApexTrigger> triggers = [
+    SELECT Id, Name, Status, IsValid
+    FROM ApexTrigger
+    WHERE Name = 'FinancialAccountRoleTrigger'
+];
+
+System.debug('Trigger count: ' + triggers.size());
+for (ApexTrigger t : triggers) {
+    System.debug('Name: ' + t.Name 
+        + ' | Status: ' + t.Status 
+        + ' | IsValid: ' + t.IsValid);
+}
+
 // Check the FAR we created today
 List<FinServ__FinancialAccountRole__c> fars = [
     SELECT Id,
