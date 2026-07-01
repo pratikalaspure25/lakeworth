@@ -1,3 +1,32 @@
+// Get an existing Financial Account
+FinServ__FinancialAccount__c fa = [
+    SELECT Id
+    FROM FinServ__FinancialAccount__c
+    WHERE Name = 'AC1 Test Deposit FA'
+    LIMIT 1
+];
+
+// Get an existing Individual Account
+Account indvRA = [
+    SELECT Id
+    FROM Account
+    WHERE LastName = 'AC1 Test Individual RA'
+    LIMIT 1
+];
+
+// Create a NEW FAR
+FinServ__FinancialAccountRole__c far = new FinServ__FinancialAccountRole__c(
+    FinServ__FinancialAccount__c = fa.Id,
+    FinServ__RelatedAccount__c   = indvRA.Id,
+    FinServ__Role__c             = 'Escrow Agent'
+);
+
+insert far;
+
+System.debug('NEW FAR CREATED: ' + far.Id);
+
+
+
 List<FinServ__FinancialAccountRole__c> fars = [
     SELECT Id, FinServ__Role__c
     FROM FinServ__FinancialAccountRole__c
