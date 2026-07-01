@@ -1,19 +1,8 @@
-// Check which Account RecordTypes are visible to YOUR running user
-List<RecordType> visible = [
-    SELECT Id, Name, DeveloperName 
-    FROM RecordType 
-    WHERE SObjectType = 'Account'
-    AND IsActive = true
-];
-for (RecordType rt : visible) {
-    System.debug(rt.DeveloperName + ' | ' + rt.Name + ' | ' + rt.Id);
-}
-
-// ── STEP 1: Get RecordTypes ──────────────────────────────────────
+// ── STEP 1: Get RecordTypes (using accessible ones) ──────────────
 RecordType businessRT = [
     SELECT Id FROM RecordType
     WHERE SObjectType = 'Account'
-    AND DeveloperName = 'Business'
+    AND DeveloperName = 'IndustriesBusiness'
     LIMIT 1
 ];
 System.debug('Business RT: ' + businessRT.Id);
@@ -21,7 +10,7 @@ System.debug('Business RT: ' + businessRT.Id);
 RecordType individualRT = [
     SELECT Id FROM RecordType
     WHERE SObjectType = 'Account'
-    AND DeveloperName = 'Individual'
+    AND DeveloperName = 'IndustriesIndividual'
     LIMIT 1
 ];
 System.debug('Individual RT: ' + individualRT.Id);
@@ -60,13 +49,10 @@ Account indvRA = new Account(
     PersonEmail             = 'ac1test@test.com'
 );
 insert indvRA;
-
-// Re-query to get PersonContactId
 indvRA = [SELECT Id, PersonContactId FROM Account WHERE Id = :indvRA.Id];
-System.debug('Individual RA created: ' + indvRA.Id);
-System.debug('PersonContactId: ' + indvRA.PersonContactId);
+System.debug('Individual RA PersonContactId: ' + indvRA.PersonContactId);
 
-// ── STEP 4: Create Deposit Financial Account ─────────────────────
+// ── STEP 4: Create Deposit FA ────────────────────────────────────
 FinServ__FinancialAccount__c fa = new FinServ__FinancialAccount__c(
     Name                     = 'AC1 Test Deposit FA',
     RecordTypeId             = depositRT.Id,
@@ -75,36 +61,34 @@ FinServ__FinancialAccount__c fa = new FinServ__FinancialAccount__c(
     FinServ__Status__c       = 'Open'
 );
 insert fa;
-System.debug('Financial Account created: ' + fa.Id);
+System.debug('FA created: ' + fa.Id);
 
-// ── STEP 5: Insert FAR — this fires the trigger ──────────────────
-FinServ__FinancialAccountRole__c far = new FinServ__FinancialAccountRole__c(
+// ── STEP 5: Insert FAR — fires trigger ───────────────────────────
+insert new FinServ__FinancialAccountRole__c(
     FinServ__FinancialAccount__c = fa.Id,
     FinServ__RelatedAccount__c   = indvRA.Id,
     FinServ__Role__c             = 'Escrow Agent'
 );
-insert far;
-System.debug('FAR inserted: ' + far.Id);
+System.debug('FAR inserted successfully');
 
-// ── STEP 6: Wait for Queueable then check result ─────────────────
-// Queueable runs async — check manually after a few seconds
-System.debug('FAR inserted. Now check ACR result below:');
+System.debug('Queueable is async - wait 5 seconds then run check script');
+System.debug('BizPO Id: ' + bizPO.Id);
+System.debug('PersonContactId: ' + indvRA.PersonContactId);
 
-List<AccountContactRelation> acrs = [
-    SELECT Id, Roles, AccountId, ContactId
-    FROM AccountContactRelation
-    WHERE AccountId = :bizPO.Id
-    AND   ContactId = :indvRA.PersonContactId
+
+
+
+// Check which Account RecordTypes are visible to YOUR running user
+List<RecordType> visible = [
+    SELECT Id, Name, DeveloperName 
+    FROM RecordType 
+    WHERE SObjectType = 'Account'
+    AND IsActive = true
 ];
-
-System.debug('ACR Count: ' + acrs.size());
-if (!acrs.isEmpty()) {
-    System.debug('ACR Roles: ' + acrs[0].Roles);
-    System.debug('SUCCESS: AC1 is working');
-} else {
-    System.debug('ACR not found yet - Queueable may still be running');
-    System.debug('Wait 5 seconds and run Step 7 separately');
+for (RecordType rt : visible) {
+    System.debug(rt.DeveloperName + ' | ' + rt.Name + ' | ' + rt.Id);
 }
+
 
 
 public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
