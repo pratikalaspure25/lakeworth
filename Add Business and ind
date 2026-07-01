@@ -1,3 +1,21 @@
+// Check if our new classes exist and are valid
+List<ApexClass> classes = [
+    SELECT Id, Name, Status, IsValid
+    FROM ApexClass
+    WHERE Name IN (
+        'FinancialAccountRoleTriggerHandler',
+        'EscrowJointOwnerFARQueueable',
+        'FinancialAccountRoleQueueable'
+    )
+];
+
+System.debug('Class count: ' + classes.size());
+for (ApexClass c : classes) {
+    System.debug('Name: ' + c.Name 
+        + ' | Status: ' + c.Status 
+        + ' | IsValid: ' + c.IsValid);
+}
+
 // Check if the trigger is active
 List<ApexTrigger> triggers = [
     SELECT Id, Name, Status, IsValid
