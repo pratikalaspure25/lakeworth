@@ -1,3 +1,28 @@
+System.debug('--- Check Async Jobs ---');
+
+List<AsyncApexJob> jobs = [
+    SELECT Id,
+           JobType,
+           Status,
+           MethodName,
+           ApexClass.Name,
+           CreatedDate,
+           NumberOfErrors
+    FROM AsyncApexJob
+    ORDER BY CreatedDate DESC
+    LIMIT 20
+];
+
+for(AsyncApexJob job : jobs){
+    System.debug(
+        'Class=' + job.ApexClass.Name +
+        ' | Type=' + job.JobType +
+        ' | Status=' + job.Status +
+        ' | Errors=' + job.NumberOfErrors
+    );
+}
+
+
 List<FinServ__FinancialAccountRole__c> fars = [
     SELECT Id, FinServ__Role__c
     FROM FinServ__FinancialAccountRole__c
