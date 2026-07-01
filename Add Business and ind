@@ -1,3 +1,14 @@
+// Check which Account RecordTypes are visible to YOUR running user
+List<RecordType> visible = [
+    SELECT Id, Name, DeveloperName 
+    FROM RecordType 
+    WHERE SObjectType = 'Account'
+    AND IsActive = true
+];
+for (RecordType rt : visible) {
+    System.debug(rt.DeveloperName + ' | ' + rt.Name + ' | ' + rt.Id);
+}
+
 // ── STEP 1: Get RecordTypes ──────────────────────────────────────
 RecordType businessRT = [
     SELECT Id FROM RecordType
