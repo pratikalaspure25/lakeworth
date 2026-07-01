@@ -1,29 +1,27 @@
 public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
 
-    // ── Constants ────────────────────────────────────────────────────────────
+    // ── Constants ────────────────────────────────────────────────────
     private static final Set<String> QUALIFYING_ROLES = new Set<String>{
         'Escrow Agent',
         'Joint Owner'
     };
     private static final Set<String> QUALIFYING_SPECIAL_CASES = new Set<String>{
-        'IOLA',
-        'IOLTA',
-        'Fiduciary'
+        'FIDUCIARY',
+        'IOLA/IOLTA'
     };
-    // ⚠️ Confirm this DeveloperName in your org before deploying
-    private static final String DEPOSIT_RT_DEV_NAME = 'DepositAccount';
+    private static final String DEPOSIT_RT_DEV_NAME = 'BankingAccount';
     private static final String TYPE_INDIVIDUAL     = 'Individual';
     private static final String TYPE_BUSINESS       = 'Business';
     private static final String ASSOC_TYPE_PEER     = 'Peer';
     private static final String HELPDESK_EMAIL      = 'crm360helpdesk@bankunited.com';
     private static final Integer MAX_RETRIES        = 3;
 
-    // ── Instance Variables ───────────────────────────────────────────────────
+    // ── Instance Variables ───────────────────────────────────────────
     private List<FinServ__FinancialAccountRole__c> insertedFARs;
     private List<FinServ__FinancialAccountRole__c> deletedFARs;
     private Integer retryCount;
 
-    // ── Constructors ─────────────────────────────────────────────────────────
+    // ── Constructors ─────────────────────────────────────────────────
     public EscrowJointOwnerFARQueueable(
         List<FinServ__FinancialAccountRole__c> insertedFARs,
         List<FinServ__FinancialAccountRole__c> deletedFARs
@@ -41,7 +39,7 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
         this.retryCount   = retryCount;
     }
 
-    // ── Execute ──────────────────────────────────────────────────────────────
+    // ── Execute ──────────────────────────────────────────────────────
     public void execute(QueueableContext context) {
         try {
             if (insertedFARs != null && !insertedFARs.isEmpty()) {
@@ -59,9 +57,9 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
         }
     }
 
-    // =========================================================================
-    // INSERT PROCESSING
-    // =========================================================================
+    // =========================================================
+    // PROCESS INSERTS — AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8
+    // =========================================================
     private void processInserts(
         List<FinServ__FinancialAccountRole__c> farList
     ) {
@@ -69,48 +67,75 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
             farList
         ).keySet();
 
-        // ── Step 1: Enrich with all needed fields ────────────────────────────
+        // Step 1: Enrich with all needed fields
         List<FinServ__FinancialAccountRole__c> enriched = [
-            SELECT
-                Id,
-                FinServ__Role__c,
-                FinServ__RelatedAccount__c,
-                FinServ__RelatedAccount__r.BKU_Record_Type_Name__c,
-                FinServ__RelatedAccount__r.PersonContactId,
-                FinServ__FinancialAccount__c,
-                FinServ__FinancialAccount__r.RecordType.DeveloperName,
-                FinServ__FinancialAccount__r.FinServ__SpecialCase__c,
-                FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c,
-                FinServ__FinancialAccount__r.FinServ__PrimaryOwner__r.BKU_Record_Type_Name__c,
-                FinServ__FinancialAccount__r.FinServ__PrimaryOwner__r.PersonContactId
+            SELECT Id,
+                   FinServ__Role__c,
+                   FinServ__RelatedAccount__c,
+                   FinServ__RelatedAccount__r.BKU_Record_Type_Name__c,
+                   FinServ__RelatedAccount__r.PersonContactId,
+                   FinServ__FinancialAccount__c,
+                   FinServ__FinancialAccount__r.RecordType.DeveloperName,
+                   FinServ__FinancialAccount__r.BKU_Special_Case__c,
+                   FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c,
+                   FinServ__FinancialAccount__r.FinServ__PrimaryOwner__r.BKU_Record_Type_Name__c,
+                   FinServ__FinancialAccount__r.FinServ__PrimaryOwner__r.PersonContactId
             FROM FinServ__FinancialAccountRole__c
             WHERE Id IN :farIds
         ];
 
-        // ── Step 2: Apply business filters (Deposit + IOLA/FIDUCIARY) ────────
+        // Step 2: Apply business filter
+        // Only Deposit FA + FIDUCIARY or IOLA/IOLTA qualifies
         List<FinServ__FinancialAccountRole__c> qualified =
             applyBusinessFilter(enriched);
         if (qualified.isEmpty()) return;
 
-        // ── Step 3: Get ReciprocalRole IDs ───────────────────────────────────
+        // Step 3: Get Reciprocal Role IDs for CCR and AAR
         Map<String, Id> acctRoleMap = getReciprocalRoleIdMap('AccountRole');
         Map<String, Id> contRoleMap = getReciprocalRoleIdMap('ContactRole');
 
-        // ── Step 4: Build contexts ────────────────────────────────────────────
+        // Step 4: Build contexts
         List<FARContext> contexts = buildContexts(qualified);
 
-        // ── Step 5: Collect IDs for bulk queries ──────────────────────────────
+        // Step 5: Collect IDs for bulk queries
         Set<Id> acrAccountIds = new Set<Id>();
         Set<Id> acrContactIds = new Set<Id>();
         Set<Id> ccrContactIds = new Set<Id>();
         Set<Id> aarAccountIds = new Set<Id>();
-        collectQueryIds(
-            contexts,
-            acrAccountIds, acrContactIds,
-            ccrContactIds, aarAccountIds
-        );
 
-        // ── Step 6: Query existing records (prevent duplicates) ───────────────
+        for (FARContext ctx : contexts) {
+            // AC1/AC2: Business PO + Individual RA
+            if (ctx.poType == TYPE_BUSINESS
+                    && ctx.raType == TYPE_INDIVIDUAL) {
+                acrAccountIds.add(ctx.poId);
+                if (ctx.raPersonContactId != null) {
+                    acrContactIds.add(ctx.raPersonContactId);
+                }
+            // AC3/AC4: Individual PO + Individual RA
+            } else if (ctx.poType == TYPE_INDIVIDUAL
+                    && ctx.raType == TYPE_INDIVIDUAL) {
+                if (ctx.poPersonContactId != null) {
+                    ccrContactIds.add(ctx.poPersonContactId);
+                }
+                if (ctx.raPersonContactId != null) {
+                    ccrContactIds.add(ctx.raPersonContactId);
+                }
+            // AC5/AC6: Individual PO + Business RA
+            } else if (ctx.poType == TYPE_INDIVIDUAL
+                    && ctx.raType == TYPE_BUSINESS) {
+                acrAccountIds.add(ctx.raId);
+                if (ctx.poPersonContactId != null) {
+                    acrContactIds.add(ctx.poPersonContactId);
+                }
+            // AC7/AC8: Business PO + Business RA
+            } else if (ctx.poType == TYPE_BUSINESS
+                    && ctx.raType == TYPE_BUSINESS) {
+                aarAccountIds.add(ctx.poId);
+                aarAccountIds.add(ctx.raId);
+            }
+        }
+
+        // Step 6: Query existing records to prevent duplicates
         Map<String, AccountContactRelation> existingACRs =
             queryExistingACRs(acrAccountIds, acrContactIds);
         Map<String, FinServ__ContactContactRelation__c> existingCCRs =
@@ -118,7 +143,7 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
         Map<String, FinServ__AccountAccountRelation__c> existingAARs =
             queryExistingAARs(aarAccountIds);
 
-        // ── Step 7: Build DML collections ─────────────────────────────────────
+        // Step 7: Build DML lists
         List<AccountContactRelation> acrToCreate =
             new List<AccountContactRelation>();
         List<AccountContactRelation> acrToUpdate =
@@ -136,11 +161,12 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
             Id     contRoleId = contRoleMap.get(roleLabel);
             Id     acctRoleId = acctRoleMap.get(roleLabel);
 
-            // AC1/AC2: Business PO + Individual RA → ACR
-            if (ctx.poType == TYPE_BUSINESS && ctx.raType == TYPE_INDIVIDUAL) {
+            // ── AC1/AC2: Business PO + Individual RA → ACR ───────────
+            if (ctx.poType == TYPE_BUSINESS
+                    && ctx.raType == TYPE_INDIVIDUAL) {
                 if (ctx.raPersonContactId == null) {
                     errors.add('RA ' + ctx.raId
-                        + ' missing PersonContactId. FAR: ' + ctx.farId);
+                        + ' has no PersonContactId. FAR: ' + ctx.farId);
                     continue;
                 }
                 String key = ctx.poId + '_' + ctx.raPersonContactId;
@@ -157,12 +183,13 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
                     );
                 }
 
-            // AC3/AC4: Individual PO + Individual RA → CCR
+            // ── AC3/AC4: Individual PO + Individual RA → CCR ─────────
             } else if (ctx.poType == TYPE_INDIVIDUAL
                     && ctx.raType == TYPE_INDIVIDUAL) {
                 if (ctx.poPersonContactId == null
                         || ctx.raPersonContactId == null) {
-                    errors.add('Missing PersonContactId. FAR: ' + ctx.farId);
+                    errors.add('Missing PersonContactId on PO or RA.'
+                        + ' FAR: ' + ctx.farId);
                     continue;
                 }
                 if (contRoleId == null) {
@@ -181,12 +208,12 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
                     ));
                 }
 
-            // AC5/AC6: Individual PO + Business RA → ACR (reversed)
+            // ── AC5/AC6: Individual PO + Business RA → ACR reversed ──
             } else if (ctx.poType == TYPE_INDIVIDUAL
                     && ctx.raType == TYPE_BUSINESS) {
                 if (ctx.poPersonContactId == null) {
                     errors.add('PO ' + ctx.poId
-                        + ' missing PersonContactId. FAR: ' + ctx.farId);
+                        + ' has no PersonContactId. FAR: ' + ctx.farId);
                     continue;
                 }
                 String key = ctx.raId + '_' + ctx.poPersonContactId;
@@ -203,7 +230,7 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
                     );
                 }
 
-            // AC7/AC8: Business PO + Business RA → AAR
+            // ── AC7/AC8: Business PO + Business RA → AAR ─────────────
             } else if (ctx.poType == TYPE_BUSINESS
                     && ctx.raType == TYPE_BUSINESS) {
                 if (acctRoleId == null) {
@@ -211,7 +238,8 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
                         + roleLabel + '" not found. FAR: ' + ctx.farId);
                     continue;
                 }
-                String key = ctx.poId + '_' + ctx.raId + '_' + acctRoleId;
+                String key = ctx.poId + '_' + ctx.raId
+                    + '_' + acctRoleId;
                 if (!existingAARs.containsKey(key)) {
                     aarToCreate.add(
                         buildAAR(ctx.poId, ctx.raId, acctRoleId)
@@ -220,7 +248,7 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
             }
         }
 
-        // ── Step 8: Execute DML ───────────────────────────────────────────────
+        // Step 8: Execute DML
         List<FinServ__FinancialAccountRole__c> retryFARs =
             new List<FinServ__FinancialAccountRole__c>();
 
@@ -254,17 +282,20 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
 
         if (!acrToUpdate.isEmpty()) {
             collectErrors(
-                Database.update(acrToUpdate, false), 'ACR Update', errors
+                Database.update(acrToUpdate, false),
+                'ACR Update', errors
             );
         }
         if (!ccrToCreate.isEmpty()) {
             collectErrors(
-                Database.insert(ccrToCreate, false), 'CCR Insert', errors
+                Database.insert(ccrToCreate, false),
+                'CCR Insert', errors
             );
         }
         if (!aarToCreate.isEmpty()) {
             collectErrors(
-                Database.insert(aarToCreate, false), 'AAR Insert', errors
+                Database.insert(aarToCreate, false),
+                'AAR Insert', errors
             );
         }
 
@@ -273,12 +304,14 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
                 retryFARs, null, retryCount + 1
             ));
         }
-        if (!errors.isEmpty()) sendErrorEmail(String.join(errors, '\n'));
+        if (!errors.isEmpty()) {
+            sendErrorEmail(String.join(errors, '\n'));
+        }
     }
 
-    // =========================================================================
-    // DELETE PROCESSING
-    // =========================================================================
+    // =========================================================
+    // PROCESS DELETES — AC9, AC10
+    // =========================================================
     private void processDeletes(
         List<FinServ__FinancialAccountRole__c> farList
     ) {
@@ -289,20 +322,20 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
             raIds.add(far.FinServ__RelatedAccount__c);
         }
 
-        // ── Step 1: Fetch FA + RA details ────────────────────────────────────
+        // Fetch FA details
         Map<Id, FinServ__FinancialAccount__c> faMap =
             new Map<Id, FinServ__FinancialAccount__c>([
-                SELECT
-                    Id,
-                    RecordType.DeveloperName,
-                    FinServ__SpecialCase__c,
-                    FinServ__PrimaryOwner__c,
-                    FinServ__PrimaryOwner__r.BKU_Record_Type_Name__c,
-                    FinServ__PrimaryOwner__r.PersonContactId
+                SELECT Id,
+                       RecordType.DeveloperName,
+                       BKU_Special_Case__c,
+                       FinServ__PrimaryOwner__c,
+                       FinServ__PrimaryOwner__r.BKU_Record_Type_Name__c,
+                       FinServ__PrimaryOwner__r.PersonContactId
                 FROM FinServ__FinancialAccount__c
                 WHERE Id IN :faIds
             ]);
 
+        // Fetch RA details
         Map<Id, Account> raMap = new Map<Id, Account>([
             SELECT Id, BKU_Record_Type_Name__c, PersonContactId
             FROM Account
@@ -312,7 +345,7 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
         Map<String, Id> acctRoleMap = getReciprocalRoleIdMap('AccountRole');
         Map<String, Id> contRoleMap = getReciprocalRoleIdMap('ContactRole');
 
-        // ── Step 2: Build delete contexts (only qualified FARs) ───────────────
+        // Build delete contexts — only qualified FARs
         List<FARContext> allContexts = new List<FARContext>();
         for (FinServ__FinancialAccountRole__c far : farList) {
             FinServ__FinancialAccount__c fa =
@@ -320,6 +353,7 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
             Account ra = raMap.get(far.FinServ__RelatedAccount__c);
             if (fa == null || ra == null) continue;
             if (!isQualifiedFA(fa)) continue;
+
             allContexts.add(new FARContext(
                 far.Id,
                 far.FinServ__Role__c,
@@ -334,7 +368,8 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
         }
         if (allContexts.isEmpty()) return;
 
-        // ── Step 3: Guard — only delete if NO other qualifying FAR remains ────
+        // Guard: only remove if no other qualifying FAR
+        // still links same PO + RA + Role
         Set<Id> poIds = new Set<Id>();
         for (FARContext ctx : allContexts) poIds.add(ctx.poId);
 
@@ -343,33 +378,35 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
             SELECT Id
             FROM FinServ__FinancialAccount__c
             WHERE FinServ__PrimaryOwner__c IN :poIds
-              AND RecordType.DeveloperName = :DEPOSIT_RT_DEV_NAME
-              AND FinServ__SpecialCase__c IN :QUALIFYING_SPECIAL_CASES
+              AND RecordType.DeveloperName  = :DEPOSIT_RT_DEV_NAME
+              AND BKU_Special_Case__c       IN :QUALIFYING_SPECIAL_CASES
         ]) {
             qualifiedFAIds.add(fa.Id);
         }
 
-        // Count remaining FARs per PO+RA+Role combination
-        Map<String, Integer> remainingCount = new Map<String, Integer>();
+        Map<String, Integer> remainingCount =
+            new Map<String, Integer>();
         for (FinServ__FinancialAccountRole__c remaining : [
-            SELECT
-                Id,
-                FinServ__Role__c,
-                FinServ__RelatedAccount__c,
-                FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c
+            SELECT Id,
+                   FinServ__Role__c,
+                   FinServ__RelatedAccount__c,
+                   FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c
             FROM FinServ__FinancialAccountRole__c
             WHERE FinServ__FinancialAccount__c IN :qualifiedFAIds
               AND FinServ__RelatedAccount__c   IN :raIds
               AND FinServ__Role__c             IN :QUALIFYING_ROLES
         ]) {
             String key =
-                remaining.FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c
+                remaining.FinServ__FinancialAccount__r
+                    .FinServ__PrimaryOwner__c
                 + '_' + remaining.FinServ__RelatedAccount__c
                 + '_' + remaining.FinServ__Role__c;
-            remainingCount.put(key, (remainingCount.get(key) ?? 0) + 1);
+            remainingCount.put(
+                key, (remainingCount.get(key) ?? 0) + 1
+            );
         }
 
-        // Only process FARs with zero remaining siblings
+        // Only remove relationships with zero remaining FARs
         List<FARContext> toRemove = new List<FARContext>();
         for (FARContext ctx : allContexts) {
             String key = ctx.poId + '_' + ctx.raId + '_' + ctx.role;
@@ -379,16 +416,39 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
         }
         if (toRemove.isEmpty()) return;
 
-        // ── Step 4: Collect IDs + query existing relationships ────────────────
+        // Collect IDs for bulk queries
         Set<Id> acrAccountIds = new Set<Id>();
         Set<Id> acrContactIds = new Set<Id>();
         Set<Id> ccrContactIds = new Set<Id>();
         Set<Id> aarAccountIds = new Set<Id>();
-        collectQueryIds(
-            toRemove,
-            acrAccountIds, acrContactIds,
-            ccrContactIds, aarAccountIds
-        );
+
+        for (FARContext ctx : toRemove) {
+            if (ctx.poType == TYPE_BUSINESS
+                    && ctx.raType == TYPE_INDIVIDUAL) {
+                acrAccountIds.add(ctx.poId);
+                if (ctx.raPersonContactId != null) {
+                    acrContactIds.add(ctx.raPersonContactId);
+                }
+            } else if (ctx.poType == TYPE_INDIVIDUAL
+                    && ctx.raType == TYPE_INDIVIDUAL) {
+                if (ctx.poPersonContactId != null) {
+                    ccrContactIds.add(ctx.poPersonContactId);
+                }
+                if (ctx.raPersonContactId != null) {
+                    ccrContactIds.add(ctx.raPersonContactId);
+                }
+            } else if (ctx.poType == TYPE_INDIVIDUAL
+                    && ctx.raType == TYPE_BUSINESS) {
+                acrAccountIds.add(ctx.raId);
+                if (ctx.poPersonContactId != null) {
+                    acrContactIds.add(ctx.poPersonContactId);
+                }
+            } else if (ctx.poType == TYPE_BUSINESS
+                    && ctx.raType == TYPE_BUSINESS) {
+                aarAccountIds.add(ctx.poId);
+                aarAccountIds.add(ctx.raId);
+            }
+        }
 
         Map<String, AccountContactRelation> existingACRs =
             queryExistingACRs(acrAccountIds, acrContactIds);
@@ -397,7 +457,6 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
         Map<String, FinServ__AccountAccountRelation__c> existingAARs =
             queryExistingAARs(aarAccountIds);
 
-        // ── Step 5: Build delete/update maps ──────────────────────────────────
         Map<Id, AccountContactRelation> acrToUpdateMap =
             new Map<Id, AccountContactRelation>();
         Map<Id, AccountContactRelation> acrToDeleteMap =
@@ -413,10 +472,13 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
             Id     contRoleId = contRoleMap.get(roleLabel);
             Id     acctRoleId = acctRoleMap.get(roleLabel);
 
-            if (ctx.poType == TYPE_BUSINESS && ctx.raType == TYPE_INDIVIDUAL) {
+            // AC9/AC10: Business PO + Individual RA
+            if (ctx.poType == TYPE_BUSINESS
+                    && ctx.raType == TYPE_INDIVIDUAL) {
                 if (ctx.raPersonContactId == null) continue;
-                AccountContactRelation acr =
-                    existingACRs.get(ctx.poId + '_' + ctx.raPersonContactId);
+                AccountContactRelation acr = existingACRs.get(
+                    ctx.poId + '_' + ctx.raPersonContactId
+                );
                 if (acr != null) {
                     String updated = removeRole(acr.Roles, roleLabel);
                     if (String.isBlank(updated)) {
@@ -427,6 +489,7 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
                     }
                 }
 
+            // AC9/AC10: Individual PO + Individual RA
             } else if (ctx.poType == TYPE_INDIVIDUAL
                     && ctx.raType == TYPE_INDIVIDUAL) {
                 if (ctx.raPersonContactId == null
@@ -438,11 +501,13 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
                     existingCCRs.get(key);
                 if (ccr != null) ccrToDeleteMap.put(ccr.Id, ccr);
 
+            // AC9/AC10: Individual PO + Business RA
             } else if (ctx.poType == TYPE_INDIVIDUAL
                     && ctx.raType == TYPE_BUSINESS) {
                 if (ctx.poPersonContactId == null) continue;
-                AccountContactRelation acr =
-                    existingACRs.get(ctx.raId + '_' + ctx.poPersonContactId);
+                AccountContactRelation acr = existingACRs.get(
+                    ctx.raId + '_' + ctx.poPersonContactId
+                );
                 if (acr != null) {
                     String updated = removeRole(acr.Roles, roleLabel);
                     if (String.isBlank(updated)) {
@@ -453,16 +518,18 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
                     }
                 }
 
+            // AC9/AC10: Business PO + Business RA
             } else if (ctx.poType == TYPE_BUSINESS
                     && ctx.raType == TYPE_BUSINESS) {
-                String key = ctx.poId + '_' + ctx.raId + '_' + acctRoleId;
+                String key = ctx.poId + '_' + ctx.raId
+                    + '_' + acctRoleId;
                 FinServ__AccountAccountRelation__c aar =
                     existingAARs.get(key);
                 if (aar != null) aarToDeleteMap.put(aar.Id, aar);
             }
         }
 
-        // ── Step 6: Execute DML ───────────────────────────────────────────────
+        // Execute DML
         AccountContactRelationTriggerHandler.suppressTrigger = true;
         try {
             if (!acrToUpdateMap.isEmpty()) {
@@ -494,12 +561,14 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
             );
         }
 
-        if (!errors.isEmpty()) sendErrorEmail(String.join(errors, '\n'));
+        if (!errors.isEmpty()) {
+            sendErrorEmail(String.join(errors, '\n'));
+        }
     }
 
-    // =========================================================================
+    // =========================================================
     // BUSINESS FILTER
-    // =========================================================================
+    // =========================================================
     private List<FinServ__FinancialAccountRole__c> applyBusinessFilter(
         List<FinServ__FinancialAccountRole__c> records
     ) {
@@ -513,51 +582,15 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
         return result;
     }
 
-    // Deposit RT + IOLA/IOLTA/Fiduciary Special Case
     private Boolean isQualifiedFA(FinServ__FinancialAccount__c fa) {
         return fa != null
             && fa.RecordType.DeveloperName == DEPOSIT_RT_DEV_NAME
-            && QUALIFYING_SPECIAL_CASES.contains(
-                fa.FinServ__SpecialCase__c
-            );
+            && QUALIFYING_SPECIAL_CASES.contains(fa.BKU_Special_Case__c);
     }
 
-    // =========================================================================
+    // =========================================================
     // QUERY HELPERS
-    // =========================================================================
-    private void collectQueryIds(
-        List<FARContext> contexts,
-        Set<Id> acrAccountIds, Set<Id> acrContactIds,
-        Set<Id> ccrContactIds,  Set<Id> aarAccountIds
-    ) {
-        for (FARContext ctx : contexts) {
-            if (ctx.poType == TYPE_BUSINESS && ctx.raType == TYPE_INDIVIDUAL) {
-                acrAccountIds.add(ctx.poId);
-                if (ctx.raPersonContactId != null) {
-                    acrContactIds.add(ctx.raPersonContactId);
-                }
-            } else if (ctx.poType == TYPE_INDIVIDUAL
-                    && ctx.raType == TYPE_INDIVIDUAL) {
-                if (ctx.poPersonContactId != null) {
-                    ccrContactIds.add(ctx.poPersonContactId);
-                }
-                if (ctx.raPersonContactId != null) {
-                    ccrContactIds.add(ctx.raPersonContactId);
-                }
-            } else if (ctx.poType == TYPE_INDIVIDUAL
-                    && ctx.raType == TYPE_BUSINESS) {
-                acrAccountIds.add(ctx.raId);
-                if (ctx.poPersonContactId != null) {
-                    acrContactIds.add(ctx.poPersonContactId);
-                }
-            } else if (ctx.poType == TYPE_BUSINESS
-                    && ctx.raType == TYPE_BUSINESS) {
-                aarAccountIds.add(ctx.poId);
-                aarAccountIds.add(ctx.raId);
-            }
-        }
-    }
-
+    // =========================================================
     private Map<String, AccountContactRelation> queryExistingACRs(
         Set<Id> accountIds, Set<Id> contactIds
     ) {
@@ -568,7 +601,7 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
             SELECT Id, AccountId, ContactId, Roles
             FROM AccountContactRelation
             WHERE AccountId IN :accountIds
-              AND ContactId IN :contactIds
+              AND ContactId  IN :contactIds
         ]) {
             result.put(acr.AccountId + '_' + acr.ContactId, acr);
         }
@@ -638,9 +671,31 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
         return roleMap;
     }
 
-    // =========================================================================
+    // =========================================================
     // BUILDERS
-    // =========================================================================
+    // =========================================================
+    private List<FARContext> buildContexts(
+        List<FinServ__FinancialAccountRole__c> enriched
+    ) {
+        List<FARContext> contexts = new List<FARContext>();
+        for (FinServ__FinancialAccountRole__c far : enriched) {
+            contexts.add(new FARContext(
+                far.Id,
+                far.FinServ__Role__c,
+                far.FinServ__FinancialAccount__r
+                    .FinServ__PrimaryOwner__r.BKU_Record_Type_Name__c,
+                far.FinServ__RelatedAccount__r.BKU_Record_Type_Name__c,
+                far.FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c,
+                far.FinServ__RelatedAccount__c,
+                far.FinServ__FinancialAccount__r
+                    .FinServ__PrimaryOwner__r.PersonContactId,
+                far.FinServ__RelatedAccount__r.PersonContactId,
+                far
+            ));
+        }
+        return contexts;
+    }
+
     private AccountContactRelation buildACR(
         Id accountId, Id contactId, String roleLabel
     ) {
@@ -677,31 +732,9 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
         return aar;
     }
 
-    private List<FARContext> buildContexts(
-        List<FinServ__FinancialAccountRole__c> enriched
-    ) {
-        List<FARContext> contexts = new List<FARContext>();
-        for (FinServ__FinancialAccountRole__c far : enriched) {
-            contexts.add(new FARContext(
-                far.Id,
-                far.FinServ__Role__c,
-                far.FinServ__FinancialAccount__r
-                    .FinServ__PrimaryOwner__r.BKU_Record_Type_Name__c,
-                far.FinServ__RelatedAccount__r.BKU_Record_Type_Name__c,
-                far.FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c,
-                far.FinServ__RelatedAccount__c,
-                far.FinServ__FinancialAccount__r
-                    .FinServ__PrimaryOwner__r.PersonContactId,
-                far.FinServ__RelatedAccount__r.PersonContactId,
-                far
-            ));
-        }
-        return contexts;
-    }
-
-    // =========================================================================
-    // STRING UTILITIES
-    // =========================================================================
+    // =========================================================
+    // ROLE UTILITIES
+    // =========================================================
     private Boolean roleContains(String roles, String roleToCheck) {
         if (String.isBlank(roles)) return false;
         for (String r : roles.split(';')) {
@@ -725,9 +758,9 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
         return String.join(kept, ';');
     }
 
-    // =========================================================================
+    // =========================================================
     // ERROR HANDLING
-    // =========================================================================
+    // =========================================================
     private void collectErrors(
         Database.SaveResult[] results,
         String ctx,
@@ -763,16 +796,12 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
     private void sendErrorEmail(String errorBody) {
         try {
             List<OrgWideEmailAddress> owas = [
-                SELECT Id
-                FROM OrgWideEmailAddress
-                WHERE Address = :HELPDESK_EMAIL
-                LIMIT 1
+                SELECT Id FROM OrgWideEmailAddress
+                WHERE Address = :HELPDESK_EMAIL LIMIT 1
             ];
             Messaging.SingleEmailMessage email =
                 new Messaging.SingleEmailMessage();
-            email.setToAddresses(
-                new List<String>{ HELPDESK_EMAIL }
-            );
+            email.setToAddresses(new List<String>{ HELPDESK_EMAIL });
             if (!owas.isEmpty()) {
                 email.setOrgWideEmailAddressId(owas[0].Id);
             }
@@ -797,9 +826,9 @@ public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
         }
     }
 
-    // =========================================================================
+    // =========================================================
     // INNER CLASS
-    // =========================================================================
+    // =========================================================
     private class FARContext {
         public Id     farId;
         public String role;
