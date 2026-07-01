@@ -1,3 +1,18 @@
+List<ApexClass> classes = [
+    SELECT Id, Name, Status, IsValid, Body
+    FROM ApexClass
+    WHERE Name = 'FinancialAccountRoleTriggerHandler'
+];
+
+System.debug('Handler count: ' + classes.size());
+for (ApexClass c : classes) {
+    System.debug('Name: ' + c.Name 
+        + ' | Status: ' + c.Status 
+        + ' | IsValid: ' + c.IsValid);
+}
+
+
+
 // Check if our new classes exist and are valid
 List<ApexClass> classes = [
     SELECT Id, Name, Status, IsValid
