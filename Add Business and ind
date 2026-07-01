@@ -1,3 +1,15 @@
+FinServ__FinancialAccountRole__c far = [
+    SELECT Id, FinServ__Role__c
+    FROM FinServ__FinancialAccountRole__c
+    WHERE Id = 'a78090000007PKtyIAG'
+];
+
+System.debug(
+    far.FinServ__Role__c == 'Escrow Agent'
+);
+
+
+
 System.debug('--- Check Async Jobs ---');
 
 List<AsyncApexJob> jobs = [
