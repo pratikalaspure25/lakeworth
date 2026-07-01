@@ -1,3 +1,17 @@
+List<ApexClass> handler = [
+    SELECT Id, Name, Body, LastModifiedDate
+    FROM ApexClass
+    WHERE Name = 'FinancialAccountRoleTriggerHandler'
+    LIMIT 1
+];
+
+System.debug('Class Id: ' + handler[0].Id);
+System.debug('Last Modified: ' + handler[0].LastModifiedDate);
+System.debug('Body first 500 chars: ' + handler[0].Body.left(500));
+
+
+
+
 List<ApexTrigger> triggers = [
     SELECT Id, Name, Status, IsValid, Body
     FROM ApexTrigger
