@@ -1,3 +1,20 @@
+List<ApexClass> cls = [
+    SELECT Id, Name, NamespacePrefix
+    FROM ApexClass
+    WHERE Name = 'FinancialAccountRoleTriggerHandler'
+];
+
+System.debug('Count = ' + cls.size());
+
+for(ApexClass c : cls){
+    System.debug(
+        'Id=' + c.Id +
+        ' Name=' + c.Name +
+        ' Namespace=' + c.NamespacePrefix
+    );
+}
+
+
 List<ApexClass> handler = [
     SELECT Id, Name, Body, LastModifiedDate
     FROM ApexClass
