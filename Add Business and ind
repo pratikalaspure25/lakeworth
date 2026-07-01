@@ -1,3 +1,30 @@
+// Confirm exact values used in real data
+System.debug('--- Account RTs in real data ---');
+List<AggregateResult> acctRTs = [
+    SELECT RecordType.DeveloperName rtName, COUNT(Id) cnt
+    FROM Account
+    WHERE CreatedDate = TODAY
+    GROUP BY RecordType.DeveloperName
+];
+for (AggregateResult ar : acctRTs) {
+    System.debug(ar.get('rtName') + ' : ' + ar.get('cnt'));
+}
+
+System.debug('--- BKU_Record_Type_Name__c values ---');
+List<Account> accts = [
+    SELECT Id, BKU_Record_Type_Name__c, RecordType.DeveloperName
+    FROM Account
+    WHERE CreatedDate = TODAY
+    LIMIT 5
+];
+for (Account a : accts) {
+    System.debug('RT: ' + a.RecordType.DeveloperName 
+        + ' | BKU_Record_Type_Name__c: ' + a.BKU_Record_Type_Name__c);
+}
+
+
+
+
 List<AsyncApexJob> jobs = [
     SELECT Id,
            Status,
