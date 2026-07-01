@@ -1,3 +1,26 @@
+// Check if our new method exists in the handler
+List<ApexClass> handler = [
+    SELECT Id, Name, Body
+    FROM ApexClass
+    WHERE Name = 'FinancialAccountRoleTriggerHandler'
+    LIMIT 1
+];
+
+if (!handler.isEmpty()) {
+    // Check if new method exists
+    Boolean hasNewMethod = handler[0].Body.contains('updateFinancialAccountEscrowJointOwners');
+    Boolean hasNewFilter = handler[0].Body.contains('filterEscrowJointOwners');
+    Boolean hasNewClass  = handler[0].Body.contains('EscrowJointOwnerFARQueueable');
+    
+    System.debug('Has updateFinancialAccountEscrowJointOwners: ' + hasNewMethod);
+    System.debug('Has filterEscrowJointOwners: ' + hasNewFilter);
+    System.debug('Has EscrowJointOwnerFARQueueable reference: ' + hasNewClass);
+} else {
+    System.debug('Handler class NOT FOUND');
+}
+
+
+
 List<ApexClass> classes = [
     SELECT Id, Name, Status, IsValid, Body
     FROM ApexClass
