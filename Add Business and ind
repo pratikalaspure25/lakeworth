@@ -1,3 +1,18 @@
+List<FinServ__FinancialAccountRole__c> fars = [
+    SELECT Id, FinServ__Role__c
+    FROM FinServ__FinancialAccountRole__c
+    WHERE CreatedDate = TODAY
+    ORDER BY CreatedDate DESC
+    LIMIT 5
+];
+
+for(FinServ__FinancialAccountRole__c f : fars){
+    System.debug('FAR Id: ' + f.Id);
+    System.debug('Role Value: [' + f.FinServ__Role__c + ']');
+}
+
+
+
 List<ApexClass> cls = [
     SELECT Id, Name, NamespacePrefix
     FROM ApexClass
