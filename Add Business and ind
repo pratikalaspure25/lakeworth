@@ -1,3 +1,367 @@
+public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
+
+    // ── Constants ────────────────────────────────────────────────────
+    private static final Set<String> QUALIFYING_ROLES = new Set<String>{
+        'Escrow Agent',
+        'Joint Owner'
+    };
+    private static final Set<String> QUALIFYING_SPECIAL_CASES = new Set<String>{
+        'FIDUCIARY',
+        'IOLA/IOLTA'
+    };
+    private static final String DEPOSIT_RT_DEV_NAME = 'BankingAccount';
+    private static final String TYPE_INDIVIDUAL     = 'Individual';
+    private static final String TYPE_BUSINESS       = 'Business';
+    private static final String ASSOC_TYPE_PEER     = 'Peer';
+    private static final String HELPDESK_EMAIL      = 'crm360helpdesk@bankunited.com';
+    private static final Integer MAX_RETRIES        = 3;
+
+    // ── Instance Variables ───────────────────────────────────────────
+    private List<FinServ__FinancialAccountRole__c> insertedFARs;
+    private List<FinServ__FinancialAccountRole__c> deletedFARs;
+    private Integer retryCount;
+
+    // ── Constructors (same pattern as Jose) ──────────────────────────
+    public EscrowJointOwnerFARQueueable(
+        List<FinServ__FinancialAccountRole__c> insertedFARs,
+        List<FinServ__FinancialAccountRole__c> deletedFARs
+    ) {
+        this(insertedFARs, deletedFARs, 0);
+    }
+
+    public EscrowJointOwnerFARQueueable(
+        List<FinServ__FinancialAccountRole__c> insertedFARs,
+        List<FinServ__FinancialAccountRole__c> deletedFARs,
+        Integer retryCount
+    ) {
+        this.insertedFARs = insertedFARs;
+        this.deletedFARs  = deletedFARs;
+        this.retryCount   = retryCount;
+    }
+
+    // ── Execute ──────────────────────────────────────────────────────
+    public void execute(QueueableContext context) {
+        try {
+            if (insertedFARs != null && !insertedFARs.isEmpty()) {
+                processInserts(insertedFARs);
+            }
+            if (deletedFARs != null && !deletedFARs.isEmpty()) {
+                processDeletes(deletedFARs);
+            }
+        } catch (Exception e) {
+            sendErrorEmail(
+                'Unhandled exception:\n' 
+                + e.getMessage() + '\n' 
+                + e.getStackTraceString()
+            );
+        }
+    }
+
+    // ── processInserts — AC1 ONLY right now ──────────────────────────
+    private void processInserts(List<FinServ__FinancialAccountRole__c> farList) {
+        Set<Id> farIds = new Map<Id, FinServ__FinancialAccountRole__c>(farList).keySet();
+
+        // Step 1: Enrich with all needed fields
+        List<FinServ__FinancialAccountRole__c> enriched = [
+            SELECT Id,
+                   FinServ__Role__c,
+                   FinServ__RelatedAccount__c,
+                   FinServ__RelatedAccount__r.BKU_Record_Type_Name__c,
+                   FinServ__RelatedAccount__r.PersonContactId,
+                   FinServ__FinancialAccount__c,
+                   FinServ__FinancialAccount__r.RecordType.DeveloperName,
+                   FinServ__FinancialAccount__r.BKU_Special_Case__c,
+                   FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c,
+                   FinServ__FinancialAccount__r.FinServ__PrimaryOwner__r.BKU_Record_Type_Name__c,
+                   FinServ__FinancialAccount__r.FinServ__PrimaryOwner__r.PersonContactId
+            FROM FinServ__FinancialAccountRole__c
+            WHERE Id IN :farIds
+        ];
+
+        // Step 2: Apply business filter
+        // Only Deposit FA + FIDUCIARY or IOLA/IOLTA
+        List<FinServ__FinancialAccountRole__c> qualified = applyBusinessFilter(enriched);
+        if (qualified.isEmpty()) return;
+
+        // Step 3: Build contexts
+        List<FARContext> contexts = buildContexts(qualified);
+
+        // Step 4: Pre-collect IDs for bulk queries
+        Set<Id> acrAccountIds = new Set<Id>();
+        Set<Id> acrContactIds = new Set<Id>();
+
+        for (FARContext ctx : contexts) {
+            // AC1: Business PO + Individual RA
+            if (ctx.poType == TYPE_BUSINESS && ctx.raType == TYPE_INDIVIDUAL) {
+                acrAccountIds.add(ctx.poId);
+                if (ctx.raPersonContactId != null) {
+                    acrContactIds.add(ctx.raPersonContactId);
+                }
+            }
+            // AC2-AC8 will be added here later
+        }
+
+        // Step 5: Query existing ACRs to prevent duplicates
+        Map<String, AccountContactRelation> existingACRs = 
+            queryExistingACRs(acrAccountIds, acrContactIds);
+
+        // Step 6: Build DML lists
+        List<AccountContactRelation> acrToCreate = new List<AccountContactRelation>();
+        List<AccountContactRelation> acrToUpdate = new List<AccountContactRelation>();
+        List<String> errors = new List<String>();
+        Map<Integer, FinServ__FinancialAccountRole__c> acrIndexToFAR = 
+            new Map<Integer, FinServ__FinancialAccountRole__c>();
+
+        for (FARContext ctx : contexts) {
+            // AC1 + AC2: Business PO + Individual RA → ACR
+            if (ctx.poType == TYPE_BUSINESS && ctx.raType == TYPE_INDIVIDUAL) {
+                if (ctx.raPersonContactId == null) {
+                    errors.add('RelatedAccount ' + ctx.raId 
+                        + ' has no PersonContactId. FAR: ' + ctx.farId);
+                    continue;
+                }
+                String key = ctx.poId + '_' + ctx.raPersonContactId;
+                AccountContactRelation existing = existingACRs.get(key);
+                if (existing != null) {
+                    if (!roleContains(existing.Roles, ctx.role)) {
+                        existing.Roles = appendRole(existing.Roles, ctx.role);
+                        acrToUpdate.add(existing);
+                    }
+                } else {
+                    acrIndexToFAR.put(acrToCreate.size(), ctx.sourceFAR);
+                    acrToCreate.add(buildACR(ctx.poId, ctx.raPersonContactId, ctx.role));
+                }
+            }
+            // AC3-AC8 will be added here later
+        }
+
+        // Step 7: Execute DML with retry on row lock
+        List<FinServ__FinancialAccountRole__c> retryFARs = 
+            new List<FinServ__FinancialAccountRole__c>();
+
+        if (!acrToCreate.isEmpty()) {
+            Database.SaveResult[] results = Database.insert(acrToCreate, false);
+            for (Integer i = 0; i < results.size(); i++) {
+                if (!results[i].isSuccess()) {
+                    for (Database.Error err : results[i].getErrors()) {
+                        if (err.getStatusCode() == StatusCode.UNABLE_TO_LOCK_ROW) {
+                            if (retryCount < MAX_RETRIES 
+                                    && acrIndexToFAR.containsKey(i)) {
+                                retryFARs.add(acrIndexToFAR.get(i));
+                            } else {
+                                errors.add('[ACR Insert] Max retries. FAR: '
+                                    + (acrIndexToFAR.containsKey(i) 
+                                        ? acrIndexToFAR.get(i).Id 
+                                        : 'unknown'));
+                            }
+                        } else if (err.getStatusCode() != StatusCode.DUPLICATE_VALUE) {
+                            errors.add('[ACR Insert] ' 
+                                + err.getStatusCode() + ': ' + err.getMessage());
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!acrToUpdate.isEmpty()) {
+            collectErrors(Database.update(acrToUpdate, false), 'ACR Update', errors);
+        }
+
+        if (!retryFARs.isEmpty()) {
+            System.enqueueJob(
+                new EscrowJointOwnerFARQueueable(retryFARs, null, retryCount + 1)
+            );
+        }
+        if (!errors.isEmpty()) sendErrorEmail(String.join(errors, '\n'));
+    }
+
+    // ── processDeletes — placeholder, AC9/AC10 added later ──────────
+    private void processDeletes(List<FinServ__FinancialAccountRole__c> farList) {
+        // Will be built after AC1-AC8 are confirmed
+    }
+
+    // ── Business Filter ───────────────────────────────────────────────
+    private List<FinServ__FinancialAccountRole__c> applyBusinessFilter(
+        List<FinServ__FinancialAccountRole__c> records
+    ) {
+        List<FinServ__FinancialAccountRole__c> result = 
+            new List<FinServ__FinancialAccountRole__c>();
+        for (FinServ__FinancialAccountRole__c far : records) {
+            if (isQualifiedFA(far.FinServ__FinancialAccount__r)) {
+                result.add(far);
+            }
+        }
+        return result;
+    }
+
+    private Boolean isQualifiedFA(FinServ__FinancialAccount__c fa) {
+        return fa != null
+            && fa.RecordType.DeveloperName == DEPOSIT_RT_DEV_NAME
+            && QUALIFYING_SPECIAL_CASES.contains(fa.BKU_Special_Case__c);
+    }
+
+    // ── Build Contexts (same as Jose) ────────────────────────────────
+    private List<FARContext> buildContexts(
+        List<FinServ__FinancialAccountRole__c> enriched
+    ) {
+        List<FARContext> contexts = new List<FARContext>();
+        for (FinServ__FinancialAccountRole__c far : enriched) {
+            contexts.add(new FARContext(
+                far.Id,
+                far.FinServ__Role__c,
+                far.FinServ__FinancialAccount__r
+                    .FinServ__PrimaryOwner__r.BKU_Record_Type_Name__c,
+                far.FinServ__RelatedAccount__r.BKU_Record_Type_Name__c,
+                far.FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c,
+                far.FinServ__RelatedAccount__c,
+                far.FinServ__FinancialAccount__r
+                    .FinServ__PrimaryOwner__r.PersonContactId,
+                far.FinServ__RelatedAccount__r.PersonContactId,
+                far
+            ));
+        }
+        return contexts;
+    }
+
+    // ── Query Existing ACRs ───────────────────────────────────────────
+    private Map<String, AccountContactRelation> queryExistingACRs(
+        Set<Id> accountIds, Set<Id> contactIds
+    ) {
+        Map<String, AccountContactRelation> result = 
+            new Map<String, AccountContactRelation>();
+        if (accountIds.isEmpty() || contactIds.isEmpty()) return result;
+        for (AccountContactRelation acr : [
+            SELECT Id, AccountId, ContactId, Roles
+            FROM AccountContactRelation
+            WHERE AccountId IN :accountIds
+              AND ContactId  IN :contactIds
+        ]) {
+            result.put(acr.AccountId + '_' + acr.ContactId, acr);
+        }
+        return result;
+    }
+
+    // ── Builder ───────────────────────────────────────────────────────
+    private AccountContactRelation buildACR(
+        Id accountId, Id contactId, String roleLabel
+    ) {
+        AccountContactRelation acr = new AccountContactRelation();
+        acr.AccountId = accountId;
+        acr.ContactId = contactId;
+        acr.Roles     = roleLabel;
+        acr.IsActive  = true;
+        return acr;
+    }
+
+    // ── Role Utilities (same as Jose) ────────────────────────────────
+    private Boolean roleContains(String roles, String roleToCheck) {
+        if (String.isBlank(roles)) return false;
+        for (String r : roles.split(';')) {
+            if (r.trim() == roleToCheck) return true;
+        }
+        return false;
+    }
+
+    private String appendRole(String existingRoles, String newRole) {
+        return String.isBlank(existingRoles) 
+            ? newRole 
+            : existingRoles + ';' + newRole;
+    }
+
+    private String removeRole(String existingRoles, String roleToRemove) {
+        if (String.isBlank(existingRoles)) return '';
+        List<String> kept = new List<String>();
+        for (String r : existingRoles.split(';')) {
+            if (r.trim() != roleToRemove) kept.add(r.trim());
+        }
+        return String.join(kept, ';');
+    }
+
+    // ── Error Handling (same as Jose) ────────────────────────────────
+    private void collectErrors(
+        Database.SaveResult[] results, String ctx, List<String> errors
+    ) {
+        for (Database.SaveResult sr : results) {
+            if (!sr.isSuccess()) {
+                for (Database.Error err : sr.getErrors()) {
+                    errors.add('[' + ctx + '] ' 
+                        + err.getStatusCode() + ': ' + err.getMessage());
+                }
+            }
+        }
+    }
+
+    private void collectDeleteErrors(
+        Database.DeleteResult[] results, String ctx, List<String> errors
+    ) {
+        for (Database.DeleteResult dr : results) {
+            if (!dr.isSuccess()) {
+                for (Database.Error err : dr.getErrors()) {
+                    errors.add('[' + ctx + '] ' 
+                        + err.getStatusCode() + ': ' + err.getMessage());
+                }
+            }
+        }
+    }
+
+    private void sendErrorEmail(String errorBody) {
+        try {
+            List<OrgWideEmailAddress> owas = [
+                SELECT Id FROM OrgWideEmailAddress 
+                WHERE Address = :HELPDESK_EMAIL LIMIT 1
+            ];
+            Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+            email.setToAddresses(new List<String>{ HELPDESK_EMAIL });
+            if (!owas.isEmpty()) email.setOrgWideEmailAddressId(owas[0].Id);
+            email.setSubject(
+                'ERROR: Financial Account Role '
+                + '– Escrow Agent / Joint Owner Sync Failed'
+            );
+            email.setPlainTextBody(
+                'One or more errors occurred while processing '
+                + 'Financial Account Role records '
+                + '(Escrow Agent / Joint Owner sync).\n\nDetails:\n' + errorBody
+            );
+            Messaging.sendEmail(new List<Messaging.SingleEmailMessage>{ email });
+        } catch (Exception e) {
+            System.debug(LoggingLevel.ERROR, 'sendErrorEmail failed: ' + e.getMessage());
+        }
+    }
+
+    // ── Inner Class (same as Jose) ────────────────────────────────────
+    private class FARContext {
+        public Id     farId;
+        public String role;
+        public String poType;
+        public String raType;
+        public Id     poId;
+        public Id     raId;
+        public Id     poPersonContactId;
+        public Id     raPersonContactId;
+        public FinServ__FinancialAccountRole__c sourceFAR;
+
+        public FARContext(
+            Id farId, String role,
+            String poType, String raType,
+            Id poId, Id raId,
+            Id poPersonContactId, Id raPersonContactId,
+            FinServ__FinancialAccountRole__c sourceFAR
+        ) {
+            this.farId             = farId;
+            this.role              = role;
+            this.poType            = poType;
+            this.raType            = raType;
+            this.poId              = poId;
+            this.raId              = raId;
+            this.poPersonContactId = poPersonContactId;
+            this.raPersonContactId = raPersonContactId;
+            this.sourceFAR         = sourceFAR;
+        }
+    }
+}
+
+
+
 // ── Step 1: Get RecordTypes ──────────────────────────────────────
 RecordType businessRT = [SELECT Id FROM RecordType 
                           WHERE SObjectType = 'Account' AND DeveloperName = 'Business' LIMIT 1];
