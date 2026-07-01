@@ -1,3 +1,19 @@
+List<FinServ__FinancialAccountRole__c> fars = [
+    SELECT Id, FinServ__Role__c
+    FROM FinServ__FinancialAccountRole__c
+    WHERE Id = 'a78090000007PKtyIAG'
+];
+
+for(FinServ__FinancialAccountRole__c far : fars){
+    System.debug('Role=[' + far.FinServ__Role__c + ']');
+    System.debug('Escrow Match=' +
+        (far.FinServ__Role__c == 'Escrow Agent'));
+    System.debug('Joint Match=' +
+        (far.FinServ__Role__c == 'Joint Owner'));
+}
+
+
+
 FinServ__FinancialAccountRole__c far = [
     SELECT Id, FinServ__Role__c
     FROM FinServ__FinancialAccountRole__c
