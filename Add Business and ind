@@ -1,3 +1,27 @@
+List<AsyncApexJob> jobs = [
+    SELECT Id,
+           Status,
+           JobType,
+           ApexClass.Name,
+           ExtendedStatus,
+           NumberOfErrors,
+           CreatedDate
+    FROM AsyncApexJob
+    WHERE ApexClass.Name = 'EscrowJointOwnerFARQueueable'
+    ORDER BY CreatedDate DESC
+];
+
+System.debug('Job Count = ' + jobs.size());
+
+for(AsyncApexJob j : jobs){
+    System.debug(
+        'Status=' + j.Status +
+        ' | Errors=' + j.NumberOfErrors +
+        ' | ExtendedStatus=' + j.ExtendedStatus
+    );
+}
+
+
 // Get an existing Financial Account
 FinServ__FinancialAccount__c fa = [
     SELECT Id
