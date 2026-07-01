@@ -1,3 +1,23 @@
+// Replace with actual IDs from debug log above
+Id bizPOId         = 'PASTE_BIZ_PO_ID_HERE';
+Id personContactId = 'PASTE_PERSON_CONTACT_ID_HERE';
+
+List<AccountContactRelation> acrs = [
+    SELECT Id, Roles FROM AccountContactRelation
+    WHERE AccountId = :bizPOId
+    AND   ContactId = :personContactId
+];
+
+System.debug('ACR Count: ' + acrs.size());
+if (!acrs.isEmpty()) {
+    System.debug('ACR Roles: ' + acrs[0].Roles);
+    System.debug('AC1 SUCCESS');
+} else {
+    System.debug('ACR not found — check Setup > Apex Jobs');
+}
+
+
+
 // ── STEP 1: Get RecordTypes (exact ones from your org data) ──────
 RecordType businessRT = [
     SELECT Id FROM RecordType
