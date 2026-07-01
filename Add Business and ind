@@ -1,3 +1,34 @@
+// Check existing Individual/Person accounts in your org
+// to see which RecordType they actually use
+List<Account> existingIndividuals = [
+    SELECT Id, Name, LastName, RecordTypeId, RecordType.DeveloperName, 
+           RecordType.Name, PersonContactId
+    FROM Account
+    WHERE IsPersonAccount = true
+    LIMIT 5
+];
+for (Account a : existingIndividuals) {
+    System.debug('Name: ' + a.LastName 
+        + ' | RT DeveloperName: ' + a.RecordType.DeveloperName 
+        + ' | RT Id: ' + a.RecordTypeId
+        + ' | PersonContactId: ' + a.PersonContactId);
+}
+
+// Also check existing Business accounts
+List<Account> existingBusiness = [
+    SELECT Id, Name, RecordTypeId, RecordType.DeveloperName
+    FROM Account
+    WHERE IsPersonAccount = false
+    AND RecordType.DeveloperName != 'Vendors'
+    LIMIT 5
+];
+for (Account a : existingBusiness) {
+    System.debug('Biz Name: ' + a.Name 
+        + ' | RT DeveloperName: ' + a.RecordType.DeveloperName 
+        + ' | RT Id: ' + a.RecordTypeId);
+}
+
+
 // ── STEP 1: Get RecordTypes ──────────────────────────────────────
 RecordType businessRT = [
     SELECT Id FROM RecordType
