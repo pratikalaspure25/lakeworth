@@ -1,0 +1,132 @@
+Story Analysis & Solution Approach
+PLIG-6999: REL — Automatic Link for Escrow Agent and Joint Owner
+Financial Account Roles to the Relationship Center
+Prepared by: Pratik
+Reference Story: PLIG-6815 (Authorized Signer — Jose's Implementation)
+Story Points: 5  |  Status: Ready for Development
+ Table of Contents
+
+
+ 1. Story Context
+This document captures my analysis of PLIG-6999 and the solution approach I followed, based directly on the requirement walkthrough by Mariela and the architecture established by Jose in the prior story PLIG-6815 (Authorized Signer).
+1.1 Background
+During grooming, Mariela explained that this story is functionally almost identical to the Authorized Signer automation already built. The ask is to extend the existing Financial Account Role → Relationship Center framework to cover two new roles, with two additional qualifying conditions layered on top.
+Jose assigned the story to me directly because I built the Authorized Signer framework and already understand the relationship-linking logic, the reciprocal role lookups, and the trigger/queueable pattern in place.
+1.2 Why Reuse Matters Here
+•	The trigger (FinancialAccountRoleTrigger) does not need to change — it already dispatches both after-insert and after-delete to the handler.
+•	The relationship-building logic (ACR / CCR / AAR routing by Individual vs Business) is identical to the Authorized Signer story.
+•	Reciprocal Roles for “Escrow Agent” and “Joint Owner” were already created in a prior release — no new metadata work needed.
+•	Picklist values for both roles were already added to AccountContactRelation and ContactContactRelation — deployment of data model changes is already done.
+This meant my job was scoped narrowly: add new filtering criteria on top of an existing, proven framework — not redesign anything.
+2. Requirement Analysis
+2.1 Core Trigger Condition
+A Relationship Center record should be created only when ALL of the following are true on a newly inserted Financial Account Role:
+1.	Role = “Escrow Agent” OR Role = “Joint Owner”
+2.	The related Financial Account’s Record Type = Deposit
+3.	The Financial Account’s Special Case field = IOLA, IOLTA, or Fiduciary
+If any one of these three conditions fails, no relationship record should be created — this was explicitly called out by Mariela using two negative examples (Escrow Agent on a Loan account, and Joint Owner on a Deposit account with Special Case = Standard).
+2.2 Comparison to PLIG-6815 (Authorized Signer)
+Aspect	PLIG-6815 (Authorized Signer)	PLIG-6999 (Escrow Agent / Joint Owner)
+Qualifying Role(s)	Other - Authorized Signer	Escrow Agent, Joint Owner
+Financial Account Type Filter	None — any FA type	Deposit only
+Special Case Filter	None	IOLA, IOLTA, or Fiduciary
+Relationship Objects Used	ACR, CCR, AAR	ACR, CCR, AAR (same)
+Routing Logic (Individual/Business)	4-way combination	Same 4-way combination
+Reciprocal Roles	Already existed	Already created (prior release)
+Picklist Values	Already existed	Already added (prior release)
+Delete / Unlink Behavior	Guarded by sibling FAR count	Same guard, extended per role
+
+The conclusion from this comparison: the delta is entirely in the filtering layer. The relationship-creation mechanics did not need to change.
+2.3 Acceptance Criteria Mapping
+AC	Role	Primary Owner	Related Account	Result
+AC1	Escrow Agent	Business	Individual	ACR
+AC2	Joint Owner	Business	Individual	ACR
+AC3	Escrow Agent	Individual	Individual	CCR (reciprocal role)
+AC4	Joint Owner	Individual	Individual	CCR (reciprocal role)
+AC5	Escrow Agent	Individual	Business	ACR (reversed)
+AC6	Joint Owner	Individual	Business	ACR (reversed)
+AC7	Escrow Agent	Business	Business	AAR, Association Type = Peer
+AC8	Joint Owner	Business	Business	AAR, Association Type = Peer
+AC9	Escrow Agent	—	—	Delete → remove relationship
+AC10	Joint Owner	—	—	Delete → remove relationship
+3. My Approach to Analyzing the Story
+3.1 Step 1 — Reviewed the Existing Framework First
+Before writing anything, I went back to the PLIG-6815 codebase and read through the full implementation Jose built:
+•	FinancialAccountRoleTrigger — confirmed it already fires on after insert and after delete, dispatching to the handler.
+•	FinancialAccountRoleTriggerHandler — confirmed the pattern: filter records by role, then enqueue a Queueable for async processing.
+•	FinancialAccountRoleQueueable — studied the full relationship-routing logic (ACR/CCR/AAR), the duplicate-prevention queries, the row-lock retry mechanism, and the delete guard that checks for sibling Financial Account Role records before unlinking.
+•	FinancialAccountRoleQueueableTest — reviewed the test naming convention and data setup pattern to replicate exactly.
+This let me confirm the architecture was solid and reusable, and identify precisely where the new business rule needed to be inserted.
+3.2 Step 2 — Identified the Exact Delta
+I compared the new requirement against the existing implementation field by field. The only net-new pieces of logic were:
+4.	A role filter that recognizes two roles instead of one.
+5.	A Financial Account eligibility check (Record Type = Deposit, Special Case in IOLA/IOLTA/Fiduciary) that did not exist in the original story at all.
+6.	The same eligibility check needs to run on the delete path too, since AC9/AC10 only apply to qualifying Financial Account Roles.
+Everything else — ACR/CCR/AAR object selection, role string append/remove logic, reciprocal role lookups, the retry-on-lock pattern, and the error-email notification — could be reused as-is.
+3.3 Step 3 — Decided Not to Modify the Existing Queueable
+I considered two options:
+•	Option A: Add the new filters directly inside FinancialAccountRoleQueueable, branching on role.
+•	Option B: Keep FinancialAccountRoleQueueable untouched for Authorized Signer, and create a new sibling class EscrowJointOwnerFARQueueable for the new roles, following the exact same internal structure.
+I went with Option B. Mixing two different qualification rules (one with no FA-type filter, one with a strict Deposit + Special Case filter) inside a single class increases regression risk on a story that is already live in production. Keeping them as parallel, structurally identical classes is safer to test, safer to deploy, and easier for QA to validate independently.
+3.4 Step 4 — Confirmed Org Readiness Before Coding
+Since Mariela confirmed in grooming that Reciprocal Roles and ACR/CCR picklist values were already deployed, my first practical step in the sandbox was to verify this rather than assume it:
+•	Queried FinServ__ReciprocalRole__c for both “Escrow Agent” and “Joint Owner” under both AccountRole and ContactRole record types.
+•	Verified the picklist values existed on AccountContactRelation.Roles and FinServ__ContactContactRelation__c.FinServ__Role__c.
+•	Confirmed the exact DeveloperName for the Deposit Financial Account Record Type and the exact API values for the Special Case field (IOLA/IOLTA, Fiduciary).
+This step matters because the previous story did not depend on Record Type or Special Case at all — these were unverified assumptions until checked directly in the org.
+4. Solution Approach
+Implemented an automated sync between Financial Account Roles (specifically the “Escrow Agent” and “Joint Owner” roles) and Relationship Center objects, scoped to Deposit Financial Accounts with Special Case = IOLA, IOLTA, or Fiduciary, by extending the existing after-insert / after-delete trigger framework with a new asynchronous processor.
+4.1 What Was Built
+Apex Trigger: FinancialAccountRoleTrigger (unchanged)
+•	No modification required — already listens for after insert and after delete on FinServ__FinancialAccountRole__c and delegates to the handler.
+Trigger Handler: FinancialAccountRoleTriggerHandler (modified)
+•	Existing Authorized Signer filter and enqueue logic left untouched.
+•	Added a second filter method scoped to Escrow Agent and Joint Owner roles.
+•	Added a second enqueue path that dispatches qualifying records to the new Queueable class.
+Queueable Processor: EscrowJointOwnerFARQueueable (new)
+•	Mirrors the structure of FinancialAccountRoleQueueable exactly — same constructor overloads, same retry-on-row-lock pattern (max 3 retries), same error-email notification to the CRM360 helpdesk.
+•	Insert flow: enriches Financial Account Role records, applies the Deposit + Special Case eligibility filter, then routes by Primary Owner / Related Account type combination to ACR, CCR, or AAR — exactly as in the Authorized Signer flow.
+•	Delete flow: re-applies the same eligibility filter, then checks whether any other qualifying Financial Account Role still links the same Primary Owner to the same Related Account under the same role before removing or stripping the relationship record. This prevents premature unlinking when multiple Financial Accounts share the same Primary Owner.
+•	Role label handling: each role (“Escrow Agent” / “Joint Owner”) is appended to or stripped from the Roles field independently, so an Account Contact Relation can carry both roles plus any pre-existing roles without collision.
+Test Class: EscrowJointOwnerFARQueueableTest (new)
+•	One positive test per Acceptance Criteria (AC1–AC10), following Jose’s exact naming convention: testInsert_[Description]_[Result] and testDelete_[Description]_[Result].
+•	Negative tests: non-qualifying role, non-Deposit Financial Account, wrong Special Case value.
+•	Guard test: confirms a relationship is preserved when a second qualifying Financial Account Role still exists for the same pair.
+•	Role append / strip tests: confirms existing unrelated roles on a shared Account Contact Relation are never overwritten.
+4.2 Architecture Diagram (Logical Flow)
+FinancialAccountRoleTrigger (after insert, after delete)
+  -> FinancialAccountRoleTriggerHandler
+       |-- filterAuthSigners()        (existing, PLIG-6815)
+       |     -> FinancialAccountRoleQueueable
+       |
+       |-- filterEscrowJointOwners()  (new, PLIG-6999)
+             -> EscrowJointOwnerFARQueueable
+                  |-- isQualifiedFA() check: Deposit + IOLA/IOLTA/Fiduciary
+                  |-- route by PO/RA type -> ACR / CCR / AAR
+                  |-- delete guard: sibling FAR count per PO+RA+Role
+4.3 Why This Follows Jose's Pattern
+Element	Jose's Pattern (PLIG-6815)	Followed in PLIG-6999
+Trigger Framework	Single trigger, handler dispatch	Reused as-is
+Queueable Constructors	(inserted, deleted) and (inserted, deleted, retryCount)	Same overloads
+Retry on Row Lock	MAX_RETRIES = 3, self re-enqueue	Same constant and logic
+Error Notification	Org-wide email to CRM360 helpdesk	Same mechanism, updated subject line
+Duplicate Prevention	Query existing ACR/CCR/AAR before insert	Same query-first pattern
+Delete Guard	Count remaining sibling FARs before unlink	Same guard, scoped by qualifying FA only
+Test Naming	testInsert_[Desc]_[Result] / testDelete_[Desc]_[Result]	Same convention used throughout
+Test Data Setup	@TestSetup with full Individual/Business Accounts + Reciprocal Roles	Same setup pattern, roles swapped
+5. Risks / Open Items Identified
+•	Need to confirm the exact DeveloperName of the Deposit Financial Account Record Type in the target org before deployment.
+•	Need to confirm the exact API picklist values for Special Case (IOLA/IOLTA may be combined or separate values depending on org configuration).
+•	QA will need ETL to run in the lower environment to generate qualifying Financial Account Role test data — flagged by Cameron in grooming.
+•	Will coordinate with Jose for any business-rule clarifications during development, as agreed in the meeting.
+6. Estimation
+Task	Hours
+Modify FinancialAccountRoleTriggerHandler	1
+EscrowJointOwnerFARQueueable — insert logic (AC1–AC8)	5
+Delete logic + guard (AC9–AC10)	2
+Verify Reciprocal Roles / picklists in org	1
+Test class (12 scenarios)	5
+Code review and refactor	1
+Deployment: sandbox → UAT validation	2
+
+Total: approximately 17 hours (~2.5 developer days). Aligned with the team’s 5 Story Point estimate, given the framework is already proven and only the filtering layer and a new Queueable class are net-new work.
