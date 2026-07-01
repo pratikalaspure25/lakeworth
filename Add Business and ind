@@ -1,3 +1,93 @@
+// ── STEP 1: Get RecordTypes (exact ones from your org data) ──────
+RecordType businessRT = [
+    SELECT Id FROM RecordType
+    WHERE SObjectType = 'Account'
+    AND DeveloperName = 'IndustriesBusiness'
+    LIMIT 1
+];
+System.debug('Business RT: ' + businessRT.Id);
+
+RecordType individualRT = [
+    SELECT Id FROM RecordType
+    WHERE SObjectType = 'Account'
+    AND DeveloperName = 'Individual'
+    AND Id = '0123g000000Xe3CAAS'
+    LIMIT 1
+];
+System.debug('Individual RT: ' + individualRT.Id);
+
+RecordType depositRT = [
+    SELECT Id FROM RecordType
+    WHERE SObjectType = 'FinServ__FinancialAccount__c'
+    AND DeveloperName = 'BankingAccount'
+    LIMIT 1
+];
+System.debug('Deposit RT: ' + depositRT.Id);
+
+// ── STEP 2: Create Business Account (Primary Owner) ──────────────
+Account bizPO = new Account(
+    Name               = 'AC1 Test Business PO',
+    RecordTypeId       = businessRT.Id,
+    Phone              = '555-000-0001',
+    BillingCity        = 'Miami',
+    BillingCountry     = 'United States',
+    BillingPostalCode  = '33101',
+    BillingState       = 'Florida',
+    BillingStreet      = '1 Biz Ave',
+    ShippingCity       = 'Miami',
+    ShippingCountry    = 'United States',
+    ShippingPostalCode = '33101',
+    ShippingState      = 'Florida',
+    ShippingStreet     = '1 Biz Ave'
+);
+insert bizPO;
+System.debug('Business PO created: ' + bizPO.Id);
+
+// ── STEP 3: Create Individual Account (Related Account) ──────────
+Account indvRA = new Account(
+    LastName                = 'AC1 Test Individual RA',
+    RecordTypeId            = individualRT.Id,
+    PersonMailingCity       = 'Miami',
+    PersonMailingCountry    = 'United States',
+    PersonMailingPostalCode = '33101',
+    PersonMailingState      = 'Florida',
+    PersonMailingStreet     = '1 Main St',
+    PersonOtherCity         = 'Miami',
+    PersonOtherCountry      = 'United States',
+    PersonOtherPostalCode   = '33101',
+    PersonOtherState        = 'Florida',
+    PersonOtherStreet       = '1 Main St',
+    PersonEmail             = 'ac1test@test.com'
+);
+insert indvRA;
+indvRA = [SELECT Id, PersonContactId FROM Account WHERE Id = :indvRA.Id];
+System.debug('Individual RA: ' + indvRA.Id);
+System.debug('PersonContactId: ' + indvRA.PersonContactId);
+
+// ── STEP 4: Create Deposit FA ─────────────────────────────────────
+FinServ__FinancialAccount__c fa = new FinServ__FinancialAccount__c(
+    Name                     = 'AC1 Test Deposit FA',
+    RecordTypeId             = depositRT.Id,
+    FinServ__PrimaryOwner__c = bizPO.Id,
+    BKU_Special_Case__c      = 'FIDUCIARY',
+    FinServ__Status__c       = 'Open'
+);
+insert fa;
+System.debug('FA created: ' + fa.Id);
+
+// ── STEP 5: Insert FAR — fires trigger ───────────────────────────
+insert new FinServ__FinancialAccountRole__c(
+    FinServ__FinancialAccount__c = fa.Id,
+    FinServ__RelatedAccount__c   = indvRA.Id,
+    FinServ__Role__c             = 'Escrow Agent'
+);
+System.debug('FAR inserted successfully');
+System.debug('--- COPY THESE IDs FOR CHECK SCRIPT ---');
+System.debug('BizPO Id: ' + bizPO.Id);
+System.debug('PersonContactId: ' + indvRA.PersonContactId);
+System.debug('--- Wait 5 seconds then run check script ---');
+
+
 // Check existing Individual/Person accounts in your org
 // to see which RecordType they actually use
 List<Account> existingIndividuals = [
