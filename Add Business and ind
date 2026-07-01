@@ -1,3 +1,18 @@
+List<ApexTrigger> triggers = [
+    SELECT Id, Name, Status, IsValid, Body
+    FROM ApexTrigger
+    WHERE Name = 'FinancialAccountRoleTrigger'
+];
+
+for (ApexTrigger t : triggers) {
+    System.debug('Trigger: ' + t.Name 
+        + ' | Status: ' + t.Status 
+        + ' | IsValid: ' + t.IsValid);
+    System.debug('Body: ' + t.Body);
+}
+
+
+
 // Check if our new method exists in the handler
 List<ApexClass> handler = [
     SELECT Id, Name, Body
