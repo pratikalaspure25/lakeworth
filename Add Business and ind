@@ -1,3 +1,101 @@
+// ── STEP 1: Get RecordTypes ──────────────────────────────────────
+RecordType businessRT = [
+    SELECT Id FROM RecordType
+    WHERE SObjectType = 'Account'
+    AND DeveloperName = 'Business'
+    LIMIT 1
+];
+System.debug('Business RT: ' + businessRT.Id);
+
+RecordType individualRT = [
+    SELECT Id FROM RecordType
+    WHERE SObjectType = 'Account'
+    AND DeveloperName = 'Individual'
+    LIMIT 1
+];
+System.debug('Individual RT: ' + individualRT.Id);
+
+RecordType depositRT = [
+    SELECT Id FROM RecordType
+    WHERE SObjectType = 'FinServ__FinancialAccount__c'
+    AND DeveloperName = 'BankingAccount'
+    LIMIT 1
+];
+System.debug('Deposit RT: ' + depositRT.Id);
+
+// ── STEP 2: Create Business Account (Primary Owner) ──────────────
+Account bizPO = new Account(
+    Name             = 'AC1 Test Business PO',
+    RecordTypeId     = businessRT.Id,
+    Phone            = '555-000-0001',
+    BillingCity      = 'Miami',
+    BillingCountry   = 'United States',
+    BillingPostalCode= '33101',
+    BillingState     = 'Florida',
+    BillingStreet    = '1 Biz Ave'
+);
+insert bizPO;
+System.debug('Business PO created: ' + bizPO.Id);
+
+// ── STEP 3: Create Individual Account (Related Account) ──────────
+Account indvRA = new Account(
+    LastName                = 'AC1 Test Individual RA',
+    RecordTypeId            = individualRT.Id,
+    PersonMailingCity       = 'Miami',
+    PersonMailingCountry    = 'United States',
+    PersonMailingPostalCode = '33101',
+    PersonMailingState      = 'Florida',
+    PersonMailingStreet     = '1 Main St',
+    PersonEmail             = 'ac1test@test.com'
+);
+insert indvRA;
+
+// Re-query to get PersonContactId
+indvRA = [SELECT Id, PersonContactId FROM Account WHERE Id = :indvRA.Id];
+System.debug('Individual RA created: ' + indvRA.Id);
+System.debug('PersonContactId: ' + indvRA.PersonContactId);
+
+// ── STEP 4: Create Deposit Financial Account ─────────────────────
+FinServ__FinancialAccount__c fa = new FinServ__FinancialAccount__c(
+    Name                     = 'AC1 Test Deposit FA',
+    RecordTypeId             = depositRT.Id,
+    FinServ__PrimaryOwner__c = bizPO.Id,
+    BKU_Special_Case__c      = 'FIDUCIARY',
+    FinServ__Status__c       = 'Open'
+);
+insert fa;
+System.debug('Financial Account created: ' + fa.Id);
+
+// ── STEP 5: Insert FAR — this fires the trigger ──────────────────
+FinServ__FinancialAccountRole__c far = new FinServ__FinancialAccountRole__c(
+    FinServ__FinancialAccount__c = fa.Id,
+    FinServ__RelatedAccount__c   = indvRA.Id,
+    FinServ__Role__c             = 'Escrow Agent'
+);
+insert far;
+System.debug('FAR inserted: ' + far.Id);
+
+// ── STEP 6: Wait for Queueable then check result ─────────────────
+// Queueable runs async — check manually after a few seconds
+System.debug('FAR inserted. Now check ACR result below:');
+
+List<AccountContactRelation> acrs = [
+    SELECT Id, Roles, AccountId, ContactId
+    FROM AccountContactRelation
+    WHERE AccountId = :bizPO.Id
+    AND   ContactId = :indvRA.PersonContactId
+];
+
+System.debug('ACR Count: ' + acrs.size());
+if (!acrs.isEmpty()) {
+    System.debug('ACR Roles: ' + acrs[0].Roles);
+    System.debug('SUCCESS: AC1 is working');
+} else {
+    System.debug('ACR not found yet - Queueable may still be running');
+    System.debug('Wait 5 seconds and run Step 7 separately');
+}
+
+
 public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
 
     // ── Constants ────────────────────────────────────────────────────
