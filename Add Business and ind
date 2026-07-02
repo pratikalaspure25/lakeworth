@@ -1,3 +1,26 @@
+Id bizPOId = 'PASTE_HERE';
+Id bizRAId = 'PASTE_HERE';
+
+RecordType depositRT = [SELECT Id FROM RecordType
+    WHERE SObjectType='FinServ__FinancialAccount__c'
+    AND DeveloperName='BankingAccount' LIMIT 1];
+
+FinServ__FinancialAccount__c fa = new FinServ__FinancialAccount__c(
+    Name='AC8 FA', RecordTypeId=depositRT.Id,
+    FinServ__PrimaryOwner__c=bizPOId,
+    BKU_Special_Case__c='IOLA/IOLTA', FinServ__Status__c='Open'
+);
+insert fa;
+
+insert new FinServ__FinancialAccountRole__c(
+    FinServ__FinancialAccount__c=fa.Id,
+    FinServ__RelatedAccount__c=bizRAId,
+    FinServ__Role__c='Joint Owner'
+);
+System.debug('AC8: FAR inserted - wait 5 seconds then run check');
+
+
+
 Id indvPOContactId = 'PASTE_HERE';
 Id indvRAContactId = 'PASTE_HERE';
 List<FinServ__ContactContactRelation__c> ccrs = [
