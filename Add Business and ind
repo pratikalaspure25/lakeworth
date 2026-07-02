@@ -1,3 +1,6 @@
+FinancialAccountRoleTriggerNo change — reused as-is✅FinancialAccountRoleTriggerHandlerModified — added 2 new methods✅ EscrowJointOwnerFARQueueableCreated new✅EscrowJointOwnerFARQueueableTestCreated new
+
+
 Id bizPOId = 'PASTE_HERE';
 Id bizRAId = 'PASTE_HERE';
 List<FinServ__AccountAccountRelation__c> aars = [
