@@ -1,3 +1,14 @@
+Id bizPOId = 'PASTE_HERE';
+Id indvRAContactId = 'PASTE_HERE';
+List<AccountContactRelation> acrs = [
+    SELECT Id, Roles FROM AccountContactRelation
+    WHERE AccountId=:bizPOId AND ContactId=:indvRAContactId
+];
+System.debug('AC1 ACR Count: ' + acrs.size());
+System.debug('AC1 ACR Roles: ' + (acrs.isEmpty() ? 'NONE' : acrs[0].Roles));
+System.debug('AC1 Result: ' + (acrs.size()==1 && acrs[0].Roles.contains('Escrow Agent') ? 'PASS ✓' : 'FAIL ✗'));
+
+
 // PASTE your IDs here
 Id bizPOId   = 'PASTE_HERE';
 Id indvRAId  = 'PASTE_HERE';
