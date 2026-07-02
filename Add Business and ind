@@ -1,3 +1,25 @@
+Id indvPOId = 'PASTE_HERE';
+Id indvRAId = 'PASTE_HERE';
+
+RecordType depositRT = [SELECT Id FROM RecordType
+    WHERE SObjectType='FinServ__FinancialAccount__c'
+    AND DeveloperName='BankingAccount' LIMIT 1];
+
+FinServ__FinancialAccount__c fa = new FinServ__FinancialAccount__c(
+    Name='AC4 FA', RecordTypeId=depositRT.Id,
+    FinServ__PrimaryOwner__c=indvPOId,
+    BKU_Special_Case__c='IOLA/IOLTA', FinServ__Status__c='Open'
+);
+insert fa;
+
+insert new FinServ__FinancialAccountRole__c(
+    FinServ__FinancialAccount__c=fa.Id,
+    FinServ__RelatedAccount__c=indvRAId,
+    FinServ__Role__c='Joint Owner'
+);
+System.debug('AC4: FAR inserted - wait 5 seconds then run check');
+
+
 Id bizPOId = 'PASTE_HERE';
 Id indvRAContactId = 'PASTE_HERE';
 List<AccountContactRelation> acrs = [
