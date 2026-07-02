@@ -1,3 +1,14 @@
+Id indvPOContactId = 'PASTE_HERE';
+Id indvRAContactId = 'PASTE_HERE';
+List<FinServ__ContactContactRelation__c> ccrs = [
+    SELECT Id FROM FinServ__ContactContactRelation__c
+    WHERE FinServ__Contact__c=:indvRAContactId
+    AND FinServ__RelatedContact__c=:indvPOContactId
+];
+System.debug('AC4 Result: ' + (ccrs.size()==1 ? 'PASS ✓' : 'FAIL ✗'));
+
+
+
 Id indvPOId = 'PASTE_HERE';
 Id indvRAId = 'PASTE_HERE';
 
