@@ -1,3 +1,20 @@
+// Check which lines need more coverage
+List<ApexCodeCoverageAggregate> coverage = [
+    SELECT ApexClassOrTrigger.Name,
+           NumLinesCovered,
+           NumLinesUncovered
+    FROM ApexCodeCoverageAggregate
+    WHERE ApexClassOrTrigger.Name = 'EscrowJointOwnerFARQueueable'
+];
+for (ApexCodeCoverageAggregate c : coverage) {
+    System.debug('Covered: ' + c.NumLinesCovered);
+    System.debug('Uncovered: ' + c.NumLinesUncovered);
+    Decimal total = c.NumLinesCovered + c.NumLinesUncovered;
+    Decimal pct = (c.NumLinesCovered / total) * 100;
+    System.debug('Coverage %: ' + pct.setScale(1));
+}
+
+
 FinancialAccountRoleTriggerNo change — reused as-is✅FinancialAccountRoleTriggerHandlerModified — added 2 new methods✅ EscrowJointOwnerFARQueueableCreated new✅EscrowJointOwnerFARQueueableTestCreated new
 
 
