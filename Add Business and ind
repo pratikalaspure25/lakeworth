@@ -1,5 +1,16 @@
 Id bizPOId = 'PASTE_HERE';
 Id bizRAId = 'PASTE_HERE';
+List<FinServ__AccountAccountRelation__c> aars = [
+    SELECT Id, FinServ__AssociationType__c
+    FROM FinServ__AccountAccountRelation__c
+    WHERE FinServ__Account__c=:bizPOId
+    AND FinServ__RelatedAccount__c=:bizRAId
+];
+System.debug('AC8 Result: ' + (aars.size()==1 && aars[0].FinServ__AssociationType__c=='Peer' ? 'PASS ✓' : 'FAIL ✗'));
+
+
+Id bizPOId = 'PASTE_HERE';
+Id bizRAId = 'PASTE_HERE';
 
 RecordType depositRT = [SELECT Id FROM RecordType
     WHERE SObjectType='FinServ__FinancialAccount__c'
