@@ -1,3 +1,75 @@
+// ============================================================
+// SETUP — Run this ONCE first
+// Creates all accounts and FA needed for AC1-AC10
+// ============================================================
+
+// Get RecordTypes
+RecordType businessRT = [SELECT Id FROM RecordType
+    WHERE SObjectType='Account' AND DeveloperName='IndustriesBusiness' LIMIT 1];
+RecordType individualRT = [SELECT Id FROM RecordType
+    WHERE SObjectType='Account' AND DeveloperName='Individual'
+    AND Id = '0123g000000Xe3CAAS' LIMIT 1];
+RecordType depositRT = [SELECT Id FROM RecordType
+    WHERE SObjectType='FinServ__FinancialAccount__c'
+    AND DeveloperName='BankingAccount' LIMIT 1];
+
+// Create Accounts
+Account bizPO = new Account(
+    Name='MANUAL TEST Biz PO', RecordTypeId=businessRT.Id,
+    Phone='555-000-0001',
+    BillingCity='Miami', BillingCountry='United States',
+    BillingPostalCode='33101', BillingState='Florida',
+    BillingStreet='1 Biz Ave',
+    ShippingCity='Miami', ShippingCountry='United States',
+    ShippingPostalCode='33101', ShippingState='Florida',
+    ShippingStreet='1 Biz Ave'
+);
+Account bizRA = new Account(
+    Name='MANUAL TEST Biz RA', RecordTypeId=businessRT.Id,
+    Phone='555-000-0002',
+    BillingCity='Miami', BillingCountry='United States',
+    BillingPostalCode='33101', BillingState='Florida',
+    BillingStreet='2 Biz Ave',
+    ShippingCity='Miami', ShippingCountry='United States',
+    ShippingPostalCode='33101', ShippingState='Florida',
+    ShippingStreet='2 Biz Ave'
+);
+Account indvPO = new Account(
+    LastName='MANUAL TEST Indv PO', RecordTypeId=individualRT.Id,
+    PersonMailingCity='Miami', PersonMailingCountry='United States',
+    PersonMailingPostalCode='33101', PersonMailingState='Florida',
+    PersonMailingStreet='1 Main St',
+    PersonOtherCity='Miami', PersonOtherCountry='United States',
+    PersonOtherPostalCode='33101', PersonOtherState='Florida',
+    PersonOtherStreet='1 Main St',
+    PersonEmail='indvpo.manual@test.com'
+);
+Account indvRA = new Account(
+    LastName='MANUAL TEST Indv RA', RecordTypeId=individualRT.Id,
+    PersonMailingCity='Miami', PersonMailingCountry='United States',
+    PersonMailingPostalCode='33101', PersonMailingState='Florida',
+    PersonMailingStreet='2 Main St',
+    PersonOtherCity='Miami', PersonOtherCountry='United States',
+    PersonOtherPostalCode='33101', PersonOtherState='Florida',
+    PersonOtherStreet='2 Main St',
+    PersonEmail='indvra.manual@test.com'
+);
+insert new List<Account>{ bizPO, bizRA, indvPO, indvRA };
+
+// Re-query for PersonContactId
+indvPO = [SELECT Id, PersonContactId FROM Account WHERE Id = :indvPO.Id];
+indvRA = [SELECT Id, PersonContactId FROM Account WHERE Id = :indvRA.Id];
+
+System.debug('=== COPY THESE IDs ===');
+System.debug('bizPO.Id = ' + bizPO.Id);
+System.debug('bizRA.Id = ' + bizRA.Id);
+System.debug('indvPO.Id = ' + indvPO.Id);
+System.debug('indvPO.PersonContactId = ' + indvPO.PersonContactId);
+System.debug('indvRA.Id = ' + indvRA.Id);
+System.debug('indvRA.PersonContactId = ' + indvRA.PersonContactId);
+
+
+
 // Confirm exact values used in real data
 System.debug('--- Account RTs in real data ---');
 List<AggregateResult> acctRTs = [
