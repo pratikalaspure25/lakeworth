@@ -1,3 +1,28 @@
+// PASTE your IDs here
+Id bizPOId   = 'PASTE_HERE';
+Id indvRAId  = 'PASTE_HERE';
+Id indvRAContactId = 'PASTE_HERE';
+
+RecordType depositRT = [SELECT Id FROM RecordType
+    WHERE SObjectType='FinServ__FinancialAccount__c'
+    AND DeveloperName='BankingAccount' LIMIT 1];
+
+FinServ__FinancialAccount__c fa = new FinServ__FinancialAccount__c(
+    Name='AC1 FA', RecordTypeId=depositRT.Id,
+    FinServ__PrimaryOwner__c=bizPOId,
+    BKU_Special_Case__c='FIDUCIARY', FinServ__Status__c='Open'
+);
+insert fa;
+
+insert new FinServ__FinancialAccountRole__c(
+    FinServ__FinancialAccount__c=fa.Id,
+    FinServ__RelatedAccount__c=indvRAId,
+    FinServ__Role__c='Escrow Agent'
+);
+System.debug('AC1: FAR inserted - wait 5 seconds then run check');
+
+
+
 // ============================================================
 // SETUP — Run this ONCE first
 // Creates all accounts and FA needed for AC1-AC10
