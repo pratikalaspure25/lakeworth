@@ -1,3 +1,21 @@
+// Check if your user can edit these accounts
+List<UserRecordAccess> access = [
+    SELECT RecordId, HasEditAccess, HasReadAccess
+    FROM UserRecordAccess
+    WHERE UserId = :UserInfo.getUserId()
+    AND RecordId IN (
+        '001O9000032pSuNIAU',
+        '001O9000032pSuQIAU'
+    )
+];
+for (UserRecordAccess a : access) {
+    System.debug('RecordId: ' + a.RecordId 
+        + ' | HasRead: ' + a.HasReadAccess 
+        + ' | HasEdit: ' + a.HasEditAccess);
+}
+
+
+
 // Try to manually create the ACR directly
 // to see if there is a validation rule or restriction
 Id bizPOId         = '001O9000032pSuNIAU';
