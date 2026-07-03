@@ -1,3 +1,23 @@
+// Check recent Apex Jobs for our Queueable
+List<AsyncApexJob> jobs = [
+    SELECT Id, Status, JobType,
+           ApexClass.Name,
+           CreatedDate,
+           CompletedDate,
+           ExtendedStatus
+    FROM AsyncApexJob
+    WHERE ApexClass.Name = 'EscrowJointOwnerFARQueueable'
+    ORDER BY CreatedDate DESC
+    LIMIT 10
+];
+System.debug('Total jobs: ' + jobs.size());
+for (AsyncApexJob j : jobs) {
+    System.debug('Status: ' + j.Status 
+        + ' | Created: ' + j.CreatedDate
+        + ' | Completed: ' + j.CompletedDate
+        + ' | Error: ' + j.ExtendedStatus);
+}
+
 // Check all FARs on faAC1
 List<FinServ__FinancialAccountRole__c> allFARs = [
     SELECT Id, FinServ__Role__c, CreatedDate
