@@ -1,3 +1,22 @@
+// Try to manually create the ACR directly
+// to see if there is a validation rule or restriction
+Id bizPOId         = '001O9000032pSuNIAU';
+Id indvRAContactId = '003O9000002l6OTVIA2';
+
+AccountContactRelation acr = new AccountContactRelation();
+acr.AccountId = bizPOId;
+acr.ContactId = indvRAContactId;
+acr.Roles     = 'Escrow Agent';
+acr.IsActive  = true;
+
+try {
+    insert acr;
+    System.debug('ACR INSERT SUCCESS: ' + acr.Id);
+} catch (Exception e) {
+    System.debug('ACR INSERT FAILED: ' + e.getMessage());
+}
+
+
 AC1 — Business PO + Individual RA + Escrow Agent → ACR
 Run INSERT:
 insert new FinServ__FinancialAccountRole__c(
