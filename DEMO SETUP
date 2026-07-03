@@ -1,3 +1,14 @@
+List<AccountContactRelation> ac1 = [
+    SELECT Id, Roles FROM AccountContactRelation
+    WHERE AccountId = '001O9000032pSuNIAU'
+    AND   ContactId = '003O90000216OTVIA2'
+    AND   Roles LIKE '%Escrow Agent%'
+];
+System.debug('AC1 Count: ' + ac1.size());
+System.debug('AC1 Roles: ' + (ac1.isEmpty() ? 'NONE' : ac1[0].Roles));
+System.debug('AC1: ' + (ac1.size()==1 ? '✅ PASS' : '❌ FAIL'));
+
+
 Account bizPO  = [SELECT Id, PersonContactId 
                   FROM Account WHERE Id = '001O9000032pSuNIAU'];
 Account bizRA  = [SELECT Id, PersonContactId 
