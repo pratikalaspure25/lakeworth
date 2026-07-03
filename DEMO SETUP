@@ -1,3 +1,20 @@
+// Check all FARs on faAC1
+List<FinServ__FinancialAccountRole__c> allFARs = [
+    SELECT Id, FinServ__Role__c, CreatedDate
+    FROM FinServ__FinancialAccountRole__c
+    WHERE FinServ__FinancialAccount__c = 'a7AO9000000Qc85MAC'
+    ORDER BY CreatedDate DESC
+];
+System.debug('Total FARs on AC1 FA: ' + allFARs.size());
+for (FinServ__FinancialAccountRole__c f : allFARs) {
+    System.debug('Id: ' + f.Id 
+        + ' | Role: ' + f.FinServ__Role__c 
+        + ' | Created: ' + f.CreatedDate);
+}
+
+
+
+
 // Maybe ACR already exists and is blocking
 List<AccountContactRelation> existing = [
     SELECT Id, AccountId, ContactId, Roles, IsActive
