@@ -1,3 +1,12 @@
+// Get exact PersonContactId directly from the account
+Account indvRA = [
+    SELECT Id, PersonContactId 
+    FROM Account 
+    WHERE Id = '001O9000032pSuQIAU'
+];
+System.debug('Exact PersonContactId: ' + indvRA.PersonContactId);
+
+
 // Check ACR history - were any ACRs ever created for these accounts
 List<AccountContactRelation> allACRs = [
     SELECT Id, AccountId, ContactId, Roles, IsActive,
