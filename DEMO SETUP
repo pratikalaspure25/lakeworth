@@ -1,3 +1,26 @@
+AC1 — Business PO + Individual RA + Escrow Agent → ACR
+Run INSERT:
+apexinsert new FinServ__FinancialAccountRole__c(
+    FinServ__FinancialAccount__c = 'a7AO90000000Qc85MAC',
+    FinServ__RelatedAccount__c   = '00109000032pSuQIAU',
+    FinServ__Role__c             = 'Escrow Agent'
+);
+System.debug('AC1 FAR inserted - wait 5 seconds then run CHECK');
+Wait 5 seconds then run CHECK:
+apexList<AccountContactRelation> ac1 = [
+    SELECT Id, Roles FROM AccountContactRelation
+    WHERE AccountId = '00109000032pSuNIAU'
+    AND   ContactId = '003O9000002l6OTVIA2'
+];
+System.debug('AC1 ACR Count: ' + ac1.size());
+System.debug('AC1 Roles: ' + (ac1.isEmpty() ? 'NONE' : ac1[0].Roles));
+System.debug('AC1: ' + (ac1.size()==1 && ac1[0].Roles.contains('Escrow Agent')
+    ? '✅ PASS' : '❌ FAIL'));
+
+
+
+
+
 // ============================================================
 // DEMO SETUP — Run this BEFORE the demo
 // ============================================================
