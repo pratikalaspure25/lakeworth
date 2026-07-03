@@ -1,3 +1,16 @@
+// Maybe ACR already exists and is blocking
+List<AccountContactRelation> existing = [
+    SELECT Id, AccountId, ContactId, Roles, IsActive
+    FROM AccountContactRelation
+    WHERE AccountId = '001O9000032pSuNIAU'
+    AND   ContactId = '003O9000002l6OTVIA2'
+];
+System.debug('Existing ACR count: ' + existing.size());
+for (AccountContactRelation a : existing) {
+    System.debug('Id: ' + a.Id + ' Roles: ' + a.Roles + ' Active: ' + a.IsActive);
+}
+
+
 // Check if your user can edit these accounts
 List<UserRecordAccess> access = [
     SELECT RecordId, HasEditAccess, HasReadAccess
