@@ -1,13 +1,14 @@
 AC1 — Business PO + Individual RA + Escrow Agent → ACR
 Run INSERT:
-apexinsert new FinServ__FinancialAccountRole__c(
+insert new FinServ__FinancialAccountRole__c(
     FinServ__FinancialAccount__c = 'a7AO90000000Qc85MAC',
     FinServ__RelatedAccount__c   = '00109000032pSuQIAU',
     FinServ__Role__c             = 'Escrow Agent'
 );
 System.debug('AC1 FAR inserted - wait 5 seconds then run CHECK');
+
 Wait 5 seconds then run CHECK:
-apexList<AccountContactRelation> ac1 = [
+List<AccountContactRelation> ac1 = [
     SELECT Id, Roles FROM AccountContactRelation
     WHERE AccountId = '00109000032pSuNIAU'
     AND   ContactId = '003O9000002l6OTVIA2'
