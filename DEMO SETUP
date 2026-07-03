@@ -1,3 +1,21 @@
+Account bizPO  = [SELECT Id, PersonContactId 
+                  FROM Account WHERE Id = '001O9000032pSuNIAU'];
+Account bizRA  = [SELECT Id, PersonContactId 
+                  FROM Account WHERE Id = '001O9000032pSuOIAU'];
+Account indvPO = [SELECT Id, PersonContactId 
+                  FROM Account WHERE Id = '001O9000032pSuPIAU'];
+Account indvRA = [SELECT Id, PersonContactId 
+                  FROM Account WHERE Id = '001O9000032pSuQIAU'];
+
+System.debug('=== EXACT IDs - COPY THESE ===');
+System.debug('bizPO.Id          = ' + bizPO.Id);
+System.debug('bizRA.Id          = ' + bizRA.Id);
+System.debug('indvPO.Id         = ' + indvPO.Id);
+System.debug('indvPO.ContactId  = ' + indvPO.PersonContactId);
+System.debug('indvRA.Id         = ' + indvRA.Id);
+System.debug('indvRA.ContactId  = ' + indvRA.PersonContactId);
+
+
 // Get exact PersonContactId directly from the account
 Account indvRA = [
     SELECT Id, PersonContactId 
