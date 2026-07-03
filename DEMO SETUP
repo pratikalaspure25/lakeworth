@@ -1,3 +1,19 @@
+// Check ACR history - were any ACRs ever created for these accounts
+List<AccountContactRelation> allACRs = [
+    SELECT Id, AccountId, ContactId, Roles, IsActive,
+           CreatedDate, LastModifiedDate
+    FROM AccountContactRelation
+    WHERE AccountId = '001O9000032pSuNIAU'
+];
+System.debug('All ACRs for BizPO: ' + allACRs.size());
+for (AccountContactRelation a : allACRs) {
+    System.debug('ContactId: ' + a.ContactId 
+        + ' | Roles: ' + a.Roles 
+        + ' | Active: ' + a.IsActive
+        + ' | Created: ' + a.CreatedDate);
+}
+
+
 // Check recent Apex Jobs for our Queueable
 List<AsyncApexJob> jobs = [
     SELECT Id, Status, JobType,
