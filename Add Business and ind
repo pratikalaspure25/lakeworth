@@ -119,6 +119,127 @@ System.debug('==============================');
 
 
 
+RecordType businessRT = [SELECT Id FROM RecordType
+    WHERE SObjectType='Account' 
+    AND DeveloperName='IndustriesBusiness' LIMIT 1];
+
+RecordType individualRT = [SELECT Id FROM RecordType
+    WHERE SObjectType='Account' 
+    AND DeveloperName='Individual'
+    AND Id='0123g000000Xe3CAAS' LIMIT 1];
+
+RecordType depositRT = [SELECT Id FROM RecordType
+    WHERE SObjectType='FinServ__FinancialAccount__c'
+    AND DeveloperName='BankingAccount' LIMIT 1];
+
+Account bizPO = new Account(
+    Name='DEMO Business PO', RecordTypeId=businessRT.Id,
+    Phone='555-000-0001',
+    BillingCity='Miami', BillingCountry='United States',
+    BillingPostalCode='33101', BillingState='Florida',
+    BillingStreet='1 Demo Biz Ave',
+    ShippingCity='Miami', ShippingCountry='United States',
+    ShippingPostalCode='33101', ShippingState='Florida',
+    ShippingStreet='1 Demo Biz Ave'
+);
+Account bizRA = new Account(
+    Name='DEMO Business RA', RecordTypeId=businessRT.Id,
+    Phone='555-000-0002',
+    BillingCity='Miami', BillingCountry='United States',
+    BillingPostalCode='33101', BillingState='Florida',
+    BillingStreet='2 Demo Biz Ave',
+    ShippingCity='Miami', ShippingCountry='United States',
+    ShippingPostalCode='33101', ShippingState='Florida',
+    ShippingStreet='2 Demo Biz Ave'
+);
+Account indvPO = new Account(
+    LastName='DEMO Individual PO', RecordTypeId=individualRT.Id,
+    PersonMailingCity='Miami', PersonMailingCountry='United States',
+    PersonMailingPostalCode='33101', PersonMailingState='Florida',
+    PersonMailingStreet='1 Demo Main St',
+    PersonOtherCity='Miami', PersonOtherCountry='United States',
+    PersonOtherPostalCode='33101', PersonOtherState='Florida',
+    PersonOtherStreet='1 Demo Main St',
+    PersonEmail='demo.indv.po@test.com'
+);
+Account indvRA = new Account(
+    LastName='DEMO Individual RA', RecordTypeId=individualRT.Id,
+    PersonMailingCity='Miami', PersonMailingCountry='United States',
+    PersonMailingPostalCode='33101', PersonMailingState='Florida',
+    PersonMailingStreet='2 Demo Main St',
+    PersonOtherCity='Miami', PersonOtherCountry='United States',
+    PersonOtherPostalCode='33101', PersonOtherState='Florida',
+    PersonOtherStreet='2 Demo Main St',
+    PersonEmail='demo.indv.ra@test.com'
+);
+insert new List<Account>{ bizPO, bizRA, indvPO, indvRA };
+
+indvPO = [SELECT Id, PersonContactId FROM Account WHERE Id=:indvPO.Id];
+indvRA = [SELECT Id, PersonContactId FROM Account WHERE Id=:indvRA.Id];
+
+FinServ__FinancialAccount__c faAC1 = new FinServ__FinancialAccount__c(
+    Name='DEMO FA AC1', RecordTypeId=depositRT.Id,
+    FinServ__PrimaryOwner__c=bizPO.Id,
+    BKU_Special_Case__c='FIDUCIARY', FinServ__Status__c='Open'
+);
+FinServ__FinancialAccount__c faAC2 = new FinServ__FinancialAccount__c(
+    Name='DEMO FA AC2', RecordTypeId=depositRT.Id,
+    FinServ__PrimaryOwner__c=bizPO.Id,
+    BKU_Special_Case__c='IOLA/IOLTA', FinServ__Status__c='Open'
+);
+FinServ__FinancialAccount__c faAC3 = new FinServ__FinancialAccount__c(
+    Name='DEMO FA AC3', RecordTypeId=depositRT.Id,
+    FinServ__PrimaryOwner__c=indvPO.Id,
+    BKU_Special_Case__c='FIDUCIARY', FinServ__Status__c='Open'
+);
+FinServ__FinancialAccount__c faAC4 = new FinServ__FinancialAccount__c(
+    Name='DEMO FA AC4', RecordTypeId=depositRT.Id,
+    FinServ__PrimaryOwner__c=indvPO.Id,
+    BKU_Special_Case__c='IOLA/IOLTA', FinServ__Status__c='Open'
+);
+FinServ__FinancialAccount__c faAC5 = new FinServ__FinancialAccount__c(
+    Name='DEMO FA AC5', RecordTypeId=depositRT.Id,
+    FinServ__PrimaryOwner__c=indvPO.Id,
+    BKU_Special_Case__c='FIDUCIARY', FinServ__Status__c='Open'
+);
+FinServ__FinancialAccount__c faAC6 = new FinServ__FinancialAccount__c(
+    Name='DEMO FA AC6', RecordTypeId=depositRT.Id,
+    FinServ__PrimaryOwner__c=indvPO.Id,
+    BKU_Special_Case__c='IOLA/IOLTA', FinServ__Status__c='Open'
+);
+FinServ__FinancialAccount__c faAC7 = new FinServ__FinancialAccount__c(
+    Name='DEMO FA AC7', RecordTypeId=depositRT.Id,
+    FinServ__PrimaryOwner__c=bizPO.Id,
+    BKU_Special_Case__c='FIDUCIARY', FinServ__Status__c='Open'
+);
+FinServ__FinancialAccount__c faAC8 = new FinServ__FinancialAccount__c(
+    Name='DEMO FA AC8', RecordTypeId=depositRT.Id,
+    FinServ__PrimaryOwner__c=bizPO.Id,
+    BKU_Special_Case__c='IOLA/IOLTA', FinServ__Status__c='Open'
+);
+insert new List<FinServ__FinancialAccount__c>{
+    faAC1,faAC2,faAC3,faAC4,faAC5,faAC6,faAC7,faAC8
+};
+
+System.debug('===== COPY ALL THESE IDs =====');
+System.debug('bizPO.Id=' + bizPO.Id);
+System.debug('bizRA.Id=' + bizRA.Id);
+System.debug('indvPO.Id=' + indvPO.Id);
+System.debug('indvPO.PersonContactId=' + indvPO.PersonContactId);
+System.debug('indvRA.Id=' + indvRA.Id);
+System.debug('indvRA.PersonContactId=' + indvRA.PersonContactId);
+System.debug('faAC1.Id=' + faAC1.Id);
+System.debug('faAC2.Id=' + faAC2.Id);
+System.debug('faAC3.Id=' + faAC3.Id);
+System.debug('faAC4.Id=' + faAC4.Id);
+System.debug('faAC5.Id=' + faAC5.Id);
+System.debug('faAC6.Id=' + faAC6.Id);
+System.debug('faAC7.Id=' + faAC7.Id);
+System.debug('faAC8.Id=' + faAC8.Id);
+System.debug('==============================');
+
+
+
 // Check which lines need more coverage
 List<ApexCodeCoverageAggregate> coverage = [
     SELECT ApexClassOrTrigger.Name,
