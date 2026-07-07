@@ -1,3 +1,8 @@
+
+Issue 3 — Inconsistent Indentation
+The CCR and AAR blocks inside both processInserts and processDeletes have very deep indentation — completely different from the rest of the file.
+
+
 RecordType businessRT = [SELECT Id FROM RecordType
     WHERE SObjectType='Account' 
     AND DeveloperName='IndustriesBusiness' LIMIT 1];
