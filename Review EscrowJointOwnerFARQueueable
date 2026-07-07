@@ -1,0 +1,1186 @@
+public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
+
+    // ── Constants ────────────────────────────────────────────────────
+    private static final Set<String> QUALIFYING_ROLES = new Set<String>{
+        'Escrow Agent',
+        'Joint Owner'
+    };
+    private static final Set<String> QUALIFYING_SPECIAL_CASES = new Set<String>{
+        'FIDUCIARY',
+        'IOLA/IOLTA'
+    };
+    private static final String DEPOSIT_RT_DEV_NAME = 'BankingAccount';
+    private static final String TYPE_INDIVIDUAL     = 'Individual';
+    private static final String TYPE_BUSINESS       = 'Business';
+    private static final String ASSOC_TYPE_PEER     = 'Peer';
+    private static final String HELPDESK_EMAIL      = 'crm360helpdesk@bankunited.com';
+    private static final Integer MAX_RETRIES        = 3;
+
+    // ── Instance Variables ───────────────────────────────────────────
+    private List<FinServ__FinancialAccountRole__c> insertedFARs;
+    private List<FinServ__FinancialAccountRole__c> deletedFARs;
+    private Integer retryCount;
+
+    // ── Constructors ─────────────────────────────────────────────────
+    public EscrowJointOwnerFARQueueable(
+        List<FinServ__FinancialAccountRole__c> insertedFARs,
+        List<FinServ__FinancialAccountRole__c> deletedFARs
+    ) {
+        this(insertedFARs, deletedFARs, 0);
+    }
+
+    public EscrowJointOwnerFARQueueable(
+        List<FinServ__FinancialAccountRole__c> insertedFARs,
+        List<FinServ__FinancialAccountRole__c> deletedFARs,
+        Integer retryCount
+    ) {
+        this.insertedFARs = insertedFARs;
+        this.deletedFARs  = deletedFARs;
+        this.retryCount   = retryCount;
+    }
+
+    // ── Execute ──────────────────────────────────────────────────────
+    public void execute(QueueableContext context) {
+        try {
+            if (insertedFARs != null && !insertedFARs.isEmpty()) {
+                processInserts(insertedFARs);
+            }
+            if (deletedFARs != null && !deletedFARs.isEmpty()) {
+                processDeletes(deletedFARs);
+            }
+        } catch (Exception e) {
+            sendErrorEmail(
+                'Unhandled exception:\n'
+                + e.getMessage() + '\n'
+                + e.getStackTraceString()
+            );
+        }
+    }
+
+    // =========================================================
+    // PROCESS INSERTS — AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8
+    // =========================================================
+    private void processInserts(
+        List<FinServ__FinancialAccountRole__c> farList
+    ) {
+        Set<Id> farIds = new Map<Id, FinServ__FinancialAccountRole__c>(
+            farList
+        ).keySet();
+
+        // Step 1: Enrich with all needed fields
+        List<FinServ__FinancialAccountRole__c> enriched = [
+            SELECT Id,
+                   FinServ__Role__c,
+                   FinServ__RelatedAccount__c,
+                   FinServ__RelatedAccount__r.BKU_Record_Type_Name__c,
+                   FinServ__RelatedAccount__r.PersonContactId,
+                   FinServ__FinancialAccount__c,
+                   FinServ__FinancialAccount__r.RecordType.DeveloperName,
+                   FinServ__FinancialAccount__r.BKU_Special_Case__c,
+                   FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c,
+                   FinServ__FinancialAccount__r.FinServ__PrimaryOwner__r.BKU_Record_Type_Name__c,
+                   FinServ__FinancialAccount__r.FinServ__PrimaryOwner__r.PersonContactId
+            FROM FinServ__FinancialAccountRole__c
+            WHERE Id IN :farIds
+        ];
+        
+        System.debug('Enriched count: ' + enriched.size());
+
+        // Step 2: Apply business filter
+        // Only Deposit FA + FIDUCIARY or IOLA/IOLTA qualifies
+        List<FinServ__FinancialAccountRole__c> qualified =
+            applyBusinessFilter(enriched);
+        
+        System.debug('Qualified after count: ' + qualified.size());
+        if (qualified.isEmpty()) return;
+
+        // Step 3: Get Reciprocal Role IDs for CCR and AAR
+        Map<String, Id> acctRoleMap = getReciprocalRoleIdMap('AccountRole');
+        Map<String, Id> contRoleMap = getReciprocalRoleIdMap('ContactRole');
+
+        // Step 4: Build contexts
+        List<FARContext> contexts = buildContexts(qualified);
+        System.debug('Contexts: built ' + contexts.size());
+
+        // Step 5: Collect IDs for bulk queries
+        Set<Id> acrAccountIds = new Set<Id>();
+        Set<Id> acrContactIds = new Set<Id>();
+        Set<Id> ccrContactIds = new Set<Id>();
+        Set<Id> aarAccountIds = new Set<Id>();
+
+        for (FARContext ctx : contexts) {
+            System.debug('FAR ' + ctx.farId);
+            System.debug('Role ' + ctx.role);
+            System.debug('PO Type ' + ctx.poType);
+            System.debug('RA Type ' + ctx.raType);
+            System.debug('PO Id ' + ctx.poId);
+            System.debug('RA Id ' + ctx.raId);
+            System.debug('PO PersonContactId ' + ctx.poPersonContactId);
+            System.debug('RA PersonContactId ' + ctx.raPersonContactId);
+            
+            // AC1/AC2: Business PO + Individual RA
+            if (ctx.poType == TYPE_BUSINESS
+                    && ctx.raType == TYPE_INDIVIDUAL) {
+                acrAccountIds.add(ctx.poId);
+                if (ctx.raPersonContactId != null) {
+                    acrContactIds.add(ctx.raPersonContactId);
+                }
+            // AC3/AC4: Individual PO + Individual RA
+            } else if (ctx.poType == TYPE_INDIVIDUAL
+                    && ctx.raType == TYPE_INDIVIDUAL) {
+                if (ctx.poPersonContactId != null) {
+                    ccrContactIds.add(ctx.poPersonContactId);
+                }
+                if (ctx.raPersonContactId != null) {
+                    ccrContactIds.add(ctx.raPersonContactId);
+                }
+            // AC5/AC6: Individual PO + Business RA
+            } else if (ctx.poType == TYPE_INDIVIDUAL
+                    && ctx.raType == TYPE_BUSINESS) {
+                acrAccountIds.add(ctx.raId);
+                if (ctx.poPersonContactId != null) {
+                    acrContactIds.add(ctx.poPersonContactId);
+                }
+            // AC7/AC8: Business PO + Business RA
+            } else if (ctx.poType == TYPE_BUSINESS
+                    && ctx.raType == TYPE_BUSINESS) {
+                aarAccountIds.add(ctx.poId);
+                aarAccountIds.add(ctx.raId);
+            }
+        }
+
+        // Step 6: Query existing records to prevent duplicates
+        Map<String, AccountContactRelation> existingACRs =
+            queryExistingACRs(acrAccountIds, acrContactIds);
+        Map<String, FinServ__ContactContactRelation__c> existingCCRs =
+            queryExistingCCRs(ccrContactIds);
+        Map<String, FinServ__AccountAccountRelation__c> existingAARs =
+            queryExistingAARs(aarAccountIds);
+
+        // Step 7: Build DML lists
+        List<AccountContactRelation> acrToCreate =
+            new List<AccountContactRelation>();
+        List<AccountContactRelation> acrToUpdate =
+            new List<AccountContactRelation>();
+        List<FinServ__ContactContactRelation__c> ccrToCreate =
+            new List<FinServ__ContactContactRelation__c>();
+        List<FinServ__AccountAccountRelation__c> aarToCreate =
+            new List<FinServ__AccountAccountRelation__c>();
+        List<String> errors = new List<String>();
+        Map<Integer, FinServ__FinancialAccountRole__c> acrIndexToFAR =
+            new Map<Integer, FinServ__FinancialAccountRole__c>();
+
+        for (FARContext ctx : contexts) {
+            String roleLabel  = ctx.role;
+            Id     contRoleId = contRoleMap.get(roleLabel);
+            Id     acctRoleId = acctRoleMap.get(roleLabel);
+
+            // ── AC1/AC2: Business PO + Individual RA → ACR ───────────
+            if (ctx.poType == TYPE_BUSINESS
+                    && ctx.raType == TYPE_INDIVIDUAL) {
+                if (ctx.raPersonContactId == null) {
+                    errors.add('RA ' + ctx.raId
+                        + ' has no PersonContactId. FAR: ' + ctx.farId);
+                    continue;
+                }
+                String key = ctx.poId + '_' + ctx.raPersonContactId;
+                        
+                System.debug('Key = ' + key);
+                System.debug('Role Label = ' + roleLabel);
+                System.debug('Existing Keys = ' + existingACRs.keySet());
+                System.debug('ALL KEYS = ' + existingACRs.keySet());
+
+
+                AccountContactRelation existing = existingACRs.get(key);
+                        System.debug('Found Existing ACR: ' + existing);
+                if (existing != null) {
+                    
+                        System.debug('Existing Roles: ' + existing.Roles);
+                        System.debug('Role Label: ' + roleLabel);
+                        System.debug('Contains Role: ' +
+                            roleContains(existing.Roles, roleLabel));
+
+                   /* if (!roleContains(existing.Roles, roleLabel)) {
+                        existing.Roles = appendRole(existing.Roles, roleLabel);
+                        System.debug('Updated Roles: ' + existing.Roles);
+                        acrToUpdate.add(existing);
+                    }*/
+                    if (!roleContains(existing.Roles, roleLabel)) {
+                        
+                        AccountContactRelation acrUpdate =
+                            new AccountContactRelation();
+                        
+                        acrUpdate.Id = existing.Id;
+                        acrUpdate.Roles =
+                            appendRole(existing.Roles, roleLabel);
+	
+                        System.debug(
+                            'Updated Roles: ' + acrUpdate.Roles
+                        );
+
+                        
+                        acrToUpdate.add(acrUpdate);
+                    }
+                } else {
+                    acrIndexToFAR.put(acrToCreate.size(), ctx.sourceFAR);
+                    acrToCreate.add(
+                        buildACR(ctx.poId, ctx.raPersonContactId, roleLabel)
+                    );
+                }
+
+            // ── AC3/AC4: Individual PO + Individual RA → CCR ─────────
+            /*} else if (ctx.poType == TYPE_INDIVIDUAL
+                    && ctx.raType == TYPE_INDIVIDUAL) {
+                        System.debug('===== AC3/AC4 DEBUG =====');
+                        System.debug('Role Label = ' + roleLabel);
+                        System.debug('Contact Role Id = ' + contRoleId);
+                        System.debug('PO Contact = ' + ctx.poPersonContactId);
+                        System.debug('RA Contact = ' + ctx.raPersonContactId);
+
+                if (ctx.poPersonContactId == null
+                        || ctx.raPersonContactId == null) {
+                    errors.add('Missing PersonContactId on PO or RA.'
+                        + ' FAR: ' + ctx.farId);
+                    continue;
+                }
+                if (contRoleId == null) {
+                    errors.add('ReciprocalRole (ContactRole) "'
+                        + roleLabel + '" not found. FAR: ' + ctx.farId);
+                    continue;
+                }
+                String key = ctx.raPersonContactId
+                    + '_' + ctx.poPersonContactId
+                    + '_' + contRoleId;
+                        
+                        System.debug('CCR Key = ' + key);
+                        System.debug(
+                            'Existing CCR Found = ' +
+                            existingCCRs.containsKey(key)
+                        );
+
+                if (!existingCCRs.containsKey(key)) {
+                    System.debug('Creating CCR');
+                    ccrToCreate.add(buildCCR(
+                        ctx.raPersonContactId,
+                        ctx.poPersonContactId,
+                        contRoleId
+                    ));
+                } */
+
+			
+                    } else if (ctx.poType == TYPE_INDIVIDUAL
+                               && ctx.raType == TYPE_INDIVIDUAL) {
+                                   
+                                   if (ctx.poPersonContactId == null
+                                       || ctx.raPersonContactId == null) {
+                                           errors.add('Missing PersonContactId on PO or RA.'
+                                                      + ' FAR: ' + ctx.farId);
+                                           continue;
+                                       }
+                                   
+                                   if (contRoleId == null) {
+                                       errors.add('ReciprocalRole (ContactRole) "'
+                                                  + roleLabel + '" not found. FAR: ' + ctx.farId);
+                                       continue;
+                                   }
+                                   
+                                   Boolean relationshipExists = false;
+                                   
+                                   for (FinServ__ContactContactRelation__c ccr :
+                                        existingCCRs.values()) {
+                                            
+                                            if (
+                                                (ccr.FinServ__Contact__c == ctx.poPersonContactId
+                                                 && ccr.FinServ__RelatedContact__c
+                                                 == ctx.raPersonContactId)
+                                                ||
+                                                (ccr.FinServ__Contact__c == ctx.raPersonContactId
+                                                 && ccr.FinServ__RelatedContact__c
+                                                 == ctx.poPersonContactId)
+                                            ) {
+                                                relationshipExists = true;
+                                                break;
+                                            }
+                                        }
+                                   
+                                   if (!relationshipExists) {
+                                       ccrToCreate.add(
+                                           buildCCR(
+                                               ctx.raPersonContactId,
+                                               ctx.poPersonContactId,
+                                               contRoleId
+                                           )
+                                       );
+                                   }
+                               
+
+
+            // ── AC5/AC6: Individual PO + Business RA → ACR reversed ──
+            } else if (ctx.poType == TYPE_INDIVIDUAL
+                    && ctx.raType == TYPE_BUSINESS) {
+                if (ctx.poPersonContactId == null) {
+                    errors.add('PO ' + ctx.poId
+                        + ' has no PersonContactId. FAR: ' + ctx.farId);
+                    continue;
+                }
+                String key = ctx.raId + '_' + ctx.poPersonContactId;
+                AccountContactRelation existing = existingACRs.get(key);
+                if (existing != null) {
+                   /* if (!roleContains(existing.Roles, roleLabel)) {
+                        existing.Roles = appendRole(existing.Roles, roleLabel);
+                        acrToUpdate.add(existing);
+                    }*/
+                    if (!roleContains(existing.Roles, roleLabel)) {
+                        
+                        AccountContactRelation acrUpdate =
+                            new AccountContactRelation();
+                        
+                        acrUpdate.Id = existing.Id;
+                        acrUpdate.Roles =
+                            appendRole(existing.Roles, roleLabel);
+
+                        System.debug(
+                            'Updated Roles: ' + acrUpdate.Roles
+                        );
+
+                        
+                        acrToUpdate.add(acrUpdate);
+                    }
+                } else {
+                    acrIndexToFAR.put(acrToCreate.size(), ctx.sourceFAR);
+                    acrToCreate.add(
+                        buildACR(ctx.raId, ctx.poPersonContactId, roleLabel)
+                    );
+                }
+
+            // ── AC7/AC8: Business PO + Business RA → AAR ─────────────
+           /* } else if (ctx.poType == TYPE_BUSINESS
+                    && ctx.raType == TYPE_BUSINESS) {
+                if (acctRoleId == null) {
+                    errors.add('ReciprocalRole (AccountRole) "'
+                        + roleLabel + '" not found. FAR: ' + ctx.farId);
+                    continue;
+                }
+                String key = ctx.poId + '_' + ctx.raId
+                    + '_' + acctRoleId;
+                if (!existingAARs.containsKey(key)) {
+                    aarToCreate.add(
+                        buildAAR(ctx.poId, ctx.raId, acctRoleId)
+                    );
+                }
+            }*/
+			
+
+                    } else if (ctx.poType == TYPE_BUSINESS
+                               && ctx.raType == TYPE_BUSINESS) {
+                                   
+                                   if (acctRoleId == null) {
+                                       errors.add('ReciprocalRole (AccountRole) "'
+                                                  + roleLabel + '" not found. FAR: ' + ctx.farId);
+                                       continue;
+                                   }
+                                   
+                                   Boolean relationshipExists = false;
+                                   
+                                   for (FinServ__AccountAccountRelation__c aar :
+                                        existingAARs.values()) {
+                                            
+                                            if (
+                                                aar.FinServ__Account__c == ctx.poId &&
+                                                aar.FinServ__RelatedAccount__c == ctx.raId
+                                            ) {
+                                                relationshipExists = true;
+                                                break;
+                                            }
+                                        }
+                                   
+                                   // If Business-to-Business relationship already exists,
+                                   // skip processing and do not create another one.
+                                   if (!relationshipExists) {
+                                       
+                                       aarToCreate.add(
+                                           buildAAR(
+                                               ctx.poId,
+                                               ctx.raId,
+                                               acctRoleId
+                                           )
+                                       );
+                                   }
+                               }
+
+		
+        }
+
+        // Step 8: Execute DML
+        List<FinServ__FinancialAccountRole__c> retryFARs =
+            new List<FinServ__FinancialAccountRole__c>();
+
+        if (!acrToCreate.isEmpty()) {
+            Database.SaveResult[] results =
+                Database.insert(acrToCreate, false);
+            for (Integer i = 0; i < results.size(); i++) {
+                if (!results[i].isSuccess()) {
+                    for (Database.Error err : results[i].getErrors()) {
+                        if (err.getStatusCode()
+                                == StatusCode.UNABLE_TO_LOCK_ROW) {
+                            if (retryCount < MAX_RETRIES
+                                    && acrIndexToFAR.containsKey(i)) {
+                                retryFARs.add(acrIndexToFAR.get(i));
+                            } else {
+                                errors.add('[ACR Insert] Max retries. FAR: '
+                                    + (acrIndexToFAR.containsKey(i)
+                                        ? acrIndexToFAR.get(i).Id
+                                        : 'unknown'));
+                            }
+                        } else if (err.getStatusCode()
+                                != StatusCode.DUPLICATE_VALUE) {
+                            errors.add('[ACR Insert] '
+                                + err.getStatusCode()
+                                + ': ' + err.getMessage());
+                        }
+                    }
+                }
+            }
+        }
+
+        System.debug('acrToUpdate Size = ' + acrToUpdate.size());
+		System.debug('acrToUpdate = ' + acrToUpdate);
+        if (!acrToUpdate.isEmpty()) {
+            collectErrors(
+                Database.update(acrToUpdate, false),
+                'ACR Update', errors
+            );
+        }
+        /*if (!ccrToCreate.isEmpty()) {
+            collectErrors(
+                Database.insert(ccrToCreate, false),
+                'CCR Insert', errors
+            );
+        }*/
+        
+        System.debug('CCR TO CREATE SIZE = ' + ccrToCreate.size());
+        System.debug('CCR TO CREATE = ' + ccrToCreate);
+
+        if (!ccrToCreate.isEmpty()) {
+            
+            Database.SaveResult[] ccrResults =
+                Database.insert(ccrToCreate, false);
+            
+            collectErrors(
+                ccrResults,
+                'CCR Insert',
+                errors
+            );
+        }
+        /*if (!aarToCreate.isEmpty()) {
+            collectErrors(
+                Database.insert(aarToCreate, false),
+                'AAR Insert', errors
+            );
+        }*/
+
+        System.debug('AAR TO CREATE SIZE = ' + aarToCreate.size());
+        System.debug('AAR TO CREATE = ' + aarToCreate);
+        
+        if (!aarToCreate.isEmpty()) {
+            
+            Database.SaveResult[] results =
+                Database.insert(aarToCreate, false);
+            
+            collectErrors(
+                results,
+                'AAR Insert',
+                errors
+            );
+        }
+
+        if (!retryFARs.isEmpty()) {
+            System.enqueueJob(new EscrowJointOwnerFARQueueable(
+                retryFARs, null, retryCount + 1
+            ));
+        }
+        if (!errors.isEmpty()) {
+            sendErrorEmail(String.join(errors, '\n'));
+        }
+    }
+
+    // =========================================================
+    // PROCESS DELETES — AC9, AC10
+    // =========================================================
+    private void processDeletes(
+        List<FinServ__FinancialAccountRole__c> farList
+    ) {
+        Set<Id> faIds = new Set<Id>();
+        Set<Id> raIds = new Set<Id>();
+        for (FinServ__FinancialAccountRole__c far : farList) {
+            faIds.add(far.FinServ__FinancialAccount__c);
+            raIds.add(far.FinServ__RelatedAccount__c);
+        }
+
+        // Fetch FA details
+        Map<Id, FinServ__FinancialAccount__c> faMap =
+            new Map<Id, FinServ__FinancialAccount__c>([
+                SELECT Id,
+                       RecordType.DeveloperName,
+                       BKU_Special_Case__c,
+                       FinServ__PrimaryOwner__c,
+                       FinServ__PrimaryOwner__r.BKU_Record_Type_Name__c,
+                       FinServ__PrimaryOwner__r.PersonContactId
+                FROM FinServ__FinancialAccount__c
+                WHERE Id IN :faIds
+            ]);
+
+        // Fetch RA details
+        Map<Id, Account> raMap = new Map<Id, Account>([
+            SELECT Id, BKU_Record_Type_Name__c, PersonContactId
+            FROM Account
+            WHERE Id IN :raIds
+        ]);
+
+        Map<String, Id> acctRoleMap = getReciprocalRoleIdMap('AccountRole');
+        Map<String, Id> contRoleMap = getReciprocalRoleIdMap('ContactRole');
+
+        // Build delete contexts — only qualified FARs
+        List<FARContext> allContexts = new List<FARContext>();
+        for (FinServ__FinancialAccountRole__c far : farList) {
+            FinServ__FinancialAccount__c fa =
+                faMap.get(far.FinServ__FinancialAccount__c);
+            Account ra = raMap.get(far.FinServ__RelatedAccount__c);
+            if (fa == null || ra == null) continue;
+            if (!isQualifiedFA(fa)) continue;
+
+            allContexts.add(new FARContext(
+                far.Id,
+                far.FinServ__Role__c,
+                fa.FinServ__PrimaryOwner__r.BKU_Record_Type_Name__c,
+                ra.BKU_Record_Type_Name__c,
+                fa.FinServ__PrimaryOwner__c,
+                far.FinServ__RelatedAccount__c,
+                fa.FinServ__PrimaryOwner__r.PersonContactId,
+                ra.PersonContactId,
+                far
+            ));
+        }
+        if (allContexts.isEmpty()) return;
+
+        // Guard: only remove if no other qualifying FAR
+        // still links same PO + RA + Role
+        Set<Id> poIds = new Set<Id>();
+        for (FARContext ctx : allContexts) poIds.add(ctx.poId);
+
+        Set<Id> qualifiedFAIds = new Set<Id>();
+        for (FinServ__FinancialAccount__c fa : [
+            SELECT Id
+            FROM FinServ__FinancialAccount__c
+            WHERE FinServ__PrimaryOwner__c IN :poIds
+              AND RecordType.DeveloperName  = :DEPOSIT_RT_DEV_NAME
+              AND BKU_Special_Case__c       IN :QUALIFYING_SPECIAL_CASES
+        ]) {
+            qualifiedFAIds.add(fa.Id);
+        }
+
+        Map<String, Integer> remainingCount =
+            new Map<String, Integer>();
+        for (FinServ__FinancialAccountRole__c remaining : [
+            SELECT Id,
+                   FinServ__Role__c,
+                   FinServ__RelatedAccount__c,
+                   FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c
+            FROM FinServ__FinancialAccountRole__c
+            WHERE FinServ__FinancialAccount__c IN :qualifiedFAIds
+              AND FinServ__RelatedAccount__c   IN :raIds
+              AND FinServ__Role__c             IN :QUALIFYING_ROLES
+        ]) {
+            String key =
+                remaining.FinServ__FinancialAccount__r
+                    .FinServ__PrimaryOwner__c
+                + '_' + remaining.FinServ__RelatedAccount__c
+                + '_' + remaining.FinServ__Role__c;
+            remainingCount.put(
+                key, (remainingCount.get(key) ?? 0) + 1
+            );
+        }
+
+        // Only remove relationships with zero remaining FARs
+        /*List<FARContext> toRemove = new List<FARContext>();
+        for (FARContext ctx : allContexts) {
+            String key = ctx.poId + '_' + ctx.raId + '_' + ctx.role;
+            if (!remainingCount.containsKey(key)) {
+                toRemove.add(ctx);
+            }
+        }*/
+
+        List<FARContext> toRemove = new List<FARContext>();
+        
+        for (FARContext ctx : allContexts) {
+            
+            String key = ctx.poId + '_' + ctx.raId + '_' + ctx.role;
+            
+            System.debug('DELETE KEY = ' + key);
+            System.debug(
+                'REMAINING COUNT = ' +
+                remainingCount.get(key)
+            );
+            System.debug(
+                'CONTAINS KEY = ' +
+                remainingCount.containsKey(key)
+            );
+            
+            if (!remainingCount.containsKey(key)) {
+                System.debug('ADDING TO REMOVE');
+                toRemove.add(ctx);
+            }
+        }	
+
+        if (toRemove.isEmpty()) return;
+
+        // Collect IDs for bulk queries
+        Set<Id> acrAccountIds = new Set<Id>();
+        Set<Id> acrContactIds = new Set<Id>();
+        Set<Id> ccrContactIds = new Set<Id>();
+        Set<Id> aarAccountIds = new Set<Id>();
+
+        for (FARContext ctx : toRemove) {
+            if (ctx.poType == TYPE_BUSINESS
+                    && ctx.raType == TYPE_INDIVIDUAL) {
+                acrAccountIds.add(ctx.poId);
+                if (ctx.raPersonContactId != null) {
+                    acrContactIds.add(ctx.raPersonContactId);
+                }
+            } else if (ctx.poType == TYPE_INDIVIDUAL
+                    && ctx.raType == TYPE_INDIVIDUAL) {
+                if (ctx.poPersonContactId != null) {
+                    ccrContactIds.add(ctx.poPersonContactId);
+                }
+                if (ctx.raPersonContactId != null) {
+                    ccrContactIds.add(ctx.raPersonContactId);
+                }
+            } else if (ctx.poType == TYPE_INDIVIDUAL
+                    && ctx.raType == TYPE_BUSINESS) {
+                acrAccountIds.add(ctx.raId);
+                if (ctx.poPersonContactId != null) {
+                    acrContactIds.add(ctx.poPersonContactId);
+                }
+            } else if (ctx.poType == TYPE_BUSINESS
+                    && ctx.raType == TYPE_BUSINESS) {
+                aarAccountIds.add(ctx.poId);
+                aarAccountIds.add(ctx.raId);
+            }
+        }
+
+        Map<String, AccountContactRelation> existingACRs =
+            queryExistingACRs(acrAccountIds, acrContactIds);
+        Map<String, FinServ__ContactContactRelation__c> existingCCRs =
+            queryExistingCCRs(ccrContactIds);
+        Map<String, FinServ__AccountAccountRelation__c> existingAARs =
+            queryExistingAARs(aarAccountIds);
+
+        Map<Id, AccountContactRelation> acrToUpdateMap =
+            new Map<Id, AccountContactRelation>();
+        Map<Id, AccountContactRelation> acrToDeleteMap =
+            new Map<Id, AccountContactRelation>();
+        Map<Id, FinServ__ContactContactRelation__c> ccrToDeleteMap =
+            new Map<Id, FinServ__ContactContactRelation__c>();
+        Map<Id, FinServ__AccountAccountRelation__c> aarToDeleteMap =
+            new Map<Id, FinServ__AccountAccountRelation__c>();
+        List<String> errors = new List<String>();
+
+        for (FARContext ctx : toRemove) {
+            String roleLabel  = ctx.role;
+            Id     contRoleId = contRoleMap.get(roleLabel);
+            Id     acctRoleId = acctRoleMap.get(roleLabel);
+
+            // AC9/AC10: Business PO + Individual RA
+            if (ctx.poType == TYPE_BUSINESS
+                    && ctx.raType == TYPE_INDIVIDUAL) {
+                if (ctx.raPersonContactId == null) continue;
+                AccountContactRelation acr = existingACRs.get(
+                    ctx.poId + '_' + ctx.raPersonContactId
+                );
+                if (acr != null) {
+                    
+                   
+                    System.debug('ROLE TO REMOVE = ' + roleLabel);
+                    System.debug('ACR ID = ' + acr.Id);
+                    System.debug('CURRENT ROLES = ' + acr.Roles);
+
+
+                    String updated = removeRole(acr.Roles, roleLabel);
+
+                    System.debug('UPDATED ROLES = ' + updated);
+                    if (String.isBlank(updated)) {
+
+                        System.debug(
+                            'NO ROLES LEFT - MARKING ACR FOR DELETE'
+                        );
+						System.debug('ACR DELETE ID = ' + acr.Id);
+                        acrToDeleteMap.put(acr.Id, acr);
+                    } else {
+	
+                        System.debug(
+                            'UPDATING ACR WITH ROLES = ' + updated
+                        );
+
+                        AccountContactRelation acrUpdate =
+                            new AccountContactRelation();
+                        
+                        acrUpdate.Id = acr.Id;
+                        acrUpdate.Roles = updated;
+                        
+                        System.debug('MARKING ACR FOR UPDATE');
+                        System.debug('ADDING ACR TO UPDATE MAP');
+                        
+                        acrToUpdateMap.put(acrUpdate.Id, acrUpdate);
+                    }
+                }
+
+            // AC9/AC10: Individual PO + Individual RA
+            } else if (ctx.poType == TYPE_INDIVIDUAL
+                    && ctx.raType == TYPE_INDIVIDUAL) {
+                if (ctx.raPersonContactId == null
+                        || ctx.poPersonContactId == null) continue;
+                String key = ctx.raPersonContactId
+                    + '_' + ctx.poPersonContactId
+                    + '_' + contRoleId;
+                FinServ__ContactContactRelation__c ccr =
+                    existingCCRs.get(key);
+                if (ccr != null) ccrToDeleteMap.put(ccr.Id, ccr);
+
+            // AC9/AC10: Individual PO + Business RA
+           /* } else if (ctx.poType == TYPE_INDIVIDUAL
+                    && ctx.raType == TYPE_BUSINESS) {
+                if (ctx.poPersonContactId == null) continue;
+                AccountContactRelation acr = existingACRs.get(
+                    ctx.raId + '_' + ctx.poPersonContactId
+                );
+                if (acr != null) {
+                    String updated = removeRole(acr.Roles, roleLabel);
+                    if (String.isBlank(updated)) {
+                        acrToDeleteMap.put(acr.Id, acr);
+                    } else {
+                        acr.Roles = updated;
+                        acrToUpdateMap.put(acr.Id, acr);
+                    }
+                } */
+
+                    } else if (ctx.poType == TYPE_INDIVIDUAL
+                               && ctx.raType == TYPE_BUSINESS) {
+                                   
+                                   if (ctx.poPersonContactId == null) continue;
+                                   
+                                   System.debug('EXISTING ACR KEYS = ' + existingACRs.keySet());
+
+                                   String acrKey =
+                                       ctx.raId + '_' + ctx.poPersonContactId;
+                                   
+                                   System.debug('LOOKUP KEY = ' + acrKey);
+                                   
+                                   System.debug('ACR KEY LOOKUP = ' + acrKey);
+                                   System.debug('AVAILABLE ACR KEYS = ' + existingACRs.keySet());
+                                   
+                                   AccountContactRelation acr =
+                                       existingACRs.get(acrKey);
+                                   
+                                   System.debug('ACR FOUND = ' + acr);
+                                   System.debug('FOUND ACR = ' + acr);
+                                   
+                                   if (acr != null) {
+                                       
+                                       System.debug('ROLE TO REMOVE = ' + roleLabel);
+                                       System.debug('CURRENT ROLES = ' + acr.Roles);
+                                       
+                                       String updated =
+                                           removeRole(acr.Roles, roleLabel);
+                                       
+                                       System.debug('UPDATED ROLES = ' + updated);
+                                       
+                                       if (String.isBlank(updated)) {
+                                           
+                                           System.debug('MARKING ACR FOR DELETE');
+                                           System.debug('ACR DELETE ID = ' + acr.Id);
+                                           
+                                           acrToDeleteMap.put(acr.Id, acr);
+                                           
+                                       } else {
+                                           
+                                           AccountContactRelation acrUpdate =
+                                               new AccountContactRelation();
+                                           
+                                           acrUpdate.Id = acr.Id;
+                                           acrUpdate.Roles = updated;
+                                           
+                                           System.debug('MARKING ACR FOR UPDATE');
+                                           System.debug('ADDING ACR TO UPDATE MAP');
+                                           
+                                           acrToUpdateMap.put(acrUpdate.Id, acrUpdate);
+                                       }
+                                   }
+                               
+
+            // AC9/AC10: Business PO + Business RA
+            } else if (ctx.poType == TYPE_BUSINESS
+                    && ctx.raType == TYPE_BUSINESS) {
+                String key = ctx.poId + '_' + ctx.raId
+                    + '_' + acctRoleId;
+                FinServ__AccountAccountRelation__c aar =
+                    existingAARs.get(key);
+                if (aar != null) aarToDeleteMap.put(aar.Id, aar);
+            }
+        }
+
+        // Execute DML
+        AccountContactRelationTriggerHandler.suppressTrigger = true;
+        try {
+            System.debug(
+                'ACR UPDATE COUNT = ' +
+                acrToUpdateMap.size()
+            );
+            if (!acrToUpdateMap.isEmpty()) {
+                collectErrors(
+                    Database.update(acrToUpdateMap.values(), false),
+                    'ACR Role Remove', errors
+                );
+            }
+            System.debug(
+                'ACR DELETE COUNT = ' +
+                acrToDeleteMap.size()
+            );
+            if (!acrToDeleteMap.isEmpty()) {
+                collectDeleteErrors(
+                    Database.delete(acrToDeleteMap.values(), false),
+                    'ACR Delete', errors
+                );
+            }
+        } finally {
+            AccountContactRelationTriggerHandler.suppressTrigger = false;
+        }
+
+        if (!ccrToDeleteMap.isEmpty()) {
+            collectDeleteErrors(
+                Database.delete(ccrToDeleteMap.values(), false),
+                'CCR Delete', errors
+            );
+        }
+        if (!aarToDeleteMap.isEmpty()) {
+            collectDeleteErrors(
+                Database.delete(aarToDeleteMap.values(), false),
+                'AAR Delete', errors
+            );
+        }
+
+        if (!errors.isEmpty()) {
+            sendErrorEmail(String.join(errors, '\n'));
+        }
+    }
+
+    // =========================================================
+    // BUSINESS FILTER
+    // =========================================================
+    private List<FinServ__FinancialAccountRole__c> applyBusinessFilter(
+        List<FinServ__FinancialAccountRole__c> records
+    ) {
+        List<FinServ__FinancialAccountRole__c> result =
+            new List<FinServ__FinancialAccountRole__c>();
+        for (FinServ__FinancialAccountRole__c far : records) {
+            if (isQualifiedFA(far.FinServ__FinancialAccount__r)) {
+                result.add(far);
+            }
+        }
+        return result;
+    }
+
+    private Boolean isQualifiedFA(FinServ__FinancialAccount__c fa) {
+        return fa != null
+            && fa.RecordType.DeveloperName == DEPOSIT_RT_DEV_NAME
+            && QUALIFYING_SPECIAL_CASES.contains(fa.BKU_Special_Case__c);
+    }
+
+    // =========================================================
+    // QUERY HELPERS
+    // =========================================================
+    private Map<String, AccountContactRelation> queryExistingACRs(
+        Set<Id> accountIds, Set<Id> contactIds
+    ) {
+        Map<String, AccountContactRelation> result =
+            new Map<String, AccountContactRelation>();
+        if (accountIds.isEmpty() || contactIds.isEmpty()) return result;
+        for (AccountContactRelation acr : [
+            SELECT Id, AccountId, ContactId, Roles
+            FROM AccountContactRelation
+            WHERE AccountId IN :accountIds
+              AND ContactId  IN :contactIds
+        ]) {
+            result.put(acr.AccountId + '_' + acr.ContactId, acr);
+        }
+        return result;
+    }
+
+    private Map<String, FinServ__ContactContactRelation__c> queryExistingCCRs(
+        Set<Id> contactIds
+    ) {
+        Map<String, FinServ__ContactContactRelation__c> result =
+            new Map<String, FinServ__ContactContactRelation__c>();
+        if (contactIds.isEmpty()) return result;
+        for (FinServ__ContactContactRelation__c ccr : [
+            SELECT Id,
+                   FinServ__Contact__c,
+                   FinServ__RelatedContact__c,
+                   FinServ__Role__c
+            FROM FinServ__ContactContactRelation__c
+            WHERE FinServ__Contact__c        IN :contactIds
+              AND FinServ__RelatedContact__c IN :contactIds
+        ]) {
+            result.put(
+                ccr.FinServ__Contact__c
+                + '_' + ccr.FinServ__RelatedContact__c
+                + '_' + ccr.FinServ__Role__c,
+                ccr
+            );
+        }
+        return result;
+    }
+
+    private Map<String, FinServ__AccountAccountRelation__c> queryExistingAARs(
+        Set<Id> accountIds
+    ) {
+        Map<String, FinServ__AccountAccountRelation__c> result =
+            new Map<String, FinServ__AccountAccountRelation__c>();
+        if (accountIds.isEmpty()) return result;
+        for (FinServ__AccountAccountRelation__c aar : [
+            SELECT Id,
+                   FinServ__Account__c,
+                   FinServ__RelatedAccount__c,
+                   FinServ__Role__c
+            FROM FinServ__AccountAccountRelation__c
+            WHERE FinServ__Account__c        IN :accountIds
+              AND FinServ__RelatedAccount__c IN :accountIds
+        ]) {
+            result.put(
+                aar.FinServ__Account__c
+                + '_' + aar.FinServ__RelatedAccount__c
+                + '_' + aar.FinServ__Role__c,
+                aar
+            );
+        }
+        return result;
+    }
+
+    private Map<String, Id> getReciprocalRoleIdMap(String rtName) {
+        Map<String, Id> roleMap = new Map<String, Id>();
+        for (FinServ__ReciprocalRole__c rr : [
+            SELECT Id, Name
+            FROM FinServ__ReciprocalRole__c
+            WHERE RecordType.DeveloperName = :rtName
+              AND Name IN :QUALIFYING_ROLES
+        ]) {
+            roleMap.put(rr.Name, rr.Id);
+        }
+        return roleMap;
+    }
+
+    // =========================================================
+    // BUILDERS
+    // =========================================================
+    private List<FARContext> buildContexts(
+        List<FinServ__FinancialAccountRole__c> enriched
+    ) {
+        List<FARContext> contexts = new List<FARContext>();
+        for (FinServ__FinancialAccountRole__c far : enriched) {
+            contexts.add(new FARContext(
+                far.Id,
+                far.FinServ__Role__c,
+                far.FinServ__FinancialAccount__r
+                    .FinServ__PrimaryOwner__r.BKU_Record_Type_Name__c,
+                far.FinServ__RelatedAccount__r.BKU_Record_Type_Name__c,
+                far.FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c,
+                far.FinServ__RelatedAccount__c,
+                far.FinServ__FinancialAccount__r
+                    .FinServ__PrimaryOwner__r.PersonContactId,
+                far.FinServ__RelatedAccount__r.PersonContactId,
+                far
+            ));
+        }
+        return contexts;
+    }
+
+    private AccountContactRelation buildACR(
+        Id accountId, Id contactId, String roleLabel
+    ) {
+        AccountContactRelation acr = new AccountContactRelation();
+        acr.AccountId = accountId;
+        acr.ContactId = contactId;
+        acr.Roles     = roleLabel;
+        acr.IsActive  = true;
+        return acr;
+    }
+
+    private FinServ__ContactContactRelation__c buildCCR(
+        Id contactId, Id relatedContactId, Id roleId
+    ) {
+        FinServ__ContactContactRelation__c ccr =
+            new FinServ__ContactContactRelation__c();
+        ccr.FinServ__Contact__c        = contactId;
+        ccr.FinServ__RelatedContact__c = relatedContactId;
+        ccr.FinServ__Role__c           = roleId;
+        ccr.FinServ__Active__c         = true;
+        return ccr;
+    }
+
+    private FinServ__AccountAccountRelation__c buildAAR(
+        Id accountId, Id relatedAccountId, Id roleId
+    ) {
+        FinServ__AccountAccountRelation__c aar =
+            new FinServ__AccountAccountRelation__c();
+        aar.FinServ__Account__c         = accountId;
+        aar.FinServ__RelatedAccount__c  = relatedAccountId;
+        aar.FinServ__Role__c            = roleId;
+        aar.FinServ__AssociationType__c = ASSOC_TYPE_PEER;
+        aar.FinServ__Active__c          = true;
+        return aar;
+    }
+
+    // =========================================================
+    // ROLE UTILITIES
+    // =========================================================
+    private Boolean roleContains(String roles, String roleToCheck) {
+        if (String.isBlank(roles)) return false;
+        for (String r : roles.split(';')) {
+            if (r.trim() == roleToCheck) return true;
+        }
+        return false;
+    }
+
+    private String appendRole(String existingRoles, String newRole) {
+        return String.isBlank(existingRoles)
+            ? newRole
+            : existingRoles + ';' + newRole;
+    }
+
+    private String removeRole(String existingRoles, String roleToRemove) {
+        if (String.isBlank(existingRoles)) return '';
+        List<String> kept = new List<String>();
+        for (String r : existingRoles.split(';')) {
+            if (r.trim() != roleToRemove) kept.add(r.trim());
+        }
+        return String.join(kept, ';');
+    }
+
+    // =========================================================
+    // ERROR HANDLING
+    // =========================================================
+    private void collectErrors(
+        Database.SaveResult[] results,
+        String ctx,
+        List<String> errors
+    ) {
+        for (Database.SaveResult sr : results) {
+            
+            System.debug('CTX=' + ctx);
+            System.debug('SUCCESS=' + sr.isSuccess());
+            
+            if (sr.isSuccess()) {
+                System.debug('UPDATED ID=' + sr.getId());
+            } else {
+                for (Database.Error err : sr.getErrors()) {
+                    
+                    System.debug(
+                        'ERROR=' +
+                        err.getStatusCode() +
+                        ' : ' +
+                        err.getMessage()
+                    );
+                    
+                    errors.add(
+                        '[' + ctx + '] '
+                        + err.getStatusCode()
+                        + ': '
+                        + err.getMessage()
+                    );
+                }
+            }
+        }
+    }
+
+    private void collectDeleteErrors(
+        Database.DeleteResult[] results,
+        String ctx,
+        List<String> errors
+    ) {
+        for (Database.DeleteResult dr : results) {
+            if (!dr.isSuccess()) {
+                for (Database.Error err : dr.getErrors()) {
+                    errors.add('[' + ctx + '] '
+                        + err.getStatusCode()
+                        + ': ' + err.getMessage());
+                }
+            }
+        }
+    }
+
+    private void sendErrorEmail(String errorBody) {
+        try {
+            List<OrgWideEmailAddress> owas = [
+                SELECT Id FROM OrgWideEmailAddress
+                WHERE Address = :HELPDESK_EMAIL LIMIT 1
+            ];
+            Messaging.SingleEmailMessage email =
+                new Messaging.SingleEmailMessage();
+            email.setToAddresses(new List<String>{ HELPDESK_EMAIL });
+            if (!owas.isEmpty()) {
+                email.setOrgWideEmailAddressId(owas[0].Id);
+            }
+            email.setSubject(
+                'ERROR: Financial Account Role '
+                + '– Escrow Agent / Joint Owner Sync Failed'
+            );
+            email.setPlainTextBody(
+                'One or more errors occurred while processing '
+                + 'Financial Account Role records '
+                + '(Escrow Agent / Joint Owner sync).'
+                + '\n\nDetails:\n' + errorBody
+            );
+            Messaging.sendEmail(
+                new List<Messaging.SingleEmailMessage>{ email }
+            );
+        } catch (Exception e) {
+            System.debug(
+                LoggingLevel.ERROR,
+                'sendErrorEmail failed: ' + e.getMessage()
+            );
+        }
+    }
+
+    // =========================================================
+    // INNER CLASS
+    // =========================================================
+    private class FARContext {
+        public Id     farId;
+        public String role;
+        public String poType;
+        public String raType;
+        public Id     poId;
+        public Id     raId;
+        public Id     poPersonContactId;
+        public Id     raPersonContactId;
+        public FinServ__FinancialAccountRole__c sourceFAR;
+
+        public FARContext(
+            Id farId, String role,
+            String poType, String raType,
+            Id poId,  Id raId,
+            Id poPersonContactId,
+            Id raPersonContactId,
+            FinServ__FinancialAccountRole__c sourceFAR
+        ) {
+            this.farId             = farId;
+            this.role              = role;
+            this.poType            = poType;
+            this.raType            = raType;
+            this.poId              = poId;
+            this.raId              = raId;
+            this.poPersonContactId = poPersonContactId;
+            this.raPersonContactId = raPersonContactId;
+            this.sourceFAR         = sourceFAR;
+        }
+    }
+}
