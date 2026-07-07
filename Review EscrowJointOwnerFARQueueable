@@ -1,3 +1,339 @@
+Description 
+As a RM, I want to see that the Financial Account Role with Roles “Escrow Agent“ and “Joint Owner”, are automatically added as Related Contact to the Financial Account Primary Owner, so that I don’t have to maintain this Manually.
+Acceptance Criteria 
+AC1: As a RM, when ETL process runs and brings new records to the Financial Account Role object 
+
+with Role=”Escrow Agent”  &&
+
+the Financial Account is Deposit &&
+
+Special Case field=”IOLA/IOLTA”  or “FIDUCIARY” &&
+
+the “Primary Owner“ of the Financial Account is a Business and the Related Account is an Individual
+
+Then I see that a new Related Contact is added to the Relationship Center of the Financial Account Primary owner with the following data:
+
+ACCOUNT-CONTACT Relationship record fields
+
+ 
+
+Field
+
+Value
+
+Contact
+
+Related Account field on the Financial Account Role  record
+
+FinServ__RelatedAccount__c
+
+Relationship
+
+Primary Owner of the Financial Account
+
+FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c
+
+Role
+
+“Escrow Agent“
+
+AC1 and AC2 NOTE: If the same Business Primary Owner and Individual Related Account have both an Escrow Agent FAR and a Joint Owner FAR a single Account-Contact Relationship record will be created with both roles selected (Escrow Agent & Joint Owner) - Review Mockup section below
+
+AC2: As a RM, when ETL process runs and brings new records to the Financial Account Role object 
+
+with Role=”Joint Owner” &&
+
+the Financial Account is Deposit &&
+
+Special Case field=”IOLA/IOLTA”  or “FIDUCIARY”
+
+the “Primary Owner“ of the Financial Account is a Business and the Related Account is an Individual
+
+Then I see that a new Related Contact is added to the Relationship Center of the Financial Account Primary owner with the following data:
+
+ACCOUNT-CONTACT Relationship record fields
+
+ 
+
+Field
+
+Value
+
+Contact
+
+Related Account field on the Financial Account Role  record
+
+FinServ__RelatedAccount__c
+
+Relationship
+
+Primary Owner of the Financial Account
+
+FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c
+
+Role
+
+“Joint Owner“
+
+AC1 and AC2 NOTE: If the same Business Primary Owner and Individual Related Account have both an Escrow Agent FAR and a Joint Owner FAR a single Account-Contact Relationship record will be created with both roles selected (Escrow Agent & Joint Owner) Review Mockup section below
+
+AC3: As a RM, when ETL process runs and brings new records to the Financial Account Role object 
+
+with Role=”Escrow Agent” &&
+
+the Financial Account is Deposit &&
+
+Special Case field=”IOLA/IOLTA”  or “FIDUCIARY”
+
+the “Primary Owner“ of the Financial Account is an Individual and the Related Account is an Individual
+
+Then I see that a new Related Contact is added to the Relationship Center of the Financial Account Primary owner with the following data.
+
+CONTACT-CONTACT Relationship record fields
+
+ 
+
+Field
+
+Value
+
+Contact
+
+Related Account field on the Financial Account Role  record
+
+FinServ__RelatedAccount__c
+
+Relationship
+
+Primary Owner of the Financial Account
+
+FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c
+
+Role
+
+Important: Reciprocal Role is the one used for Contact-Contact Relationship 
+
+“Escrow Agent“
+
+SELECT id, name, FinServ__InverseRole__c
+from FinServ__ReciprocalRole__c
+
+AC3 and AC4 NOTE: If there is an existing Contact-Contact Relationship for the pair we need to add, the system will skip the addition because Salesforce prevents creating a second Contact-Contact Relationship for the same contact pair.
+
+AC4: As a RM, when ETL process runs and brings new records to the Financial Account Role object 
+
+with Role=”Joint Owner” &&
+
+the Financial Account is Deposit &&
+
+Special Case field=”IOLA/IOLTA”  or “FIDUCIARY” &&
+
+the “Primary Owner“ of the Financial Account is an Individual and the Related Account is an Individual
+
+Then I see that a new Related Contact is added to the Relationship Center of the Financial Account Primary owner with the following data.
+
+CONTACT-CONTACT Relationship record fields
+
+ 
+
+Field
+
+Value
+
+Contact
+
+Related Account field on the Financial Account Role  record
+
+FinServ__RelatedAccount__c
+
+Relationship
+
+Primary Owner of the Financial Account
+
+FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c
+
+Role
+
+Important: Reciprocal Role is the one used for Contact-Contact Relationship 
+
+“Joint Owner“
+
+SELECT id, name, FinServ__InverseRole__c
+from FinServ__ReciprocalRole__c
+
+AC5: As a RM, when ETL process runs and brings new records to the Financial Account Role object 
+
+with Role=”Escrow Agent” &&
+
+the Financial Account is Deposit &&
+
+Special Case field=”IOLA/IOLTA”  or “FIDUCIARY” &&
+
+the “Primary Owner“ of the Financial Account is an Individual and the Related Account is a Business
+
+Then I see that a new Related Account is added to the Relationship Center of the Financial Account Primary owner with the following data:
+
+ACCOUNT-CONTACT Relationship record fields
+
+ 
+
+Field
+
+Value
+
+Contact
+
+Primary Owner of the Financial Account
+
+FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c
+
+Relationship
+
+Related Account field on the Financial Account Role  record
+
+FinServ__RelatedAccount__c
+
+Role
+
+“Escrow Agent“
+
+AC5 and AC6 NOTE: If the same Individual Primary Owner and Business Related Account have both an Escrow Agent FAR and a Joint Owner FAR a single Account-Contact Relationship record will be created with both roles selected (Escrow Agent & Joint Owner) Review Mockup section below
+
+AC6: As a RM, when ETL process runs and brings new records to the Financial Account Role object 
+
+with Role=”Joint Owner” &&
+
+the Financial Account is Deposit &&
+
+Special Case field=”IOLA/IOLTA”  or “FIDUCIARY” &&
+
+the “Primary Owner“ of the Financial Account is an Individual and the Related Account is a Business
+
+Then I see that a new Related Account is added to the Relationship Center of the Financial Account Primary owner with the following data:
+
+ACCOUNT-CONTACT Relationship record fields
+
+ 
+
+Field
+
+Value
+
+Contact
+
+Primary Owner of the Financial Account
+
+FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c
+
+Relationship
+
+Related Account field on the Financial Account Role  record
+
+FinServ__RelatedAccount__c
+
+Role
+
+“Joint Owner“
+
+AC5 and AC6 NOTE: If the same Individual Primary Owner and Business Related Account have both an Escrow Agent FAR and a Joint Owner FAR a single Account-Contact Relationship record will be created with both roles selected (Escrow Agent & Joint Owner) Review Mockup section below
+
+AC7: As a RM, when ETL process runs and brings new records to the Financial Account Role object 
+
+with Role=”Escrow Agent” &&
+
+the Financial Account is Deposit &&
+
+Special Case field=”IOLA/IOLTA”  or “FIDUCIARY” &&
+
+the “Primary Owner“ of the Financial Account is a Business and the Related Account is a Business
+
+Then I see that a new Related Account is added to the Relationship Center of the Financial Account Primary owner with the following data.
+
+ACCOUNT-ACCOUNT Relationship record fields
+
+ 
+
+Field
+
+Value
+
+Relationship
+
+Primary Owner of the Financial Account
+
+FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c
+
+Related Relationship
+
+Related Account field on the Financial Account Role  record
+
+FinServ__RelatedAccount__c
+
+Related Role
+
+Important: Reciprocal Role is the one used for Account-Account Relationship 
+
+“Escrow Agent“
+
+SELECT id, name, FinServ__InverseRole__c
+from FinServ__ReciprocalRole__c
+
+Association Type
+
+“Peer”
+
+AC8: As a RM, when ETL process runs and brings new records to the Financial Account Role object 
+
+with Role=”Joint Owner” &&
+
+the Financial Account is Deposit &&
+
+Special Case field=”IOLA/IOLTA”  or “FIDUCIARY” &&
+
+the “Primary Owner“ of the Financial Account is a Business and the Related Account is a Business
+
+Then I see that a new Related Account is added to the Relationship Center of the Financial Account Primary owner with the following data.
+
+ACCOUNT-ACCOUNT Relationship record fields
+
+ 
+
+Field
+
+Value
+
+Relationship
+
+Primary Owner of the Financial Account
+
+FinServ__FinancialAccount__r.FinServ__PrimaryOwner__c
+
+Related Relationship
+
+Related Account field on the Financial Account Role  record
+
+FinServ__RelatedAccount__c
+
+Related Role
+
+Important: Reciprocal Role is the one used for Account-Account Relationship 
+
+“Joint Owner“
+
+SELECT id, name, FinServ__InverseRole__c
+from FinServ__ReciprocalRole__c
+
+Association Type
+
+“Peer”
+
+AC8 NOTE: Salesforce prevents creating a second Account-Account Relationship for the same Business Primary Owner and Business-Related Account and returns: "Business cannot be linked more than once to the same Business." In these scenarios, we won’t add another relationship to the Relationship Center.
+
+AC9: As a RM, when our process runs and removes a Financial Account Role record with Role=”Escrow Agent”, then in the Relationship Center of the Financial Account Primary owner I see that the Related Contact or Related Account is removed.
+
+AC10: As a RM, when our process runs and removes a Financial Account Role record with Role=”Joint Owner”, then in the Relationship Center of the Financial Account Primary owner I see that the Related Contact or Related Account is removed.
+
+
 public without sharing class EscrowJointOwnerFARQueueable implements Queueable {
 
     // ── Constants ────────────────────────────────────────────────────
