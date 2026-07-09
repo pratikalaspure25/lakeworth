@@ -1,4 +1,25 @@
+Hi [BA Name],
 
+I have a question regarding Defect PLIG-XXXX, which appears to be related to PLIG-7191.
+
+In PLIG-7191, the requirement was:
+
+"Before moving to Submitted for Underwriting, Submitted for Approval, or In Closing, the Opportunity must first be moved to Proposal Accepted by the RM."
+
+I implemented this validation in the existing CPM Flow, and it is working correctly in Flow Debug for all three stages.
+
+However, when moving directly from Opportunity Submitted to In Closing, existing validation rules (BKU_Proposal_Accepted_Date_Required and BKU_Proposal_Issued_Date_Required) are triggered and display date-related validation messages.
+
+Since those validation rules already prevent the stage change and are used by other processes, I have not modified them.
+
+Could you please confirm for Defect PLIG-XXXX:
+
+Should the system display the exact PLIG-7191 validation message?
+Or is it acceptable that the stage transition is prevented by the existing validation rules and their current messages?
+
+I want to confirm the expected user experience before making any further changes.
+
+Thanks.
 Issue 3 — Inconsistent Indentation
 The CCR and AAR blocks inside both processInserts and processDeletes have very deep indentation — completely different from the rest of the file.
 
