@@ -1,3 +1,89 @@
+Solution Approach
+Implemented an automated sync between Financial Account Roles (specifically the "Escrow Agent" and "Joint Owner" roles) and the Relationship Center relationship objects, scoped to Deposit Financial Accounts with Special Case = FIDUCIARY or IOLA/IOLTA, using an after-insert / after-delete trigger pattern with asynchronous processing.
+
+What Was Built
+
+Apex Trigger: FinancialAccountRoleTrigger (modified — no new trigger)
+
+Listens for new or removed FinServ__FinancialAccountRole__c records
+Delegates logic to the handler class to keep trigger thin
+
+
+Trigger Handler: FinancialAccountRoleTriggerHandler (modified)
+
+Extended to filter FAR records with Role = Escrow Agent or Joint Owner via new filterEscrowJointOwners() method
+Enqueues async processing using a new EscrowJointOwnerFARQueueable job
+Existing Authorized Signer logic (PLIG-6815) left completely untouched
+Includes suppressTrigger flag to support safe execution in automation/test scenarios
+
+
+Queueable Processor: EscrowJointOwnerFARQueueable (new)
+
+Handles both create and remove flows
+Insert flow: applies business filter (Deposit FA + FIDUCIARY or IOLA/IOLTA Special Case), then creates or updates the appropriate Relationship Center record
+Delete flow: removes relationships only when no remaining qualifying FAR exists for the same Primary Owner ↔ Related Account pairing (prevents premature unlinking)
+Supports all Primary Owner / Related Account type combinations and routes to the correct relationship object:
+
+Business → Individual → AccountContactRelation (ACR)
+
+Adds/updates Roles to include "Escrow Agent" or "Joint Owner" (appends without overwriting other roles)
+
+
+Individual → Individual → FinServ__ContactContactRelation__c (CCR)
+
+Creates/removes the CCR using the Escrow Agent or Joint Owner reciprocal role
+
+
+Individual → Business → AccountContactRelation (ACR)
+
+Relationship established from the Business account to the Individual contact (via PersonContactId)
+
+
+Business → Business → FinServ__AccountAccountRelation__c (AAR)
+
+Creates/removes the AAR using the Escrow Agent or Joint Owner reciprocal role with Association Type = Peer
+
+
+
+
+Prevents duplicates by querying existing ACR/CCR/AAR records and only inserting when missing
+On delete, removes only the qualifying role from multi-role ACRs — deletes the ACR entirely only when no roles remain
+Handles UNABLE_TO_LOCK_ROW errors with automatic retry (up to 3 retries via re-enqueue)
+
+
+
+
+Additional Filtering (New vs PLIG-6815)
+Unlike the Authorized Signer story, this implementation includes two additional qualifying conditions that must both be true before any relationship record is created or removed:
+ConditionFieldQualifying ValuesFinancial Account TypeRecordType.DeveloperNameBankingAccount (Deposit)Special CaseBKU_Special_Case__cFIDUCIARY, IOLA/IOLTA
+
+Error Handling / Observability
+
+Centralized error collection for partial-success DML (Database.insert/update/delete(..., false))
+Sends an email notification to crm360helpdesk@bankunited.com when errors occur during processing (subject line identifies Escrow Agent / Joint Owner FAR sync failure)
+
+
+Org Readiness Confirmed Before Development
+ItemStatusReciprocal Roles — Escrow Agent + Joint Owner (AccountRole + ContactRole)✅ CreatedACR picklist values — Escrow Agent, Joint Owner✅ Already deployed (prior release)CCR picklist values — Escrow Agent, Joint Owner✅ Already deployed (prior release)BKU_Special_Case__c field on Financial Account✅ Confirmed — Text(50), custom field (PLIG-6679)Deposit FA Record Type DeveloperName✅ Confirmed — BankingAccountBKU_Record_Type_Name__c on Account✅ Returns Business / Individual
+
+Testing
+Added EscrowJointOwnerFARQueueableTest to validate:
+
+Relationship creation for all four Primary Owner / Related Account type combinations (AC1–AC8)
+Proper cleanup behavior on FAR delete (AC9–AC10)
+Guard behavior when another qualifying FAR still exists for the same pairing
+ACR role append behavior when an ACR already exists with other roles
+ACR role removal behavior when ACR contains multiple roles
+Non-qualifying role FARs are ignored (no relationships created)
+Non-Deposit Financial Account FARs are ignored (no relationships created)
+Wrong Special Case value FARs are ignored (no relationships created)
+
+Code Coverage: 77% (3 additional delete path tests ready to push above 85% before production deploy)
+
+Files Changed
+FileChange TypeFinancialAccountRoleTriggerNo change — reused as-isFinancialAccountRoleTriggerHandlerModified — added filterEscrowJointOwners() and updateFinancialAccountEscrowJointOwners()EscrowJointOwnerFARQueueableNew classEscrowJointOwnerFARQueueableTestNew test class
+
+
 Story Analysis & Solution Approach
 PLIG-6999: REL — Automatic Link for Escrow Agent and Joint Owner
 Financial Account Roles to the Relationship Center
