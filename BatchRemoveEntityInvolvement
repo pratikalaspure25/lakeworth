@@ -1,42 +1,36 @@
 public with sharing class BatchRemoveEntityInvolvement implements Database.Batchable<SObject> {
  
-    private static final String ROLE_OBJECT         = 'LLC_BI__Legal_Entities__c';
-    private static final String ACCOUNT_LOOKUP_FIELD = 'LLC_BI__Account__c';
-    private static final String DEPOSIT_RT_DEVNAME   = 'Deposit_Account';
-    private static final String LOAN_RT_DEVNAME      = 'Loan_Account';
-    private static final String BORROWER_TYPE_FIELD  = 'Borrower_Type__c';
- 
-    private static final Set<String> EXCLUDED_BORROWER_TYPES = new Set<String>{
-        'Related Entity',
-        'Other - Authorized Signer',
-        'Affiliate',
-        'Seller',
-        'Key Role Employee',
-        'Unassigned'
-    };
+    private static final String DEPOSIT_RT_DEVNAME = 'Deposit_Account';
+    private static final String LOAN_RT_DEVNAME     = 'Loan_Account';
  
     public Database.QueryLocator start(Database.BatchableContext bc) {
-        Date cutoff = System.today().addDays(-5);
-        String excludedList = '(\'' + String.join(new List<String>(EXCLUDED_BORROWER_TYPES), '\',\'') + '\')';
-        String accountRel = ACCOUNT_LOOKUP_FIELD.removeEnd('__c') + '__r';
+        Datetime cutoff = System.now().addDays(-5);
  
-        String query =
-            'SELECT Id ' +
-            'FROM ' + ROLE_OBJECT + ' ' +
-            'WHERE LastModifiedDate <= :cutoff ' +
-            'AND ( ' +
-            '  ' + accountRel + '.RecordType.DeveloperName = \'' + DEPOSIT_RT_DEVNAME + '\' ' +
-            '  OR ' +
-            '  ( ' + accountRel + '.RecordType.DeveloperName = \'' + LOAN_RT_DEVNAME + '\' ' +
-            '    AND ' + BORROWER_TYPE_FIELD + ' NOT IN ' + excludedList + ' ' +
-            '  ) ' +
-            ')';
+        List<String> excludedBorrowerTypes = new List<String>{
+            'Related Entity',
+            'Other - Authorized Signer',
+            'Affiliate',
+            'Seller',
+            'Key Role Employee',
+            'Unassigned'
+        };
  
-        return Database.getQueryLocator(query);
+        return Database.getQueryLocator([
+            SELECT Id
+            FROM LLC_BI__Legal_Entities__c
+            WHERE LastModifiedDate <= :cutoff
+            AND (
+                Account__r.RecordType.DeveloperName = :DEPOSIT_RT_DEVNAME
+                OR (
+                    Account__r.RecordType.DeveloperName = :LOAN_RT_DEVNAME
+                    AND Borrower_Type__c NOT IN :excludedBorrowerTypes
+                )
+            )
+        ]);
     }
  
     public void execute(Database.BatchableContext bc, List<SObject> scope) {
-        delete scope;
+        Database.delete(scope, false);
     }
  
     public void finish(Database.BatchableContext bc) {
