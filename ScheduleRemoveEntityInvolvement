@@ -1,0 +1,6 @@
+public with sharing class ScheduleRemoveEntityInvolvement implements Schedulable {
+ 
+    public void execute(SchedulableContext sc) {
+        Database.executeBatch(new BatchRemoveEntityInvolvement(), 200);
+    }
+}
