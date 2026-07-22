@@ -1,19 +1,26 @@
-public with sharing class BatchRemoveEntityInvolvement implements Database.Batchable<SObject> {
+public without sharing class BatchRemoveEntityInvolvement implements Database.Batchable<SObject> {
  
+    @TestVisible
+    private static final Integer STALE_THRESHOLD_DAYS = 5;
+ 
+    @TestVisible
     private static final String DEPOSIT_RT_DEVNAME = 'Deposit_Account';
-    private static final String LOAN_RT_DEVNAME     = 'Loan_Account';
+ 
+    @TestVisible
+    private static final String LOAN_RT_DEVNAME = 'Loan_Account';
+ 
+    @TestVisible
+    private static final Set<String> EXCLUDED_BORROWER_TYPES = new Set<String>{
+        'Related Entity',
+        'Other - Authorized Signer',
+        'Affiliate',
+        'Seller',
+        'Key Role Employee',
+        'Unassigned'
+    };
  
     public Database.QueryLocator start(Database.BatchableContext bc) {
-        Datetime cutoff = System.now().addDays(-5);
- 
-        List<String> excludedBorrowerTypes = new List<String>{
-            'Related Entity',
-            'Other - Authorized Signer',
-            'Affiliate',
-            'Seller',
-            'Key Role Employee',
-            'Unassigned'
-        };
+        Datetime cutoff = System.now().addDays(-STALE_THRESHOLD_DAYS);
  
         return Database.getQueryLocator([
             SELECT Id
@@ -23,7 +30,7 @@ public with sharing class BatchRemoveEntityInvolvement implements Database.Batch
                 Account__r.RecordType.DeveloperName = :DEPOSIT_RT_DEVNAME
                 OR (
                     Account__r.RecordType.DeveloperName = :LOAN_RT_DEVNAME
-                    AND Borrower_Type__c NOT IN :excludedBorrowerTypes
+                    AND Borrower_Type__c NOT IN :EXCLUDED_BORROWER_TYPES
                 )
             )
         ]);
