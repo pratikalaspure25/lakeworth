@@ -3,39 +3,47 @@ private class BatchRemoveEntityInvolvementTest {
  
     @TestSetup
     static void makeData() {
-        // TODO: create whatever parent record(s) LLC_BI__Deposit__c and
-        // LLC_BI__Loan__c actually reference. Example if they're Accounts:
-        //
-        //   Account depositParent = new Account(Name = 'Test Deposit Parent');
-        //   Account loanParent    = new Account(Name = 'Test Loan Parent');
-        //   insert new List<Account>{ depositParent, loanParent };
+        Account acct = new Account(Name = 'Test Account');
+        insert acct;
+ 
+        // TODO: add any other required fields found on LLC_BI__Deposit__c
+        LLC_BI__Deposit__c depositRec = new LLC_BI__Deposit__c(Name = 'Test Deposit');
+        insert depositRec;
+ 
+        // TODO: add any other required fields found on LLC_BI__Loan__c
+        LLC_BI__Loan__c loanRec = new LLC_BI__Loan__c(Name = 'Test Loan');
+        insert loanRec;
  
         List<LLC_BI__Legal_Entities__c> roles = new List<LLC_BI__Legal_Entities__c>();
  
         // 1. Stale Deposit role -> should be deleted (AC1)
         roles.add(new LLC_BI__Legal_Entities__c(
-            Name = 'Stale Deposit Role'
-            // LLC_BI__Deposit__c = depositParent.Id   <-- set once parent exists
+            Name = 'Stale Deposit Role',
+            LLC_BI__Account__c = acct.Id,
+            LLC_BI__Deposit__c = depositRec.Id
         ));
  
         // 2. Stale Loan role, non-excluded Borrower Type -> should be deleted (AC2)
         roles.add(new LLC_BI__Legal_Entities__c(
             Name = 'Stale Loan Role - Guarantor',
-            // LLC_BI__Loan__c = loanParent.Id,
+            LLC_BI__Account__c = acct.Id,
+            LLC_BI__Loan__c = loanRec.Id,
             LLC_BI__Borrower_Type__c = 'Guarantor'
         ));
  
         // 3. Stale Loan role, EXCLUDED Borrower Type -> should be kept
         roles.add(new LLC_BI__Legal_Entities__c(
             Name = 'Stale Loan Role - Affiliate',
-            // LLC_BI__Loan__c = loanParent.Id,
+            LLC_BI__Account__c = acct.Id,
+            LLC_BI__Loan__c = loanRec.Id,
             LLC_BI__Borrower_Type__c = 'Affiliate'
         ));
  
         // 4. Fresh Deposit role (not yet stale) -> should be kept
         roles.add(new LLC_BI__Legal_Entities__c(
-            Name = 'Fresh Deposit Role'
-            // LLC_BI__Deposit__c = depositParent.Id
+            Name = 'Fresh Deposit Role',
+            LLC_BI__Account__c = acct.Id,
+            LLC_BI__Deposit__c = depositRec.Id
         ));
  
         insert roles;
