@@ -1,3 +1,20 @@
+List<String> targets = new List<String>{'LLC_BI__Deposit__c','LLC_BI__Loan__c'};
+Map<String, Schema.SObjectField> fieldMap = LLC_BI__Legal_Entities__c.sObjectType.getDescribe().fields.getMap();
+for (String fname : targets) {
+    if (fieldMap.containsKey(fname)) {
+        Schema.DescribeFieldResult r = fieldMap.get(fname).getDescribe();
+        List<String> relatedTo = new List<String>();
+        for (Schema.SObjectType t : r.getReferenceTo()) {
+            relatedTo.add(String.valueOf(t));
+        }
+        System.debug('FOUND: ' + fname + ' | required: ' + (!r.isNillable()) + ' | related to: ' + relatedTo);
+    } else {
+        System.debug('MISSING: ' + fname + ' does NOT exist on this object');
+    }
+}
+
+
+
 Hi [BA Name],
 
 I have a question regarding Defect PLIG-XXXX, which appears to be related to PLIG-7191.
