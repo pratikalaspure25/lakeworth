@@ -1,0 +1,388 @@
+PLIG-7376 FA: Loan Financial Account - Opt Out New Fields
+
+Description
+
+Description 
+As a RM, I can view and manage the Loan Maturity Notification opt-out settings on the Loan Financial Account so that I can control whether Loan Maturity Email Notifications are sent for the loan.
+
+Acceptance Criteria 
+AC1: As a RM, when I'm viewing the Loan Financial Account Page, then I can see a new section called “Loan Maturity Notifications”
+
+AC2: As a RM, when I'm viewing the Loan Financial Account Page, then I can see three new fields called “Opt Out Notifications”, “Opt Out Date & Time“ and “Opt Out Name“,  located under the new “Loan Maturity Notifications” section.
+
+AC3: As a RM, when I'm viewing the Loan Financial Account Page, then I can only edit the “Opt Out Notifications” field if I’m the Loan Financial Account Owner and Loan Financial Account Owner Manager.
+
+AC4: As a RM, when I'm viewing the Loan Financial Account Page, and I try to edit the “Opt Out Notifications” field and I’m not the Loan Financial Account Owner and Loan Financial Account Owner Manager then I receive the following error message: This setting can only be updated by the Loan Financial Account Owner or Financial Account Owner Manager. Please contact one of them if a change is needed.
+
+AC5: As a RM, when I edit the “Opt Out Notifications” field, then the “Opt Out Date & Time“ and “Opt Out Name“ field are automatically updated with the current date and time and the user name that made the update accordingly.
+
+Field Information
+
+Field Type
+
+Permission
+
+Label: Opt Out Notifications
+
+API Name: BKU_Opt_Out_Notifications_c
+
+Description: Controls whether Loan Maturity Email Notifications are sent for this Loan Financial Account.
+
+Help text: Yes - Select “Yes” to stop future Loan Maturity Email Notifications.
+
+Picklist:
+
+Yes
+
+No
+
+Read Only for CRMA
+
+Edit for RM (Loan Financial Account Owner), Admin and ETL
+
+ 
+Label: Opt Out Date & Time
+
+API Name: BKU_Opt_Out_Date_Timee_c
+
+Description: Stores the date and time when the Opt Out Notifications preference was last updated.
+
+Help text: No
+
+Date/Time
+
+Read Only for RM and CRMA
+
+Edit for Admin and ETL
+
+Read Only in the user layout
+
+ 
+Label: Opt Out Name
+
+API Name: BKU_Opt_Out_Name_c
+
+Description: Stores the name of the user who last updated the Opt Out Notifications preference.
+
+Help text: No
+
+Lookup (User)
+
+Read Only for RM and CRMA
+
+Edit for Admin and ETL
+
+Read Only in the user layout
+
+
+
+Note:
+
+The Officer 3 on the Financial Account will not be able to update the Opt Out Notifications as this functionality should only be available for Financial Account Owner and Financial Account Owner Manager - The email templates can remain the same but if the Officer 3 clicks the unsubscribe in the email no action should be performed.
+
+
+PLIG-7061 FA: Maturity Date - Email Automation
+
+
+
+Description
+
+Description 
+As an RM from Commercial Banking Division, I want to receive an Email alert when a Loan Financial Account is approaching its maturity date at the 1-Month (30 days), 2-Month (60 days), 3-Month (90 days), 4-Month (120 days) & 6-Month (180 days) prior to maturity date, so that I can follow up with the customer and decide the next actions.
+Acceptance Criteria 
+AC1: As an RM, when the system date is 6 Months (180 days) prior to the Loan End Date (Maturity Date) field of the Financial Account Loan record type, 
+
+AND the Balloon Loan = Yes,
+
+AND the Opt Out Notifications = No,
+
+AND the Financial Account Owner is not equal to "DataLoad Bank United Data", 
+
+AND the Financial Account Owner Division is equal to “Commercial Banking”,
+
+then the system will send an email notification (Initial Notification) to the Financial Account Owner, the Financial Account Owner Manager and the Officer 3 of the Loan Financial Account (only if they Financial Account Owner User is from Commercial Banking division) including the following information:
+
+Email Sender: CRM360 Helpdesk (CRM360Helpdesk@BankUnited.com)
+
+Email Recipient: Financial Account Owner, Financial Account Owner Manager and Officer 3
+
+Email Subject: Action Required – Loan Maturity Approaching (180 Days)
+
+Email Body:
+
+Dear Relationship Manager,
+
+This is a notification for a loan in your portfolio that will mature in approximately 180 days. The loan will become due and payable at maturity unless renewed and approved through the Bank's underwriting process.
+
+If this has already been addressed, no further action is needed on your part.
+
+Otherwise, please:
+
+Confirm whether the client intends to renew or repay.
+
+Engage the assigned Portfolio Management CPO if renewal is requested.
+
+Begin collecting required financial information.
+
+Timely engagement is critical to ensure sufficient time for underwriting, approval, and closing prior to maturity.
+
+Client: {FinServ__PrimaryOwner__c} + {CRM_Product_Name__c} + {FinServ__LoanAmount__c}
+
+If you no longer wish to receive Loan Maturity Notifications for this loan, click Unsubscribe. You can update your notification preference at any time from the Loan Financial Account record.
+
+Best regards,
+
+CRM360 Team
+
+ 
+
+AC2: As an RM, when the system date is 4 Months (120 days) prior to the Loan End Date (Maturity Date) field of the Financial Account Loan record type, 
+
+AND the Balloon Loan = Yes,
+
+AND the Opt Out Notifications = No,
+
+AND the Financial Account Owner is not equal to "DataLoad Bank United Data", 
+
+AND the Financial Account Owner Division is equal to “Commercial Banking”,
+
+then the system will send an email notification (Follow-Up) to the Financial Account Owner, the Financial Account Owner Manager and the Officer 3 of the Loan Financial Account (only if they Financial Account Owner User is from Commercial Banking division) including the following information:
+
+Email Sender: CRM360 Helpdesk (CRM360Helpdesk@BankUnited.com)
+
+Email Recipient: Financial Account Owner, Financial Account Owner Manager and Officer 3
+
+Email Subject: Action Required – Loan Maturity Approaching (120 Days)
+
+Email Body:
+
+Dear Relationship Manager,
+
+This is a notification for a loan in your portfolio that will mature in approximately 120 days. The loan will become due and payable at maturity unless renewed and approved through the Bank's underwriting process.
+
+If this has already been addressed, no further action is needed on your part.
+
+Otherwise, please:
+
+Confirm whether the client intends to renew or repay.
+
+Engage the assigned Portfolio Management CPO if renewal is requested.
+
+Begin collecting required financial information.
+
+Timely engagement is critical to ensure sufficient time for underwriting, approval, and closing prior to maturity.
+
+Client: {FinServ__PrimaryOwner__c} + {CRM_Product_Name__c} + {FinServ__LoanAmount__c}
+
+If you no longer wish to receive Loan Maturity Notifications for this loan, click Unsubscribe. You can update your notification preference at any time from the Loan Financial Account record.
+
+Best regards,
+
+CRM360 Team
+
+ 
+
+AC3: As an RM, when the system date is 3 Months (90 days) prior to the Loan End Date (Maturity Date) field of the Financial Account Loan record type, 
+
+AND the Balloon Loan = Yes,
+
+AND the Opt Out Notifications = No,
+
+AND the Financial Account Owner is not equal to "DataLoad Bank United Data", 
+
+AND the Financial Account Owner Division is equal to “Commercial Banking”,
+
+then the system will send an email notification (Follow-Up) to the Financial Account Owner, the Financial Account Owner Manager and the Officer 3 of the Loan Financial Account including the following information:
+
+Email Sender: CRM360 Helpdesk (CRM360Helpdesk@BankUnited.com)
+
+Email Recipient: Financial Account Owner, Financial Account Owner Manager and Officer 3 
+
+Email Subject: Action Required – Loan Maturity Approaching (90 Days)
+
+Email Body:
+
+Dear Relationship Manager,
+
+This is a follow-up notification for a loan in your portfolio that will mature in approximately 90 days. The loan will become due and payable at maturity unless renewed and approved through the Bank's underwriting process.
+
+If this has already been addressed, no further action is needed on your part.
+
+If not already completed, please:
+
+Confirm the client's intent to renew or repay.
+
+Begin submitting required financial information.
+
+Coordinate with the assigned Portfolio Management CPO on next steps.
+
+At 90 days remaining, any delay may significantly impact the Bank's ability to complete underwriting and approval before maturity.
+
+Client: {FinServ__PrimaryOwner__c} + {CRM_Product_Name__c} + {FinServ__LoanAmount__c}
+
+If you no longer wish to receive Loan Maturity Notifications for this loan, click Unsubscribe. You can update your notification preference at any time from the Loan Financial Account record.
+
+Best regards,
+
+CRM360 Team
+
+ 
+
+AC4: As an RM, when the system date is 2 Months (60 days) prior to the Loan End Date (Maturity Date) field of the Financial Account Loan record type, 
+
+AND the Balloon Loan = Yes,
+
+AND the Opt Out Notifications = No,
+
+AND the Financial Account Owner is not equal to "DataLoad Bank United Data", 
+
+AND the Financial Account Owner Division is equal to “Commercial Banking”,
+
+then the system will send an email notification (Escalated / Time-Sensitive) to the Financial Account Owner, the Financial Account Owner Manager and the Officer 3 of the Loan Financial Account (only if they Financial Account Owner User is from Commercial Banking division) including the following information:
+
+Email Sender: CRM360 Helpdesk (CRM360Helpdesk@BankUnited.com)
+
+Email Recipient: Financial Account Owner, Financial Account Owner Manager and Officer 3 
+
+Email Subject: Urgent Action Required – Loan Maturity Within 60 Days
+
+Email Body:
+
+Dear Relationship Manager,
+
+This loan is scheduled to mature within the next 60 days. Immediate attention is required to mitigate the risk of an incomplete renewal process prior to maturity.
+
+If this has already been addressed, no further action is needed on your part.
+
+Otherwise, please complete the following immediately:
+
+Confirm the client's intent to renew or repay.
+
+Submit all available financial information.
+
+Order any required third-party reports.
+
+Resolve all outstanding renewal requirements with the assigned Portfolio Management CPO.
+
+Failure to provide required information promptly may prevent completion of the renewal process before maturity and could necessitate a short-term extension. Extension fees and additional costs may apply to the client.
+
+Client: {FinServ__PrimaryOwner__c} + {CRM_Product_Name__c} + {FinServ__LoanAmount__c}
+
+If you no longer wish to receive Loan Maturity Notifications for this loan, click Unsubscribe. You can update your notification preference at any time from the Loan Financial Account record.
+
+Best regards,
+
+CRM360 Team
+
+ 
+
+AC5: As an RM, when the system date is 1 Month (30 days) prior to the Loan End Date (Maturity Date) field of the Financial Account Loan record type, 
+
+AND the Balloon Loan = Yes,
+
+AND the Opt Out Notifications = No,
+
+AND the Financial Account Owner is not equal to "DataLoad Bank United Data", 
+
+AND the Financial Account Owner Division is equal to “Commercial Banking”,
+
+then the system will send an email notification (Final / Critical) to the Financial Account Owner, the Financial Account Owner Manager and the Officer 3 of the Loan Financial Account (only if they Financial Account Owner User is from Commercial Banking division) including the following information:
+
+Email Sender: CRM360 Helpdesk (CRM360Helpdesk@BankUnited.com)
+
+Email Recipient: Financial Account Owner, Financial Account Owner Manager and Officer 3 
+
+Email Subject: Final Notice – Immediate Action Required (30 Days to Maturity)
+
+Email Body:
+
+Dear Relationship Manager,
+
+This is the final notification regarding a loan in your portfolio that is scheduled to mature within the next 30 days.
+
+If this has already been addressed, no further action is needed on your part.
+
+Otherwise, immediate action is required.
+
+Confirm the client's intent to renew or repay.
+
+If the client wishes to renew, all outstanding financial information, underwriting documentation, and renewal requirements must be submitted immediately in coordination with the assigned Portfolio Management CPO.
+
+The remaining timeframe may be insufficient to complete underwriting, approval, and closing if required information is not received promptly. Failure to provide updated financial information as required under the loan documents may constitute a default. A short-term extension may be required, and applicable fees will be charged to the client.
+
+Client: {FinServ__PrimaryOwner__c} + {CRM_Product_Name__c} + {FinServ__LoanAmount__c}
+
+Best regards,
+
+CRM360 Team
+
+Note: 
+
+If Officer 3 on the Financial Account record is null or is not a SF User, Officer 3 must be excluded from the email recipient list. In this case, the email will be sent only to the Financial Account Owner and the Financial Account Owner Manager.
+
+If Financial Account Owner on the Loan Financial Account is not from Commercial Banking, then the email should not be sent to anyone.
+
+If Opt Out Notifications is set to Yes, Loan Maturity Notifications will not be sent.
+
+The Officer 3 on the Financial Account will not be able to Unsubscribed as this functionality should only be available for Financial Account Owner and Financial Account Owner Manager - The email templates can remain the same but if the Officer 3 clicks the unsubscribe in the email no action should be performed.
+
+
+PLIG-7329 FA: Maturity Date Notification Opt Out
+
+
+
+Description
+
+Description 
+As an RM, when receiving the Loan Maturity Emails, I want the ability to opt out of the notifications from the Email directly so that I no longer receive maturity reminders and escalation emails when the loan renewal process is already in progress or the notifications are no longer needed.
+
+Acceptance Criteria 
+AC1: As a recipient* of a Loan Maturity Email Notification, when I receive a 1-Month (30-Day), 2-Month (60-Day), 3-Month (90-Day), or 4-Month (120-Day) Loan Maturity Email Notifications, then the email includes an Unsubscribe option that allows me to stop receiving future Loan Maturity Notifications for the related Loan Financial Account.
+
+AC2: As a recipient of a Loan Maturity Email Notification, when I click Unsubscribe from Loan Maturity Notifications from the 4-Month (120-Day) Loan Maturity Email Notification, then the related Loan Financial Account is automatically updated as follows:
+
+Opt Out Notifications = Yes
+
+Opt Out Date & Time = Current date and time
+
+Opt Out Name = User who performed the update
+
+And no future Loan Maturity Email Notifications are sent for that Loan Financial Account.
+
+AC3: As a recipient* of a Loan Maturity Email Notification, when I click Unsubscribe from Loan Maturity Notifications from the 3-Month (90-Day) Loan Maturity Email Notification, then the related Loan Financial Account is automatically updated as follows:
+
+Opt Out Notifications = Yes
+
+Opt Out Date & Time = Current date and time
+
+Opt Out Name = User who performed the update
+
+And no future Loan Maturity Email Notifications are sent for that Loan Financial Account.
+
+AC4: As a recipient* of a Loan Maturity Email Notification, when I click Unsubscribe from Loan Maturity Notifications from the 2-Month (60-Day) Loan Maturity Email Notification, then the related Loan Financial Account is automatically updated as follows:
+
+Opt Out Notifications = Yes
+
+Opt Out Date & Time = Current date and time
+
+Opt Out Name = User who performed the update
+
+And no future Loan Maturity Email Notifications are sent for that Loan Financial Account.
+
+AC5: As a recipient* of a Loan Maturity Email Notification, when I click Unsubscribe from Loan Maturity Notifications from the 1-Month (30-Day) Loan Maturity Email Notification, then the related Loan Financial Account is automatically updated as follows:
+
+Opt Out Notifications = Yes
+
+Opt Out Date & Time = Current date and time
+
+Opt Out Name = User who performed the update
+
+And no future Loan Maturity Email Notifications are sent for that Loan Financial Account.
+
+Note:
+
+Recipient* = Loan Financial Account Owner and Loan Financial Account Owner Manager
+
+When Opt Out Notifications is set to Yes, Loan Maturity Notifications are suppressed for all recipients associated with the Loan Financial Account.
+
+The Officer 3 on the Financial Account will not be able to Unsubscribed as this functionality should only be available for Financial Account Owner and Financial Account Owner Manager - The email templates can remain the same but if the Officer 3 clicks the unsubscribe in the email no action should be performed.
