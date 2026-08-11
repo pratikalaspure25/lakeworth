@@ -1,3 +1,13 @@
+
+Rule Name: BKU_Restrict_OptOut_Edit_To_Owner_Manager
+AND(
+  ISCHANGED(BKU_Opt_Out_Notifications__c),
+  $User.Id <> OwnerId,
+  $User.Id <> Owner.ManagerId,
+  NOT($Permission.Is_Admin_Or_ETL)
+)
+
+
 List<String> targets = new List<String>{'LLC_BI__Deposit__c','LLC_BI__Loan__c'};
 Map<String, Schema.SObjectField> fieldMap = LLC_BI__Legal_Entities__c.sObjectType.getDescribe().fields.getMap();
 for (String fname : targets) {
