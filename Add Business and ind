@@ -1,3 +1,6 @@
+Hi Juan, I confirmed with Claudia. No users should be exempt from the restriction; everyone should have Financial Account Name and Primary Owner as read-only. Also, users do not create Financial Account records. These records are created by ETL from Signature.
+
+
 Yes, I’m testing this in the DevFSC org. The permission changes I made are in DevFSC, so the permission assignments may be different from INT. I’ll check the RM user’s assigned Permission Sets and Permission Set Groups in DevFSC to identify where the Edit access to Financial Account Name and Primary Owner is coming from.
 
 Juan, yesterday you suggested that I use the Financial Account Management permission set to provide Edit access to the Financial Account object for the RM user. I made that change and gave Edit access only to the new Opt Out Notifications field.
