@@ -1,3 +1,9 @@
+Juan, yesterday you suggested that I use the Financial Account Management permission set to provide Edit access to the Financial Account object for the RM user. I made that change and gave Edit access only to the new Opt Out Notifications field.
+
+During today’s demo, Claudia pointed out that the requirement is that only the Opt Out Notifications field should be editable and the other fields should remain read-only. I noticed that the RM user can still edit the Financial Account Name and Primary Owner fields, which are standard fields.
+
+I also checked the Page Layout, but I’m not able to make those standard fields read-only there. How should we handle this so that the RM can edit only the Opt Out Notifications field while the Financial Account Name and Primary Owner remain read-only?
+
 
 Rule Name: BKU_Restrict_OptOut_Edit_To_Owner_Manager
 AND(
