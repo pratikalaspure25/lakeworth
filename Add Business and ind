@@ -1,4 +1,8 @@
 
+I confirmed that the Edit access is coming from the Financial Account Management permission set. Since RM needs object-level Edit for Opt Out Notifications, the required Name and Primary Owner fields are also editable. Should I proceed with the Validation Rule to prevent RM from changing those fields?
+
+
+
 Hi Josh/Jose, I’m working on PLIG-7376. The requirement is that the RM user should be able to edit only the new Opt Out Notifications field on the Loan Financial Account. Previously, RM had only Read access to the Financial Account object, so I needed object-level Edit access to allow the field update. Juan suggested using the Financial Account Management permission set, which I implemented in DevFSC.
 
 After that change, I noticed that Financial Account Name and Primary Owner are also editable for the RM. Claudia clarified that those fields, along with the other existing fields, should remain read-only and only Opt Out Notifications should be editable. I checked the Page Layout, but those standard fields can't be made read-only there.
