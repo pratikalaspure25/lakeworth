@@ -1,4 +1,23 @@
 
+AND(
+    NOT(ISNEW()),
+    OR(
+        ISCHANGED(Name),
+        ISCHANGED(FinServ__PrimaryOwner__c)
+    ),
+    NOT(
+        OR(
+            $Profile.Name = "System Administrator",
+            $Profile.Name = "System Administrator - Integration"
+        )
+    )
+)
+
+You do not have permission to edit Financial Account Name or Primary Owner.
+
+
+
+
 I confirmed that the Edit access is coming from the Financial Account Management permission set. Since RM needs object-level Edit for Opt Out Notifications, the required Name and Primary Owner fields are also editable. Should I proceed with the Validation Rule to prevent RM from changing those fields?
 
 
