@@ -1,4 +1,12 @@
 
+Hi Josh/Jose, I’m working on PLIG-7376. The requirement is that the RM user should be able to edit only the new Opt Out Notifications field on the Loan Financial Account. Previously, RM had only Read access to the Financial Account object, so I needed object-level Edit access to allow the field update. Juan suggested using the Financial Account Management permission set, which I implemented in DevFSC.
+
+After that change, I noticed that Financial Account Name and Primary Owner are also editable for the RM. Claudia clarified that those fields, along with the other existing fields, should remain read-only and only Opt Out Notifications should be editable. I checked the Page Layout, but those standard fields can't be made read-only there.
+
+Juan suggested that a Validation Rule could potentially handle the restriction. Claudia confirmed that no users should be exempt and that users don't create Financial Account records; they're created by ETL from Signature. I just need to confirm the final approach before I proceed.”
+
+
+
 Yes, I checked. Just to clarify, the Edit access I added to the Financial Account Management permission set was only in DevFSC for PLIG-7376. I haven’t pushed that permission change to INT yet, so the fields being locked for Rosemary in INT is expected.
 
 Hi Juan, just following up on PLIG-7376. I confirmed the details with Claudia as discussed. Since you mentioned that a Validation Rule could be used for this restriction, could you please confirm if I should proceed with that approach? I’m holding off on the remaining changes until I get your confirmation. Thanks!
