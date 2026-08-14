@@ -1,3 +1,10 @@
+Hi Claudia, for **PLIG-7376**, I’ve added the Validation Rule to prevent RM users from changing Financial Account Name and Primary Owner. The rule bypasses the two admin profiles: **System Administrator** and **System Administrator - Integration**.
+
+Could you please confirm the error message you’d like users to see when they try to edit these fields?
+
+Also, for **PLIG-7061**, I wanted to confirm whether we need to include the **Loan Financial Account Name as a hyperlink** in the maturity notification email. If yes, could you please confirm where you would like the Loan Financial Account Name/hyperlink to be placed? I don’t see this requirement mentioned in the story, so I want to confirm before adding it.
+
+
 
 AND(
     NOT(ISNEW()),
