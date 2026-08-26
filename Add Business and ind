@@ -1,3 +1,13 @@
+Screen Flow (BKU_Loan_Maturity_Unsubscribe) — core logic handling identity checks, field updates, and confirmation screens
+Hierarchy Custom Setting (App_Config__c) storing the environment base URL, so the same flow and email templates work unchanged across Dev, UAT, and Production
+Formula field generating the dynamic unsubscribe link per record
+Formula field generating a link back to the Loan Financial Account record, shown post-unsubscribe
+Get Records elements to retrieve the Loan Financial Account and resolve Officer 3 (matched from a text field to an active User, since Officer 3 is stored as text rather than a lookup)
+Decision elements handling: already-opted-out check, Officer 3 exclusion, and Owner/Owner Manager authorization (OR logic)
+Update Records step setting Opt Out Notifications = Yes, Opt Out Date & Time = current date/time, Opt Out Name = running user
+Three confirmation screens (Success, Already Unsubscribed, Officer 3 blocked) using the exact copy specified in the ACs
+
+
 Hi Claudia, for **PLIG-7376**, I’ve added the Validation Rule to prevent RM users from changing Financial Account Name and Primary Owner. The rule bypasses the two admin profiles: **System Administrator** and **System Administrator - Integration**.
 
 Could you please confirm the error message you’d like users to see when they try to edit these fields?
