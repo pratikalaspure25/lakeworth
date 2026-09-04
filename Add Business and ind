@@ -1,3 +1,11 @@
+Only one class needed updating: DealTeamMemberListViewController. This single Apex controller powers the Deal Team Members LWC on both the Relationship Team tab and the Opportunity Team tab, so one update covers AC1 and AC2 together.
+
+Changes:
+
+Updated the hardcoded Deal Team Role list in DealTeamMemberListViewController to the new names from PLIG-7425 (3 renamed + 1 new = 9 total roles).
+Updated DealTeamMemberListViewControllerTest to fix list-size assertions for the new count.
+
+
 Screen Flow (BKU_Loan_Maturity_Unsubscribe) — core logic handling identity checks, field updates, and confirmation screens
 Hierarchy Custom Setting (App_Config__c) storing the environment base URL, so the same flow and email templates work unchanged across Dev, UAT, and Production
 Formula field generating the dynamic unsubscribe link per record
