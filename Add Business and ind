@@ -1,3 +1,8 @@
+I have one clarification on PLIG-7321. For the cancellation restriction, should I check TS_COA_Current_Approval_Scenario__c, which is the Scenario lookup, or the nCino Product Package field? The AC says Scenario is linked, but the error message refers to Product Package. Which field should I use for the validation?
+
+
+
+
 Only one class needed updating: DealTeamMemberListViewController. This single Apex controller powers the Deal Team Members LWC on both the Relationship Team tab and the Opportunity Team tab, so one update covers AC1 and AC2 together.
 
 Changes:
