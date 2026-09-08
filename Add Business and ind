@@ -1,3 +1,16 @@
+Hi Team, I have a clarification regarding PLIG-7321.
+
+AC3 and AC5 mention that the Treasury Solutions Opportunity can be moved to Canceled when there is no Scenario linked, and cancellation should be blocked when a Scenario is linked.
+
+Could someone please confirm which Opportunity field/relationship should be used to identify whether a Scenario is linked to the Opportunity?
+
+I found TS_COA_Current_Approval_Scenario__c as a Lookup(Scenario) field, but I want to confirm whether this is the correct field to use for the validation.
+
+Also, AC5's error message refers to an associated Product Package. Could you please confirm whether the validation should be based on the Scenario relationship or the nCino Product Package?
+
+Thanks!
+
+
 Hi, I have a clarification regarding PLIG-7321. In AC3, it says that when the Treasury Solutions Opportunity does not have a Scenario, the user should be able to move it to Canceled by providing a Cancel Reason. In AC5, it says that when a Scenario is linked to the Opportunity, the user should not be able to move it to Canceled.
 
 However, the story doesn't specify which Scenario/relationship on the Opportunity I should consider for this validation. Could you please confirm which Scenario field should be used? Or should the validation actually be based on the nCino Product Package, since the error message in AC5 refers to an associated Product Package?
