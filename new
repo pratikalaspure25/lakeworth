@@ -1,0 +1,73 @@
+The automation in question is the FLOW CRM Auto Assign Default Relationship Team Members. It is a record-triggered Flow on User, After Save, Create only, and currently Active. It writes UserAccountTeamMember records with OwnerId = the new user and UserId = each matched member.
+Four defects exist. Sequence matters because each defect masks the ones that follow.
+Before you start: The role line in the AC2 header appears to be struck through. Confirm with the someone on the Product Team whether that is intentional. It changes how Defect 2 should be fixed, and the two implementation paths are different enough that you should not make assumptions. Everything else below applies either way.
+Defect 1: Division__c blank on CRM360_Default_Team_Member_Divisions__mdt (data fix)
+All five records have Division__c empty. Values exist only in DeveloperName:
+Business_Banking
+Commercial_Banking
+Consumer_and_Small_Business
+National_HOA
+National_Title_Solutions
+The Get_Team_Member_Divisions_Metadata lookup filters on:
+Division__c = $Record.BKU_Division__c
+Because Division__c is blank, the lookup returns null and Check_Valid_Division_And_Roles_are_Present fails its first condition. The Default Outcome has no connector, so the Flow interview ends silently.
+Populate Division__c using the exact values already present in CRM360_Roles_per_Division__mdt:
+Business Banking
+Commercial Banking
+Consumer and Small Business
+National HOA
+National Title Solutions
+I verified these values match live BKU_Division__c values exactly. There are no ampersand or spacing mismatches.
+Defect 2: Gate tests the wrong role (flow fix, pending PO answer)
+The third condition on Check_Valid_Division_And_Roles_are_Present requires roleIdCollection to contain $Record.UserRole.DeveloperName.
+However, roleIdCollection is built from User_role_API__c on the roles metadata. That field represents the list of roles to pull members from, not the list of users who qualify to receive a default team.
+Sample user 005PA000007CmpdYAC has role:
+Relationship_Manager_BB_Tampa_West_Coast
+and fails the gate.
+If the strikethrough in AC2 is intentional, eligibility is division-only per AC1. In that case:
+Remove the third condition entirely.
+Remove the Iterate_Over_Roles loop.
+Remove the roleIdCollection variable.
+That collection exists solely to support the gate check, and Extract_User_Role_from_Metadata already rebuilds the identical collection downstream from the same metadata source.
+If the strikethrough is not intentional, the Product Owner must provide the actual eligibility rule before any changes are made. The current logic cannot be the intended behavior because it effectively limits qualification to the support associate roles being queried.
+Defect 3: Member lookup is division-locked (schema + flow fix)
+Get_Users_by_Roles_Division filters on:
+BKU_Division__c = $Record.BKU_Division__c
+All seven active SSM_CSB and SSM_Team_Lead_CSB users belong to Consumer and Small Business, so a Business Banking user finds zero matching members. This was confirmed through direct query results.
+Add a new field:
+Source_Division__c
+to CRM360_Roles_per_Division__mdt.
+Populate it as follows:
+Metadata Record	Source_Division__c
+Business_Banking	Consumer and Small Business
+Business_Banking_2	Consumer and Small Business
+All others	Same value as Division__c
+Update Get_Users_by_Roles_Division to filter using Source_Division__c instead of the target user's division.
+Do not simply remove the division filter. Doing so would pull SSM users from every division and would break the Consumer and Small Business use case.
+Defect 4: Create-only trigger (flow fix)
+If BKU_Division__c or UserRoleId is populated after the User record is inserted, the Flow has already executed and that user is permanently skipped.
+Review UserFieldHistory for user 005PA000007CmpdYAC (created 2026-05-06, last modified today) to determine when those fields were populated relative to record creation.
+If this is a two-step write process:
+Change the Flow trigger from Create-only to Create and Update.
+Add IsChanged entry conditions for:
+BKU_Division__c
+UserRoleId
+This change requires duplicate protection. Before creating new UserAccountTeamMember records, query for existing team-member records for that owner.
+Without a duplicate guard, every qualifying User update would recreate the entire default team. This becomes even more important if Defect 2 resolves to division-only eligibility because every active user in a participating division would qualify.
+Two other things while you're in there
+Error_Creating_Team_Member_Records is a custom error on the fault path of an after-save Flow. Any failure rolls back the User insert and displays the message:
+Error in user creation records.
+If user provisioning is automated, a metadata issue could prevent User creation entirely while providing no actionable troubleshooting information. Consider logging a fault record instead of performing a hard rollback.
+Unused variables to remove
+currentUserRole
+RoleIds
+roleIdsFromMetaadata (contains a typo)
+SSMCSBUsercollection
+Testing
+Defect 1 and Defect 2 each cause complete silent failure on their own. If a partial fix is deployed and the process still does not work, do not assume the previous fix was incorrect.
+Validate in sequence:
+Fix Defect 1 and confirm the Flow advances past the division check.
+Fix Defect 2 and confirm the Flow advances past the eligibility gate.
+Fix Defect 3 and confirm team members are successfully found.
+Fix Defect 4 if field-history review confirms required values are being populated after insert.
+When the gate conditions fail, debug logs do not show an error. The Flow interview simply ends, making step-by-step validation essential.
