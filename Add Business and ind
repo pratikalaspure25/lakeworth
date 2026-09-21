@@ -1,3 +1,21 @@
+
+Hi Juan, I reviewed the steps Jose provided, but I haven’t made any changes yet. I first validated the existing configuration.
+
+Step 1: I checked CRM360 Default Team Member Divisions → Manage Records. The Division__c field is blank for all five records, which matches Jose’s finding.
+
+Step 2: I checked CRM360 Roles per Division and verified the Business Banking configuration and roles.
+
+Step 3: I checked the CRM Auto Assign Default Relationship Team Members Flow, specifically Check_Valid_Division_And_Roles_are_Present. I confirmed that the current Flow has a condition where roleIdCollection Contains $Record.UserRole.DeveloperName.
+
+I also had a call with Anita on Friday to clarify the expected behavior. She updated the story with the clarification and shared a recording showing the example with Mariela and the existing team members.
+
+Anita confirmed that the new user’s own Role should not determine the team assignment. The user’s Division is used to find the metadata, and the roles configured in the metadata (SSM_CSB / SSM_Team_Lead_CSB for Business Banking) are used to find the existing users who should be added to the new user’s Default Relationship Team.
+
+I’m currently validating the remaining Flow logic before making the adjustment.
+
+
+
+
 Hi Team, I have a clarification regarding PLIG-7321.
 
 AC3 and AC5 mention that the Treasury Solutions Opportunity can be moved to Canceled when there is no Scenario linked, and cancellation should be blocked when a Scenario is linked.
