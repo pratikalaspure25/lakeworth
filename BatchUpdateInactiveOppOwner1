@@ -1,0 +1,214 @@
+/*----------------------------------------------------------------------
+Name: 		BatchUpdateInactiveOppOwner.cls
+Purpose: 	Runs batch to transfer Opportunity records when RM is Deactivated
+-------------------------------------------------------------------------------
+Version 		  Author 					Date 				@Description
+-------		------------------			------------- 		-------------------
+1.0 		 Pratik Alasspure 			 20-Jan-2026		Initial Development	
+------------------------------------------------------------------------------*/
+
+public without sharing class BatchUpdateInactiveOppOwner implements Schedulable, Database.Batchable<sObject>, Database.Stateful {
+    
+    private List<String> errorMessages = new List<String>();
+    private Map<Id, User> inactiveUserMap = new Map<Id, User>();
+    private Map<Id, InactiveUserWrapper> recordsByManager = new Map<Id, InactiveUserWrapper>();
+    private Map<Id, String> recordsForSupportAdmin = new Map<Id, String>();
+    
+    public Database.QueryLocator start(Database.BatchableContext bc) {
+        // Get the IDs of all System Administrator profiles
+        Set<Id> systemAdminProfileIds = new Set<Id>();
+        for (Profile p : [SELECT Id FROM Profile WHERE Name = 'System Administrator']) {
+            systemAdminProfileIds.add(p.Id);
+        }
+        
+        // Query all inactive users who are not System Admins (deactivated in last 7 days)
+        inactiveUserMap = new Map<Id, User>([
+            SELECT Id, Name, Email, ManagerId, Manager.IsActive, Manager.Email, Manager.Name, ProfileId
+            FROM User
+            WHERE IsActive = false
+            AND ProfileId NOT IN :systemAdminProfileIds AND BKU_Deactivation_Date__c = LAST_N_DAYS:7
+        ]);
+        
+        // Query Opportunities owned by inactive users
+        return Database.getQueryLocator([
+            SELECT Id, OwnerId, Name 
+            FROM Opportunity
+            WHERE OwnerId IN :inactiveUserMap.keySet()
+        ]);
+    }
+    
+    public void execute(Database.BatchableContext bc, List<SObject> scope) {
+        List<Opportunity> toUpdate = new List<Opportunity>();
+        
+        for (SObject record : scope) {
+            Opportunity opp = (Opportunity) record;
+            Id ownerId = opp.OwnerId;
+            User inactiveUser = inactiveUserMap.get(ownerId);
+            
+            if (inactiveUser == null) continue;
+            
+            // If user has an active manager, reassign the opportunity to the manager
+            if (inactiveUser.ManagerId != null && inactiveUser.Manager.IsActive) {
+                opp.OwnerId = inactiveUser.ManagerId;
+                toUpdate.add(opp);
+                
+                // Track records by manager for email notification
+                if (!recordsByManager.containsKey(ownerId)) {
+                    recordsByManager.put(ownerId, new InactiveUserWrapper(
+                        inactiveUser.Name, 
+                        inactiveUser.Manager.Email, 
+                        inactiveUser.Manager.Name
+                    ));
+                }
+            } else {
+                // If no active manager, flag for Helpdesk email
+                if (!recordsForSupportAdmin.containsKey(ownerId)) {
+                    recordsForSupportAdmin.put(ownerId, inactiveUser.Name);
+                }
+            }
+        }
+        
+        // Update opportunities with new owner (manager)
+        if (!toUpdate.isEmpty()) {
+            List<Database.SaveResult> results = Database.update(toUpdate, false);
+            for (Integer i = 0; i < results.size(); i++) {
+                if (!results[i].isSuccess()) {
+                    errorMessages.add('Error updating Opportunity ' + toUpdate[i].Id + ': ' + 
+                                    results[i].getErrors()[0].getMessage());
+                }
+            }
+        }
+    }
+    
+    public void finish(Database.BatchableContext bc) {
+        if (!errorMessages.isEmpty()) {
+            System.debug(LoggingLevel.ERROR, 'Errors during batch execution:\n' + 
+                        String.join(errorMessages, '\n'));
+        }
+        
+        // Send manager notification emails
+        if (!recordsByManager.isEmpty()) {
+            sendManagerNotifications(recordsByManager);
+        }
+        
+        // Send support admin notification emails
+        if (!recordsForSupportAdmin.isEmpty()) {
+            sendSupportAdminNotifications(recordsForSupportAdmin);
+        }
+    }
+    
+    private void sendManagerNotifications(Map<Id, InactiveUserWrapper> recordsByManager) {
+        List<Messaging.SingleEmailMessage> emails = new List<Messaging.SingleEmailMessage>();
+        
+        OrgWideEmailAddress[] orgWideEmails = [
+                SELECT Id 
+                FROM OrgWideEmailAddress 
+                WHERE Address = 'crm360helpdesk@bankunited.com' 
+                LIMIT 1
+            ];
+        
+        for (InactiveUserWrapper info : recordsByManager.values()) {
+            if (String.isBlank(info.ManagerEmail)) continue;
+            
+            Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+            email.setToAddresses(new List<String>{info.ManagerEmail});
+            email.setSubject('Opportunity records Reassigned from Former Team Member');
+            
+
+            if (!orgWideEmails.isEmpty()) {
+                email.setOrgWideEmailAddressId(orgWideEmails[0].Id);
+            }
+            
+            String reportLink = getReportLink(info.ManagerEmail);
+            email.setHtmlBody(
+                'Hi ' + info.ManagerName + ',<br/><br/>' +
+                'Opportunity records previously owned by a former team member (' + 
+                info.InactiveUserName + ') in Salesforce CRM 360 have now been temporarily reassigned to you.<br/><br/>' +
+                'You can view the full list of these records here: ' + reportLink + '.<br/><br/>' +
+                'Please remember to transfer ownership to the incoming Relationship Manager once they are assigned.<br/><br/>' +
+                'If you have any questions or need assistance, feel free to reach out to the CRM 360 Helpdesk at ' +
+                '<a href="mailto:crm360helpdesk@bankunited.com">crm360helpdesk@bankunited.com</a>.<br/><br/>' +
+                'Thank you,<br/>CRM360 Team'
+            );
+            
+            emails.add(email);
+        }
+        
+        if (!emails.isEmpty()) {
+            Messaging.sendEmail(emails, false);
+        }
+    }
+    
+    private void sendSupportAdminNotifications(Map<Id, String> recordsForSupportAdmin) {
+        List<Messaging.SingleEmailMessage> emails = new List<Messaging.SingleEmailMessage>();
+        
+        OrgWideEmailAddress[] orgWideEmails = [
+            SELECT Id 
+            FROM OrgWideEmailAddress 
+            WHERE Address = 'crm360helpdesk@bankunited.com' 
+            LIMIT 1
+        ];
+        if (orgWideEmails.isEmpty()) return;
+        
+        for (String formerUserName : recordsForSupportAdmin.values()) {
+            Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+            email.setToAddresses(new List<String>{'crm360helpdesk@bankunited.com'});
+            email.setOrgWideEmailAddressId(orgWideEmails[0].Id);
+            email.setSubject('Opportunity records previously Owned by Former Team Member');
+            
+            String reportLink = getReportLink('crm360helpdesk@bankunited.com');
+            email.setHtmlBody(
+                'Hi CRM360 Helpdesk,<br/><br/>' +
+                'Opportunity records previously owned by ' + formerUserName +
+                ' - who is no longer active in Salesforce CRM 360 - could not be transferred to their manager.<br/><br/>' +
+                'Please refer to this report to view all Opportunity records currently owned by inactive users: ' +
+                reportLink + '.<br/><br/>' +
+                'Kindly coordinate with the appropriate teams to ensure these records are reassigned to the incoming Relationship Manager.<br/><br/>' +
+                'Regards,<br/>CRM360 Team'
+            );
+            
+            emails.add(email);
+        }
+        
+        if (!emails.isEmpty()) {
+            Messaging.sendEmail(emails, false);
+        }
+    }
+    
+    @TestVisible
+    private String getReportLink(String recipientEmail) {
+        String reportName;
+        if (recipientEmail != null && recipientEmail.toLowerCase() == 'crm360helpdesk@bankunited.com') {
+            reportName = 'Opportunities owned by Inactive RMs'; // for Helpdesk
+        } else {
+            reportName = 'My Opportunities'; // for managers
+        }
+        
+        List<Report> reports = [SELECT Id FROM Report WHERE Name = :reportName LIMIT 1];
+        if (!reports.isEmpty()) {
+            String reportId = reports[0].Id;
+            String baseUrl = URL.getOrgDomainURL().toExternalForm();
+            String reportUrl = baseUrl + '/lightning/r/Report/' + reportId + '/view';
+            return '<a href="' + reportUrl + '" target="_blank">' + reportName + '</a>';
+        } else {
+            System.debug('Report not found: ' + reportName);
+            return '#';
+        }
+    }
+    
+    public void execute(SchedulableContext sc) {
+        Database.executeBatch(new BatchUpdateInactiveOppOwner(), 200);
+    }
+    
+    public class InactiveUserWrapper {
+        public String InactiveUserName;
+        public String ManagerEmail;
+        public String ManagerName;
+        
+        public InactiveUserWrapper(String InactiveUserName, String ManagerEmail, String ManagerName) {
+            this.InactiveUserName = InactiveUserName;
+            this.ManagerEmail = ManagerEmail;
+            this.ManagerName = ManagerName;
+        }
+    }
+}
