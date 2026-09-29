@@ -1,3 +1,87 @@
+// AccountContactRelationTriggerHandler.cls
+public without sharing class AccountContactRelationTriggerHandler {
+    //Static Boolean to prevent queueable recursion
+    public static Boolean suppressTrigger = false;
+
+    // Handler for before insert context
+    public static void beforeInsert(List<AccountContactRelation> newRecords, System.TriggerOperation triggerEvent) {
+        //checkForDupes(newRecords);
+        //RelationshipLinkingPermsHandler.handleAccountContactRelation(newRecords, null, triggerEvent);
+
+        removeLeadConversionACRs(newRecords, triggerEvent);
+    }
+
+    // Handler for before update context
+    public static void beforeUpdate(List<AccountContactRelation> newRecords, System.TriggerOperation triggerEvent) {
+        //RelationshipLinkingPermsHandler.handleAccountContactRelation(newRecords, null, triggerEvent);
+        removeLeadConversionACRs(newRecords, triggerEvent);
+    }
+
+    // Handler for before delete context
+    public static void beforeDelete(
+        List<AccountContactRelation> newRecords,
+        Map<Id, AccountContactRelation> oldMap,
+        System.TriggerOperation triggerEvent
+    ) {
+        RelationshipLinkingPermsHandler.handleAccountContactRelation(newRecords, oldMap, triggerEvent);
+    }
+
+    // Handler for after insert context
+    public static void afterInsert(List<AccountContactRelation> newRecords) {
+        if (!suppressTrigger) {
+            System.enqueueJob(new AccountContactRelationSharingQueueable(newRecords, null));
+        }
+    }
+
+    // Handler for after delete context
+    public static void afterDelete(List<AccountContactRelation> oldRecords) {
+        if (!suppressTrigger) {
+            System.enqueueJob(new AccountContactRelationSharingQueueable(null, oldRecords));
+        }
+    }
+
+    private static void removeLeadConversionACRs(List<AccountContactRelation> newRecords, System.TriggerOperation triggerEvent) {
+        //Create a List of ACRs that don't come from Lead Conversion
+        List<AccountContactRelation> recordsToSend = new List<AccountContactRelation>();
+        DateTime oneHourAgo = System.now().addHours(-1);
+        System.debug('oneHourAgo: ' + oneHourAgo);
+        // Get Contact IDs to query
+        Set<Id> contactIds = new Set<Id>();
+        for (AccountContactRelation acr : newRecords) {
+            contactIds.add(acr.ContactId);
+        }
+
+        // Query Contact data
+        Map<Id, Contact> contactMap = new Map<Id, Contact>(
+            [
+                SELECT Id, CRM_For_Lead_Conversion__c, CreatedDate
+                FROM Contact
+                WHERE Id IN :contactIds
+            ]
+        );
+
+        for (AccountContactRelation acr : newRecords) {
+            Contact con = contactMap.get(acr.ContactId);
+            if (
+                con != null && (con.CRM_For_Lead_Conversion__c == false || (con.CRM_For_Lead_Conversion__c == true && con.CreatedDate < oneHourAgo))
+            ) {
+                recordsToSend.add(acr);
+            }
+        }
+
+        if (!recordsToSend.isEmpty()) {
+            RelationshipLinkingPermsHandler.handleAccountContactRelation(recordsToSend, null, triggerEvent);
+        }
+    }
+}
+
+
+
+/////////////////////////////////////////////////
+
+
+
+
 FinancialAccountRoleTriggerHandler Class
 
 public without sharing class FinancialAccountRoleTriggerHandler {
