@@ -1,3 +1,7 @@
+Root cause not yet confirmed. Permission issue ruled out (Data Load user is a System Admin). Failures seem to occur around the 6 AM ETL load, Tuesday to Saturday (per Anita and Ero), and may be related to concurrency with the load. The error email shows only a generic Salesforce message, so the real error needs a debug log.
+Related: PLIG-7648 adds the admin distribution email to the notification, so future failures can be investigated right away.
+
+
 
 PLIG-7619 - SPIKE: Household Owner Auto-Assignment Based on Relationship Ownership
 Technical Feasibility
