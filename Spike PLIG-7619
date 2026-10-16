@@ -1,22 +1,18 @@
 
-// 1. Distinct owners per household (aggregate in a FOR loop avoids the 2000-row limit)
+// 1. Distinct owners per household (plain query, no GROUP BY)
 Map<Id, Set<Id>> ownersByHH = new Map<Id, Set<Id>>();
-for (AggregateResult ar : [
-        SELECT CRM_Customer_Household__c hh, OwnerId o
-        FROM Account
-        WHERE CRM_Customer_Household__c != null
-        GROUP BY CRM_Customer_Household__c, OwnerId]) {
-    Id hhId = (Id) ar.get('hh');
-    Id ownerId = (Id) ar.get('o');
-    if (!ownersByHH.containsKey(hhId)) {
-        ownersByHH.put(hhId, new Set<Id>());
+for (Account a : [SELECT OwnerId, CRM_Customer_Household__c
+                  FROM Account
+                  WHERE CRM_Customer_Household__c != null]) {
+    if (!ownersByHH.containsKey(a.CRM_Customer_Household__c)) {
+        ownersByHH.put(a.CRM_Customer_Household__c, new Set<Id>());
     }
-    ownersByHH.get(hhId).add(ownerId);
+    ownersByHH.get(a.CRM_Customer_Household__c).add(a.OwnerId);
 }
 
 // 2. Compare with the Household Owner
 Integer single = 0, mixed = 0, mismatch = 0;
-for (Account hh : [SELECT Id, Name, OwnerId, Owner.Name
+for (Account hh : [SELECT Id, OwnerId
                    FROM Account
                    WHERE Id IN :ownersByHH.keySet()]) {
     Set<Id> owners = ownersByHH.get(hh.Id);
@@ -24,7 +20,6 @@ for (Account hh : [SELECT Id, Name, OwnerId, Owner.Name
         single++;
         if (!owners.contains(hh.OwnerId)) {
             mismatch++;
-            System.debug('UPDATE: ' + hh.Name + ' | current owner: ' + hh.Owner.Name);
         }
     } else {
         mixed++;
