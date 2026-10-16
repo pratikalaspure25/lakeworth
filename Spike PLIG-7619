@@ -1,3 +1,44 @@
+
+// 1. Distinct owners per household (aggregate in a FOR loop avoids the 2000-row limit)
+Map<Id, Set<Id>> ownersByHH = new Map<Id, Set<Id>>();
+for (AggregateResult ar : [
+        SELECT CRM_Customer_Household__c hh, OwnerId o
+        FROM Account
+        WHERE CRM_Customer_Household__c != null
+        GROUP BY CRM_Customer_Household__c, OwnerId]) {
+    Id hhId = (Id) ar.get('hh');
+    Id ownerId = (Id) ar.get('o');
+    if (!ownersByHH.containsKey(hhId)) {
+        ownersByHH.put(hhId, new Set<Id>());
+    }
+    ownersByHH.get(hhId).add(ownerId);
+}
+
+// 2. Compare with the Household Owner
+Integer single = 0, mixed = 0, mismatch = 0;
+for (Account hh : [SELECT Id, Name, OwnerId, Owner.Name
+                   FROM Account
+                   WHERE Id IN :ownersByHH.keySet()]) {
+    Set<Id> owners = ownersByHH.get(hh.Id);
+    if (owners.size() == 1) {
+        single++;
+        if (!owners.contains(hh.OwnerId)) {
+            mismatch++;
+            System.debug('UPDATE: ' + hh.Name + ' | current owner: ' + hh.Owner.Name);
+        }
+    } else {
+        mixed++;
+    }
+}
+
+System.debug('Households with related accounts: ' + ownersByHH.size());
+System.debug('Single owner: ' + single);
+System.debug('Single owner AND mismatch (will be updated): ' + mismatch);
+System.debug('Mixed owners (out of scope): ' + mixed);
+
+
+
+
 PLIG-7619 - SPIKE: Household Owner Auto-Assignment Based on Relationship Ownership
 Technical Feasibility
 
