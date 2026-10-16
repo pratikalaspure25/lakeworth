@@ -1,0 +1,115 @@
+PLIG-7619 - SPIKE: Household Owner Auto-Assignment Based on Relationship Ownership
+Technical Feasibility
+
+The requirement is feasible.
+
+Investigation confirmed:
+
+Household records are stored as Account records with the Household Record Type.
+Related Business and Individual Accounts are linked to the Household using CRM_Customer_Household__c.
+Households can be identified where all related Accounts are owned by the same user.
+Ownership mismatches currently exist and can be corrected automatically.
+
+A monthly Scheduled Batch Apex process is the recommended solution.
+
+Findings
+Household Relationship Structure
+Plain Text
+Household Account
+^
+|
+CRM_Customer_Household__c
+|
+Business / Individual Accounts
+Example - No Update Required
+
+Household: CERVONA LLC - Customer (Household)
+
+Plain Text
+Household Owner: Matt Spohr
+ 
+Related Accounts:
+- SAM NEHME HANNA (Matt Spohr)
+- CERVONA LLC (Matt Spohr)
+- BORANO, INC. (Matt Spohr)
+- TAYBOOTO REAL LLC (Matt Spohr)
+
+Result:
+
+Plain Text
+No update required.
+Example - Update Required
+
+Household: Biltmore Realty LLC - HH (ACE)
+
+Plain Text
+Household Owner: Eddie Bronfen
+ 
+Related Accounts:
+- Farrah Weinstein (Juan Zaino)
+- Janna Zervas (Juan Zaino)
+
+Result:
+
+Plain Text
+Update Household Owner to Juan Zaino.
+Additional Update Candidates
+Plain Text
+JVN Restoration INC HH
+Current Household Owner: Charles Marchica
+Related Account Owner: James Pallitto III
+ 
+Wellington Construction Group - HH (ACE)
+Current Household Owner: Lily Rojas
+Related Account Owner: Elizabeth Cabrera
+ 
+SOUTH FLORIDA STUDIO, LLC - HH
+Current Household Owner: Alejandro Gonzalez
+Related Account Owner: Leslie Fischman
+Proposed Solution
+Monthly Scheduled Batch Apex
+Query all Accounts with CRM_Customer_Household__c populated.
+Group Accounts by Household.
+Determine distinct Relationship Owners.
+If all related Accounts have the same owner:
+Compare against the Household Owner.
+Update Household Owner when different.
+Skip Households with multiple Relationship Owners.
+Log any failed updates for troubleshooting.
+Processing Logic
+Plain Text
+IF
+Related Account Count > 0
+AND Distinct Owner Count = 1
+AND Household Owner != Related Account Owner
+THEN
+Update Household Owner
+ELSE
+Skip
+Business Rules
+Update Household Owner When
+Household contains one or more related Accounts.
+All related Accounts have the same Owner.
+Household Owner differs from the common Owner.
+Do Not Update When
+No related Accounts exist.
+Related Accounts have multiple Owners.
+Household Owner already matches the common Owner.
+Out of Scope
+Households with multiple Relationship Owners.
+Ownership hierarchy logic.
+Manager-based ownership assignment.
+Real-time ownership synchronization.
+Manual ownership conflict resolution.
+Open Questions
+Business Questions
+Should the process overwrite a manually assigned Household Owner when all related Accounts have the same owner?
+If all related Accounts are owned by an inactive user, should the Household Owner still be updated?
+Should ownership changes be reported or audited?
+Should notifications be sent when ownership changes occur?
+Should Households with only one related Account be included?
+Should the process run monthly only, or at a different frequency?
+Technical Questions
+Are there any Flows, Apex Triggers, Assignment Rules, or Integrations that execute when Account Owner changes?
+Should all Household records be processed or only active Households?
+Is there any division or record type that should be excluded from processing?
