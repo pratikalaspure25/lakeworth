@@ -1,35 +1,144 @@
 
-// 1. Distinct owners per household (plain query, no GROUP BY)
-Map<Id, Set<Id>> ownersByHH = new Map<Id, Set<Id>>();
-for (Account a : [SELECT OwnerId, CRM_Customer_Household__c
-                  FROM Account
-                  WHERE CRM_Customer_Household__c != null]) {
-    if (!ownersByHH.containsKey(a.CRM_Customer_Household__c)) {
-        ownersByHH.put(a.CRM_Customer_Household__c, new Set<Id>());
-    }
-    ownersByHH.get(a.CRM_Customer_Household__c).add(a.OwnerId);
-}
+PLIG-7619 - SPIKE: Household Owner Auto-Assignment Based on Relationship Ownership
+Technical Feasibility
 
-// 2. Compare with the Household Owner
-Integer single = 0, mixed = 0, mismatch = 0;
-for (Account hh : [SELECT Id, OwnerId
-                   FROM Account
-                   WHERE Id IN :ownersByHH.keySet()]) {
-    Set<Id> owners = ownersByHH.get(hh.Id);
-    if (owners.size() == 1) {
-        single++;
-        if (!owners.contains(hh.OwnerId)) {
-            mismatch++;
-        }
-    } else {
-        mixed++;
-    }
-}
+The requirement is feasible.
 
-System.debug('Households with related accounts: ' + ownersByHH.size());
-System.debug('Single owner: ' + single);
-System.debug('Single owner AND mismatch (will be updated): ' + mismatch);
-System.debug('Mixed owners (out of scope): ' + mixed);
+Investigation confirmed:
+
+Household records are stored as Account records with the Household Record Type (4,289 Households in Production).
+Related Business and Individual Accounts are linked to the Household using the lookup field CRM_Customer_Household__c.
+Households where all related Accounts are owned by the same user can be identified.
+Ownership mismatches currently exist (see examples) and can be corrected automatically.
+
+Recommended solution: a monthly Scheduled Batch Apex process.
+
+Findings
+Household Relationship Structure
+Business / Individual Account
+        |
+        |  CRM_Customer_Household__c (Lookup)
+        v
+Household Account
+Example - No Update Required
+
+Household: CERVONA LLC - Customer (Household)
+
+Household Owner: Matt Spohr
+
+Related Accounts:
+- SAM NEHME HANNA (Matt Spohr)
+- CERVONA LLC (Matt Spohr)
+- BORANO, INC. (Matt Spohr)
+- TAYBOOTO REAL LLC (Matt Spohr)
+
+Result: No update required.
+Example - Update Required
+
+Household: Biltmore Realty LLC - HH (ACE)
+
+Household Owner: Eddie Bronfen
+
+Related Accounts:
+- Farrah Weinstein (Juan Zaino)
+- Janna Zervas (Juan Zaino)
+
+Result: Update Household Owner to Juan Zaino.
+Additional Update Candidates
+JVN Restoration INC HH
+Current Household Owner: Charles Marchica
+Related Account Owner: James Pallitto III
+
+Wellington Construction Group - HH (ACE)
+Current Household Owner: Lily Rojas
+Related Account Owner: Elizabeth Cabrera
+
+SOUTH FLORIDA STUDIO, LLC - HH
+Current Household Owner: Alejandro Gonzalez
+Related Account Owner: Leslie Fischman
+Proposed Solution
+Monthly Scheduled Batch Apex
+
+The batch starts from Household Accounts, so every Household is always evaluated with all of its related Accounts. This avoids a Household being split across batch chunks.
+
+start(): query all Household Accounts (Household Record Type).
+execute() (batch size 100-200):
+Query related Accounts where CRM_Customer_Household__c IN :householdIds.
+Build the set of distinct owners per Household.
+If there is exactly one distinct owner and it differs from the Household Owner, add the Household to the update list.
+Skip Households with no related Accounts or with multiple owners.
+Update using Database.update(list, false) so one failure does not block the rest.
+Write one audit log entry per update (Household Id, old owner, new owner, run date) and log all failures.
+finish(): send a summary (updated, skipped, failed) to administrators.
+Technical Components
+Batch Apex class
+Schedulable class (cron 0 0 2 1 * ?, 1st of every month at 2 AM)
+Audit log (custom object or equivalent)
+Custom Metadata toggle to enable or disable the job without a deployment
+Dry-run mode (report only, no updates) for the first run
+Test class
+Processing Logic
+IF
+    Related Account Count > 0
+    AND Distinct Owner Count = 1
+    AND Household Owner != Related Account Owner
+THEN
+    Update Household Owner
+ELSE
+    Skip
+Business Rules
+
+Update Household Owner when:
+
+Household contains one or more related Accounts (pending business confirmation for Households with only one related Account).
+All related Accounts have the same Owner.
+Household Owner differs from the common Owner.
+
+Do not update when:
+
+No related Accounts exist.
+Related Accounts have multiple Owners.
+Household Owner already matches the common Owner.
+The common Owner is inactive or a queue (pending business confirmation; recommended: skip and log).
+Risks and Considerations
+Risk	Mitigation
+Changing the Household Owner may trigger sharing recalculation and Relationship Team changes	Test in sandbox; review sharing rules and team setup
+Existing Flows, Triggers or integrations on Account Owner change may fire	Review all automation on Account owner change before build
+Record locking (UNABLE_TO_LOCK_ROW)	Small batch size (100-200), partial-success updates, retry failures
+Inactive or queue owners	Skip and log
+FSC roll-ups to the Household may be affected by an owner change	Validate in sandbox
+Large first run (many mismatches at once)	Run in dry-run mode first and review the count with the business
+Out of Scope
+Households with multiple Relationship Owners (to be reviewed as a future enhancement, including additional backend ownership logic).
+Ownership hierarchy logic.
+Manager-based ownership assignment.
+Real-time ownership synchronization.
+Manual ownership conflict resolution.
+Estimate and Next Steps
+
+Estimate: 5-8 story points, depending on the automation found on Account Owner change.
+
+Next steps:
+
+Get business answers to the open questions below.
+Review existing automation on Account Owner change.
+Build the Batch class, Scheduler, audit log, toggle and test class.
+Run the batch in dry-run mode in a sandbox and in Production. The dry run produces the exact number of Households that would be updated.
+UAT with the business, then enable the live run.
+Open Questions
+Business Questions
+Should the process overwrite a manually assigned Household Owner when all related Accounts have the same owner? (Recommended: yes, since the goal is to align the Household Owner with the Relationship Owner.)
+If all related Accounts are owned by an inactive user, should the Household Owner still be updated? (Recommended: no, skip and log.)
+Should ownership changes be reported or audited? (Recommended: yes, to support the goal of reducing ServiceNow tickets.)
+Should notifications be sent when ownership changes occur?
+Should Households with only one related Account be included?
+Should the process run monthly only, or at a different frequency?
+Technical Questions
+Are there any Flows, Apex Triggers, Assignment Rules or Integrations that execute when Account Owner changes?
+Should all Household records be processed or only active Households?
+Is there any division or record type that should be excluded from processing? Please also confirm that “Customer (Household)”, “HH” and “HH (ACE)” all belong to the same Household Record Type.
+
+
 
 
 
