@@ -1,3 +1,27 @@
+I need your guidance on two points regarding user story PLIG-7318.
+
+1. AC3 – Formula Field Implementation
+
+To display the Related Loan Account as a clickable hyperlink in the format Account Number - Product Name, I encountered Salesforce's limit of 20 unique relationship references in formula fields on the Opportunity object.
+
+As a workaround, I created:
+- BKU_Related_Loan_Account_Label__c – Text field to store the concatenated Account Number and Product Name through the Screen Flow.
+- Related Loan Account Display – Formula field to display the value as a clickable hyperlink using the Financial Account record ID.
+This approach is working, but it requires two additional fields, including the Formula field.
+
+Could you please confirm whether this approach is acceptable or suggest an alternative?
+
+2. AC7 – Prevent Selection of Already-Linked Loans
+
+As per AC7, if an Open Loan Financial Account is already linked to another Opportunity, the RM should be able to see it in the list but should not be able to select it.
+
+I checked the standard Screen Flow Data Table options, but I couldn't find a way to dynamically disable selection for individual rows.
+
+Do you have any suggestions for meeting this requirement using Screen Flow?
+
+Thanks!
+
+
 
 Hi Juan, I reviewed the steps Jose provided, but I haven’t made any changes yet. I first validated the existing configuration.
 
