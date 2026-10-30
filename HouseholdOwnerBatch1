@@ -1,0 +1,120 @@
+public without sharing class HouseholdOwnerBatch implements Database.Batchable<SObject>, Database.Stateful, Schedulable {
+
+    // API name of the "Customer (Household)" record type - replace with the real API name
+    public static final String HOUSEHOLD_RECORD_TYPE = 'REPLACE_WITH_HOUSEHOLD_RT_API_NAME';
+    public static final Integer BATCH_SIZE = 100;
+
+    private static final Integer MAX_FAILURES_REPORTED = 100;
+
+    private Integer evaluatedCount = 0;
+    private Integer updatedCount = 0;
+    private Integer failedCount = 0;
+    private List<String> failures = new List<String>();
+
+    // Schedulable entry point: starts a fresh batch run
+    public void execute(SchedulableContext sc) {
+        Database.executeBatch(new HouseholdOwnerBatch(), BATCH_SIZE);
+    }
+
+    public Database.QueryLocator start(Database.BatchableContext bc) {
+        return Database.getQueryLocator([
+            SELECT Id, OwnerId
+            FROM Account
+            WHERE RecordType.DeveloperName = :HOUSEHOLD_RECORD_TYPE
+            AND Id IN (SELECT CRM_Customer_Household__c FROM Account WHERE CRM_Customer_Household__c != null)
+        ]);
+    }
+
+    public void execute(Database.BatchableContext bc, List<Account> households) {
+        evaluatedCount += households.size();
+
+        Map<Id, Set<Id>> ownersByHousehold = getRelationshipOwners(households);
+        Set<Id> activeUserIds = getActiveUserIds(ownersByHousehold);
+
+        List<Account> householdsToUpdate = new List<Account>();
+        for (Account household : households) {
+            Id newOwnerId = resolveNewOwner(
+                household.OwnerId, ownersByHousehold.get(household.Id), activeUserIds);
+            if (newOwnerId != null) {
+                householdsToUpdate.add(new Account(Id = household.Id, OwnerId = newOwnerId));
+            }
+        }
+
+        if (!householdsToUpdate.isEmpty()) {
+            updateHouseholds(householdsToUpdate);
+        }
+    }
+
+    public void finish(Database.BatchableContext bc) {
+        System.debug(LoggingLevel.INFO, 'HouseholdOwnerBatch finished. Evaluated: ' + evaluatedCount
+            + ', Updated: ' + updatedCount + ', Failed: ' + failedCount);
+        if (failedCount > 0) {
+            System.debug(LoggingLevel.ERROR, 'HouseholdOwnerBatch failures (first ' + MAX_FAILURES_REPORTED
+                + '): ' + String.join(failures, ' || '));
+        }
+    }
+
+    /**
+     * PLIG-7682 business rules. Pure logic: no SOQL, no DML.
+     * Returns the Id the Household Owner must be changed to, or null when the Household stays unchanged.
+     */
+    @TestVisible
+    private static Id resolveNewOwner(Id householdOwnerId, Set<Id> relationshipOwnerIds, Set<Id> activeUserIds) {
+        if (relationshipOwnerIds == null || relationshipOwnerIds.isEmpty()) {
+            return null;                                   // AC3: no connected Relationships
+        }
+        if (relationshipOwnerIds.size() > 1) {
+            return null;                                   // AC2: owned by multiple users
+        }
+        Id commonOwnerId;
+        for (Id ownerId : relationshipOwnerIds) {
+            commonOwnerId = ownerId;
+        }
+        if (commonOwnerId == householdOwnerId) {
+            return null;                                   // AC4: already matches
+        }
+        if (activeUserIds == null || !activeUserIds.contains(commonOwnerId)) {
+            return null;                                   // AC5: inactive user or queue
+        }
+        return commonOwnerId;                              // AC1: reassign
+    }
+
+    private Map<Id, Set<Id>> getRelationshipOwners(List<Account> households) {
+        Map<Id, Set<Id>> ownersByHousehold = new Map<Id, Set<Id>>();
+        for (Account relationship : [
+                SELECT OwnerId, CRM_Customer_Household__c
+                FROM Account
+                WHERE CRM_Customer_Household__c IN :households]) {
+            Set<Id> owners = ownersByHousehold.get(relationship.CRM_Customer_Household__c);
+            if (owners == null) {
+                owners = new Set<Id>();
+                ownersByHousehold.put(relationship.CRM_Customer_Household__c, owners);
+            }
+            owners.add(relationship.OwnerId);
+        }
+        return ownersByHousehold;
+    }
+
+    // Queues and inactive users are never returned here, which implements AC5
+    private Set<Id> getActiveUserIds(Map<Id, Set<Id>> ownersByHousehold) {
+        Set<Id> ownerIds = new Set<Id>();
+        for (Set<Id> owners : ownersByHousehold.values()) {
+            ownerIds.addAll(owners);
+        }
+        return new Map<Id, User>([SELECT Id FROM User WHERE Id IN :ownerIds AND IsActive = true]).keySet();
+    }
+
+    private void updateHouseholds(List<Account> householdsToUpdate) {
+        List<Database.SaveResult> results = Database.update(householdsToUpdate, false);
+        for (Integer i = 0; i < results.size(); i++) {
+            if (results[i].isSuccess()) {
+                updatedCount++;
+            } else {
+                failedCount++;
+                if (failures.size() < MAX_FAILURES_REPORTED) {
+                    failures.add(householdsToUpdate[i].Id + ': ' + results[i].getErrors()[0].getMessage());
+                }
+            }
+        }
+    }
+}
