@@ -1,0 +1,57 @@
+public without sharing class HouseholdOwnerBatch implements Database.Batchable<SObject>, Schedulable {
+ 
+    // API name of the "Customer (Household)" record type (replace with the real API name)
+    public static final String HOUSEHOLD_RECORD_TYPE = 'REPLACE_WITH_HOUSEHOLD_RT_API_NAME';
+ 
+    public void execute(SchedulableContext sc) {
+        Database.executeBatch(new HouseholdOwnerBatch(), 100);
+    }
+ 
+    public Database.QueryLocator start(Database.BatchableContext bc) {
+        return Database.getQueryLocator([
+            SELECT Id, OwnerId
+            FROM Account
+            WHERE RecordType.DeveloperName = :HOUSEHOLD_RECORD_TYPE
+        ]);
+    }
+ 
+    public void execute(Database.BatchableContext bc, List<Account> households) {
+        // Owners of all Relationships connected to each Household
+        Map<Id, Set<Id>> ownersByHousehold = new Map<Id, Set<Id>>();
+        Set<Id> allOwners = new Set<Id>();
+        for (Account rel : [SELECT OwnerId, CRM_Customer_Household__c
+                            FROM Account
+                            WHERE CRM_Customer_Household__c IN :households]) {
+            if (!ownersByHousehold.containsKey(rel.CRM_Customer_Household__c)) {
+                ownersByHousehold.put(rel.CRM_Customer_Household__c, new Set<Id>());
+            }
+            ownersByHousehold.get(rel.CRM_Customer_Household__c).add(rel.OwnerId);
+            allOwners.add(rel.OwnerId);
+        }
+ 
+        // Active users only (a queue or an inactive user is not in this set)
+        Set<Id> activeUsers = new Map<Id, User>(
+            [SELECT Id FROM User WHERE Id IN :allOwners AND IsActive = true]).keySet();
+ 
+        List<Account> toUpdate = new List<Account>();
+        for (Account hh : households) {
+            Set<Id> owners = ownersByHousehold.get(hh.Id);
+ 
+            if (owners == null || owners.isEmpty()) continue;   // AC3: no Relationships -> unchanged
+            if (owners.size() > 1) continue;                    // AC2: multiple owners -> unchanged
+ 
+            Id commonOwner = new List<Id>(owners)[0];
+            if (commonOwner == hh.OwnerId) continue;            // AC4: already matches -> unchanged
+            if (!activeUsers.contains(commonOwner)) continue;   // AC5: inactive or queue -> unchanged
+ 
+            toUpdate.add(new Account(Id = hh.Id, OwnerId = commonOwner));   // AC1: reassign
+        }
+ 
+        if (!toUpdate.isEmpty()) {
+            Database.update(toUpdate, false);
+        }
+    }
+ 
+    public void finish(Database.BatchableContext bc) {}
+}
+ 
