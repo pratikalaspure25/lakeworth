@@ -196,6 +196,7 @@ private class BatchHouseholdOwnerAssignmentTest {
         for (Integer i = 0; i < count; i++) {
             users.add(new User(
                 Alias = 'bho' + i, LastName = 'BHO' + i, Email = 'bho' + i + '@test.com',
+                Department = 'Test Department',   // required by an org validation rule on User
                 Username = 'bho' + i + '.' + UserInfo.getOrganizationId() + '@test.com',
                 ProfileId = profileId, TimeZoneSidKey = 'America/New_York', LocaleSidKey = 'en_US',
                 EmailEncodingKey = 'UTF-8', LanguageLocaleKey = 'en_US'));
@@ -206,7 +207,6 @@ private class BatchHouseholdOwnerAssignmentTest {
         return users;
     }
 }
-
 
 
 
