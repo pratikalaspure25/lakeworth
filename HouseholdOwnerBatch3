@@ -1,3 +1,221 @@
+@IsTest
+private class BatchHouseholdOwnerAssignmentTest {
+
+    // Must be the same record type the batch queries
+    private static final String HOUSEHOLD_RT = 'IndustriesHousehold';
+
+    // Well-formed Ids are enough for the pure rule checks (no SOQL/DML in resolveNewOwner)
+    private static final Id USER_A = '005000000000001AAA';
+    private static final Id USER_B = '005000000000002AAA';
+    private static final Id USER_C = '005000000000003AAA';
+    private static final Id QUEUE  = '00G000000000001AAA';
+
+    // =====================================================================
+    // 1) Rule checks: resolveNewOwner() (AC1 - AC5)
+    // =====================================================================
+
+    @IsTest
+    static void ac1_commonOwnerDiffers_returnsCommonOwner() {
+        Id result = BatchHouseholdOwnerAssignment.resolveNewOwner(
+            USER_A, new Set<Id>{ USER_B }, new Set<Id>{ USER_B });
+        System.assertEquals(USER_B, result);
+    }
+
+    @IsTest
+    static void ac2_multipleOwners_returnsNull() {
+        Id result = BatchHouseholdOwnerAssignment.resolveNewOwner(
+            USER_A, new Set<Id>{ USER_B, USER_C }, new Set<Id>{ USER_B, USER_C });
+        System.assertEquals(null, result);
+    }
+
+    @IsTest
+    static void ac3_noRelationships_returnsNull() {
+        System.assertEquals(null, BatchHouseholdOwnerAssignment.resolveNewOwner(
+            USER_A, new Set<Id>(), new Set<Id>()));
+        System.assertEquals(null, BatchHouseholdOwnerAssignment.resolveNewOwner(
+            USER_A, null, new Set<Id>()));
+    }
+
+    @IsTest
+    static void ac4_alreadyMatchingOwner_returnsNull() {
+        Id result = BatchHouseholdOwnerAssignment.resolveNewOwner(
+            USER_A, new Set<Id>{ USER_A }, new Set<Id>{ USER_A });
+        System.assertEquals(null, result);
+    }
+
+    @IsTest
+    static void ac5_inactiveOwner_returnsNull() {
+        Id result = BatchHouseholdOwnerAssignment.resolveNewOwner(
+            USER_A, new Set<Id>{ USER_B }, new Set<Id>());   // USER_B not in the active set
+        System.assertEquals(null, result);
+    }
+
+    @IsTest
+    static void ac5_queueOwner_returnsNull() {
+        Id result = BatchHouseholdOwnerAssignment.resolveNewOwner(
+            USER_A, new Set<Id>{ QUEUE }, new Set<Id>{ USER_A, USER_B });
+        System.assertEquals(null, result);
+    }
+
+    // =====================================================================
+    // 2) End-to-end through the batch (covers start, execute, helpers, finish)
+    // =====================================================================
+
+    @IsTest
+    static void batch_appliesAllAcceptanceCriteria() {
+        List<User> users = createUsers(3);
+        User userA = users[0];
+        User userB = users[1];
+        User userC = users[2];   // deactivated below for AC5
+        Id rtId = householdRecordTypeId();
+
+        Account ac1 = new Account(Name = 'AC1 update',   RecordTypeId = rtId, OwnerId = userA.Id);
+        Account ac2 = new Account(Name = 'AC2 multiple', RecordTypeId = rtId, OwnerId = userA.Id);
+        Account ac3 = new Account(Name = 'AC3 none',     RecordTypeId = rtId, OwnerId = userA.Id);
+        Account ac4 = new Account(Name = 'AC4 matches',  RecordTypeId = rtId, OwnerId = userB.Id);
+        Account ac5 = new Account(Name = 'AC5 inactive', RecordTypeId = rtId, OwnerId = userA.Id);
+        insert new List<Account>{ ac1, ac2, ac3, ac4, ac5 };
+
+        insert new List<Account>{
+            new Account(Name = 'r1', OwnerId = userB.Id, CRM_Customer_Household__c = ac1.Id),
+            new Account(Name = 'r2', OwnerId = userB.Id, CRM_Customer_Household__c = ac1.Id),
+            new Account(Name = 'r3', OwnerId = userA.Id, CRM_Customer_Household__c = ac2.Id),
+            new Account(Name = 'r4', OwnerId = userB.Id, CRM_Customer_Household__c = ac2.Id),
+            new Account(Name = 'r5', OwnerId = userB.Id, CRM_Customer_Household__c = ac4.Id),
+            new Account(Name = 'r6', OwnerId = userC.Id, CRM_Customer_Household__c = ac5.Id)
+        };
+
+        // An inactive user cannot be set as owner on insert, so deactivate afterwards
+        System.runAs(new User(Id = UserInfo.getUserId())) {
+            userC.IsActive = false;
+            update userC;
+        }
+
+        Test.startTest();
+        Database.executeBatch(new BatchHouseholdOwnerAssignment(), 50);
+        Test.stopTest();
+
+        Map<Id, Account> result = new Map<Id, Account>(
+            [SELECT Id, OwnerId FROM Account
+             WHERE Id IN :new Set<Id>{ ac1.Id, ac2.Id, ac3.Id, ac4.Id, ac5.Id }]);
+
+        System.assertEquals(userB.Id, result.get(ac1.Id).OwnerId, 'AC1: reassigned to common owner');
+        System.assertEquals(userA.Id, result.get(ac2.Id).OwnerId, 'AC2: multiple owners, unchanged');
+        System.assertEquals(userA.Id, result.get(ac3.Id).OwnerId, 'AC3: no relationships, unchanged');
+        System.assertEquals(userB.Id, result.get(ac4.Id).OwnerId, 'AC4: already matches, unchanged');
+        System.assertEquals(userA.Id, result.get(ac5.Id).OwnerId, 'AC5: inactive owner, unchanged');
+    }
+
+    @IsTest
+    static void batch_singleRelationship_updatesHousehold() {
+        List<User> users = createUsers(2);
+        Id rtId = householdRecordTypeId();
+
+        Account hh = new Account(Name = 'One relationship', RecordTypeId = rtId, OwnerId = users[0].Id);
+        insert hh;
+        insert new Account(Name = 'only child', OwnerId = users[1].Id, CRM_Customer_Household__c = hh.Id);
+
+        Test.startTest();
+        Database.executeBatch(new BatchHouseholdOwnerAssignment(), 50);
+        Test.stopTest();
+
+        System.assertEquals(users[1].Id, [SELECT OwnerId FROM Account WHERE Id = :hh.Id].OwnerId);
+    }
+
+    @IsTest
+    static void batch_bulk_100Households() {
+        List<User> users = createUsers(2);
+        Id rtId = householdRecordTypeId();
+
+        List<Account> households = new List<Account>();
+        for (Integer i = 0; i < 100; i++) {
+            households.add(new Account(Name = 'Bulk HH ' + i, RecordTypeId = rtId, OwnerId = users[0].Id));
+        }
+        insert households;
+
+        List<Account> relationships = new List<Account>();
+        for (Account hh : households) {
+            relationships.add(new Account(Name = 'Bulk rel ' + hh.Name, OwnerId = users[1].Id,
+                CRM_Customer_Household__c = hh.Id));
+        }
+        insert relationships;
+
+        Test.startTest();
+        Database.executeBatch(new BatchHouseholdOwnerAssignment(), 200);   // one chunk of 100
+        Test.stopTest();
+
+        System.assertEquals(100,
+            [SELECT COUNT() FROM Account WHERE Id IN :households AND OwnerId = :users[1].Id]);
+    }
+
+    @IsTest
+    static void batch_otherRecordType_isIgnored() {
+        List<User> users = createUsers(2);
+        // A non-household account that has a related account with a different owner must not change
+        Account other = new Account(Name = 'Not a household', OwnerId = users[0].Id);
+        insert other;
+        insert new Account(Name = 'child of other', OwnerId = users[1].Id, CRM_Customer_Household__c = other.Id);
+
+        Test.startTest();
+        Database.executeBatch(new BatchHouseholdOwnerAssignment(), 50);
+        Test.stopTest();
+
+        System.assertEquals(users[0].Id, [SELECT OwnerId FROM Account WHERE Id = :other.Id].OwnerId);
+    }
+
+    // =====================================================================
+    // 3) Scheduler entry point
+    // =====================================================================
+
+    @IsTest
+    static void scheduler_schedulesJob() {
+        Test.startTest();
+        String jobId = System.schedule(
+            'BatchHouseholdOwnerAssignment_Test', '0 0 2 1 * ?', new BatchHouseholdOwnerAssignment());
+        Test.stopTest();
+
+        System.assertNotEquals(null, jobId);
+        CronTrigger ct = [SELECT CronExpression FROM CronTrigger WHERE Id = :jobId];
+        System.assertEquals('0 0 2 1 * ?', ct.CronExpression);
+    }
+
+    // =====================================================================
+    // Helpers
+    // =====================================================================
+
+    private static Id householdRecordTypeId() {
+        Schema.RecordTypeInfo info =
+            Schema.SObjectType.Account.getRecordTypeInfosByDeveloperName().get(HOUSEHOLD_RT);
+        System.assertNotEquals(null, info, 'Record type ' + HOUSEHOLD_RT + ' not found in this org');
+        return info.getRecordTypeId();
+    }
+
+    private static List<User> createUsers(Integer count) {
+        Id profileId = [SELECT Id FROM Profile WHERE Name = 'System Administrator' LIMIT 1].Id;
+        List<User> users = new List<User>();
+        for (Integer i = 0; i < count; i++) {
+            users.add(new User(
+                Alias = 'bho' + i, LastName = 'BHO' + i, Email = 'bho' + i + '@test.com',
+                Username = 'bho' + i + '.' + UserInfo.getOrganizationId() + '@test.com',
+                ProfileId = profileId, TimeZoneSidKey = 'America/New_York', LocaleSidKey = 'en_US',
+                EmailEncodingKey = 'UTF-8', LanguageLocaleKey = 'en_US'));
+        }
+        System.runAs(new User(Id = UserInfo.getUserId())) {   // avoids MIXED_DML_OPERATION
+            insert users;
+        }
+        return users;
+    }
+}
+
+
+
+
+
+
+
+
+
+
 public without sharing class BatchHouseholdOwnerAssignment
     implements Database.Batchable<SObject>, Database.Stateful, Schedulable {
 
